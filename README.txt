@@ -68,7 +68,7 @@ System Libraries (typically needed for Linux builds):
 
     bash
     git clone <your-repository-url>
-    cd RaymarchVibe
+    cd raymarchvibe/
     
 
 2.  Install Dependencies (if not already present):
@@ -79,7 +79,7 @@ System Libraries (typically needed for Linux builds):
     
     (Package names may vary slightly on other distributions. For RHEL/Fedora use sudo dnf install.)
 
-3.  Configure with CMake (cmake from same dir you placed CMakeLists.txt which should be /RaymarchVibe):
+3.  Configure with CMake (cmake from same dir you placed CMakeLists.txt which should be raymarchvibe/):
 
     cmake 
     
@@ -88,7 +88,7 @@ System Libraries (typically needed for Linux builds):
         cmake .. -DRAYMARCHVIBE_ENABLE_SSL=OFF
 
 
-4.  Build the project (from within the dir of /RaymarchVibe):
+4.  Build the project (from within the dir of raymarchvibe/):
     
     make -j$(nproc) 
    
