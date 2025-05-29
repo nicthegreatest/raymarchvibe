@@ -1,4 +1,4 @@
-RaymarchVibe ✨ BETA/EXPERIMENTAL
+RaymarchVibe ✨ BETA/EXPERIMENTAL there may be bugs and crashes!
 
 ## Vision: Shader Exploration Made Intuitive
 
