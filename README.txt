@@ -79,26 +79,22 @@ System Libraries (typically needed for Linux builds):
     
     (Package names may vary slightly on other distributions. For RHEL/Fedora use sudo dnf install.)
 
-3.  Configure with CMake:
+3.  Configure with CMake (cmake from same dir you placed CMakeLists.txt which should be /RaymarchVibe):
 
-    bash
-    mkdir build
-    cd build
-    cmake .. 
+    cmake 
     
     * If you don't have OpenSSL or wish to disable HTTPS for Shadertoy fetching, you can turn off the SSL option:
 
         cmake .. -DRAYMARCHVIBE_ENABLE_SSL=OFF
 
 
-4.  Build the project:
+4.  Build the project (from within the dir of /RaymarchVibe):
     
     make -j$(nproc) 
    
     (The '-j$(nproc)' flag tells make to use all available processor cores for a faster build, otherwise just use make)
 
 5.  Run RaymarchVibe:
-    The executable will be in the `build` directory:
 
     ./RaymarchVibe
 
