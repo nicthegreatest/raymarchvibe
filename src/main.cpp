@@ -646,8 +646,6 @@ std::string UpdateDefineValueInString(const std::string& sourceCode, const std::
     return ""; 
 }
 
-
-// --- NEW FOR CONST EDITING (Step 5) ---
 // Function to reconstruct the value string for a const variable
 std::string ReconstructConstValueString(ShaderConstControl& control) {
     std::ostringstream oss;
@@ -1045,7 +1043,7 @@ void ApplyShaderFromEditor(
         } else {
             shaderToyUniformControls.clear(); 
         }
-        // --- NEW FOR CONST EDITING (Step 4) ---
+        // --- NEW FOR CONST EDITING ---
         ScanAndPrepareConstControls(shaderCode_param); 
         // --- END NEW FOR CONST EDITING ---
         
@@ -1249,7 +1247,7 @@ int main() {
             // --- Status Window ---
             {
                 ImGui::Begin("Status");
-                ImGui::Text("Hello from drewp/darkrange!"); 
+                ImGui::Text("Hello from nicthegr8/darkrange!"); 
                 ImGui::TextWrapped("F12: Fullscreen | Spacebar: Toggle GUI | F5: Apply Editor Code | ESC: Close"); // Updated and wrapped
                 if(ImGui::Button("Show Help")) { showHelpWindow = true; } 
                 ImGui::Separator(); 
