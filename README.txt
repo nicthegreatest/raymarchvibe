@@ -108,3 +108,6 @@ RaymarchVibe relies on the following libraries, which are fetched automatically 
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
 
+I've temporarily added some sample shaders from the user balkhan (https://www.shadertoy.com/user/balkhan) on Shadertoy, because I thought they looked cool and needed something kinda complex to test with.
+I'll work on some custom shader samples SOON
+
