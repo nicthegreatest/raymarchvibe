@@ -1,8 +1,8 @@
-# RaymarchVibe ✨ BETA/EXPERIMENTAL
+RaymarchVibe ✨ BETA/EXPERIMENTAL
 
 ## Vision: Shader Exploration Made Intuitive
 
-Ever found yourself deep in GLSL shader code, wishing you could just *see* what happens when you tweak that one value? RaymarchVibe is born from that exact feeling. Sometimes, you just want to **drag a slider instead of digging through lines of code.
+Ever found yourself deep in GLSL shader code, wishing you could just *see* what happens when you tweak that one value? RaymarchVibe is born from that exact feeling. Sometimes, you just want to drag a slider instead of digging through lines of code.
 
 This tool is designed to bridge the gap between complex shader logic and immediate visual feedback. With RaymarchVibe, you can:
 
@@ -21,8 +21,6 @@ RaymarchVibe is particularly crafted for those new to the fascinating worlds of 
 * Lower the barrier to entry for creating and understanding complex visual effects.
 
 Dive in, tweak, explore, and vibe with your shaders!
-
----
 
 ## Key Features
 
@@ -57,7 +55,8 @@ RaymarchVibe relies on the following libraries, which are fetched automatically 
 * **cpp-httplib:** For fetching shaders from Shadertoy.com (requires OpenSSL for HTTPS).
 * **nlohmann/json:** For parsing JSON data (used with Shadertoy API).
 
-**System Libraries (typically needed for Linux builds):**
+System Libraries (typically needed for Linux builds):
+
 * OpenGL development libraries (e.g., `libgl1-mesa-dev`, `freeglut3-dev`)
 * GLFW development libraries (e.g., `libglfw3-dev`)
 * X11 development libraries (e.g., `libx11-dev`, `libxrandr-dev`, `libxinerama-dev`, `libxcursor-dev`, `libxi-dev`)
@@ -65,49 +64,53 @@ RaymarchVibe relies on the following libraries, which are fetched automatically 
 
 ## Build Instructions (Linux)
 
-1.  **Clone the repository:**
-    ```bash
+1.  Clone the repository:
+
+    bash
     git clone <your-repository-url>
     cd RaymarchVibe
-    ```
+    
 
-2.  **Install Dependencies (if not already present):**
-    On Debian/Ubuntu based systems, you might need:
-    ```bash
+2.  Install Dependencies (if not already present):
+
+    bash
     sudo apt update
     sudo apt install build-essential cmake libgl1-mesa-dev libglfw3-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev
-    ```
-    (Package names may vary slightly on other distributions.)
+    
+    (Package names may vary slightly on other distributions. For RHEL/Fedora use sudo dnf install.)
 
-3.  **Configure with CMake:**
-    Create a build directory and run CMake:
-    ```bash
+3.  Configure with CMake:
+
+    bash
     mkdir build
     cd build
     cmake .. 
-    ```
+    
     * If you don't have OpenSSL or wish to disable HTTPS for Shadertoy fetching, you can turn off the SSL option:
-        ```bash
+
         cmake .. -DRAYMARCHVIBE_ENABLE_SSL=OFF
-        ```
 
-4.  **Build the project:**
-    ```bash
+
+4.  Build the project:
+    
     make -j$(nproc) 
-    ```
-    (The `-j$(nproc)` flag tells make to use all available processor cores for a faster build.)
+   
+    (The '-j$(nproc)' flag tells make to use all available processor cores for a faster build, otherwise just use make)
 
-5.  **Run RaymarchVibe:**
+5.  Run RaymarchVibe:
     The executable will be in the `build` directory:
-    ```bash
+
     ./RaymarchVibe
-    ```
+
     The `shaders/` directory should be copied to the build directory alongside the executable for the sample shaders to load correctly.
 
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
 
+## NOTES
+
 I've temporarily added some sample shaders from the user balkhan (https://www.shadertoy.com/user/balkhan) on Shadertoy, because I thought they looked cool and needed something kinda complex to test with.
 I'll work on some custom shader samples SOON
 
+This is probably version 0.3 in a beta. There's some features that might crash or not work exactly as intended. This one's fresh out of the oven folks ...
