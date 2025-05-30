@@ -28,7 +28,7 @@ Dive in, tweak, explore, and vibe with your shaders!
 * Interactive UI:
     * Collapsible sections for organized parameter control.
     * In-app console for status messages and compilation errors.
-    * Help window with keybinds and usage instructions.
+    * Help window with keybinds and usage instructions. [needs simplifying]
     * Keybinds: F12 (Fullscreen), Spacebar (Toggle GUI), F5 (Apply Editor Code).
     * "Reset Parameters" button to revert changes to shader defaults.
 
@@ -58,7 +58,7 @@ System Libraries (typically needed for Linux builds):
 1.  Clone the repository:
 
     bash
-    git clone <your-repository-url>
+    git clone https://github.com/nicthegreatest/raymarchvibe
     cd raymarchvibe/
     
 
