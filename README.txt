@@ -8,7 +8,7 @@ This tool aims to:
 
 * Demystify how different parameters affect the visual output of a shader.
 * Help build an intuitive understanding of shader logic.
-* Encourage experimentation and learning through direct manipulation.
+* Encourage experimentation and learning through direct manipulation and seeing the results in real-time.
 * Lower the barrier to entry for creating and understanding complex visual effects.
 
 Dive in, tweak, explore, and vibe with your shaders!
