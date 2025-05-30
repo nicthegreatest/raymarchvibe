@@ -4,16 +4,7 @@ RaymarchVibe ✨ BETA/EXPERIMENTAL there may be bugs and crashes!
 
 Ever found yourself deep in GLSL shader code, wishing you could just *see* what happens when you tweak that one value? RaymarchVibe is born from that exact feeling. Sometimes, you just want to drag a slider instead of digging through lines of code.
 
-This tool is designed to bridge the gap between complex shader logic and immediate visual feedback. With RaymarchVibe, you can:
-
-* Edit shader parameters in real-time using intuitive GUI controls.
-* See your code changes instantly reflected in the live render.
-* Load shaders directly from Shadertoy or local files.
-* Experiment with `#define` directives and global `const` variables without manually editing and recompiling every time.
-
-## An Educational Tool for Shader Beginners
-
-RaymarchVibe is particularly crafted for those new to the fascinating worlds of fragment shaders, raymarching, and procedural generation. By providing a hands-on, interactive environment, it aims to:
+This tool aims to:
 
 * Demystify how different parameters affect the visual output of a shader.
 * Help build an intuitive understanding of shader logic.
