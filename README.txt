@@ -104,6 +104,7 @@ This is probably version 0.3 in a beta. There's some features that might crash o
 
 ## In the works
 
+> Ability to handle buffers/textures.
 > Audio reactivity.
 > Switch between mouse input and WASD keys for camera control.
 > Ability to handle larger more complex shaders in a way that preserves that 'instantaneous feel'.
