@@ -36,22 +36,22 @@ Dive in, tweak, explore, and vibe with your shaders!
 
 RaymarchVibe relies on the following libraries, which are fetched automatically using CMake's `FetchContent` where possible:
 
-* **C++17 Compiler** (e.g., GCC, Clang, MSVC)
-* **CMake** (version 3.15 or higher)
-* **OpenGL** (version 3.3 or higher)
-* **GLFW:** For windowing and input.
-* **Dear ImGui:** For the graphical user interface.
-* **ImGuiColorTextEdit:** For the enhanced shader code editor.
-* **GLAD:** OpenGL Loading Library.
-* **cpp-httplib:** For fetching shaders from Shadertoy.com (requires OpenSSL for HTTPS).
-* **nlohmann/json:** For parsing JSON data (used with Shadertoy API).
+* C++17 Compiler: (e.g., GCC, Clang, MSVC)
+* CMake: (version 3.15 or higher)
+* OpenGL: (version 3.3 or higher)
+* GLFW: For windowing and input.
+* Dear ImGui: For the graphical user interface.
+* ImGuiColorTextEdit: For the enhanced shader code editor.
+* GLAD: OpenGL Loading Library.
+* cpp-httplib: For fetching shaders from Shadertoy.com (requires OpenSSL for HTTPS).
+* nlohmann/json: For parsing JSON data (used with Shadertoy API).
 
 System Libraries (typically needed for Linux builds):
 
-* OpenGL development libraries (e.g., `libgl1-mesa-dev`, `freeglut3-dev`)
-* GLFW development libraries (e.g., `libglfw3-dev`)
-* X11 development libraries (e.g., `libx11-dev`, `libxrandr-dev`, `libxinerama-dev`, `libxcursor-dev`, `libxi-dev`)
-* OpenSSL development libraries (e.g., `libssl-dev`) for HTTPS Shadertoy fetching.
+* OpenGL development libraries (e.g `libgl1-mesa-dev`, `freeglut3-dev`)
+* GLFW development libraries (e.g `libglfw3-dev`)
+* X11 development libraries (e.g `libx11-dev`, `libxrandr-dev`, `libxinerama-dev`, `libxcursor-dev`, `libxi-dev`)
+* OpenSSL development libraries (e.g `libssl-dev`) for HTTPS Shadertoy fetching.
 
 ## Build Instructions (Linux)
 
@@ -97,7 +97,15 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## NOTES
 
-I've temporarily added some sample shaders from the user balkhan (https://www.shadertoy.com/user/balkhan) on Shadertoy, because I thought they looked cool and needed something kinda complex to test with.
+I've temporarily added some sample shaders from the user balkhan (https://www.shadertoy.com/user/balkhan) on Shadertoy, because I thought they looked cool and needed something quick and easy to test with stored locally.
 I'll work on some custom shader samples SOON
 
 This is probably version 0.3 in a beta. There's some features that might crash or not work exactly as intended. This one's fresh out of the oven folks ...
+
+## In the works
+
+> Audio reactivity.
+> Switch between mouse input and WASD keys for camera control.
+> Ability to handle larger more complex shaders in a way that preserves that 'instantaneous feel'.
+> GUI themes
+> Easier macOS and Windows compatability 
