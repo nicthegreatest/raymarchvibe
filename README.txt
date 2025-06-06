@@ -8,7 +8,7 @@ Updates:
 
 ![Image](https://github.com/user-attachments/assets/9e219c58-ecb6-424a-b796-642e404f02c6)
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/105405420/452169171-9e219c58-ecb6-424a-b796-642e404f02c6.png" alt="Screenshot">
+<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/105405420/452169171-9e219c58-ecb6-424a-b796-642e404f02c6.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20250606%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250606T053100Z&X-Amz-Expires=300&X-Amz-Signature=6875a1908335312074719cb45d710989d60108aef72d824f0574cdc6ae41bbc8&X-Amz-SignedHeaders=host" alt="Screenshot">
 
 
 
