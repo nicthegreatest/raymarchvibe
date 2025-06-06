@@ -1,4 +1,11 @@
-RaymarchVibe ✨ BETA/EXPERIMENTAL there may be bugs and crashes!
+RaymarchVibe ✨ BETA/EXPERIMENTAL
+
+Updates:
+
+- Modularization to reduce code size
+- Added basic audio reactivity function - add "uniform float iAudioAmp;" to get started
+
+
 
 ## Vision: Shader Exploration Made Intuitive
 
@@ -100,7 +107,7 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 I've temporarily added some sample shaders from the user balkhan (https://www.shadertoy.com/user/balkhan) on Shadertoy, because I thought they looked cool and needed something quick and easy to test with stored locally.
 I'll work on some custom shader samples SOON
 
-This is probably version 0.3 in a beta. There's some features that might crash or not work exactly as intended. This one's fresh out of the oven folks ...
+This is probably version 0.2 in a beta. There's some features that might crash or not work exactly as intended. This one's fresh out of the oven folks ...
 
 ## In the works
 
