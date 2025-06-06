@@ -8,7 +8,7 @@ Updates:
 
 ![Image](https://github.com/user-attachments/assets/9e219c58-ecb6-424a-b796-642e404f02c6)
 
-<img src="https://github.com/user-attachments/assets/9e219c58-ecb6-424a-b796-642e404f02c6" alt="Screenshot">
+<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/105405420/452169171-9e219c58-ecb6-424a-b796-642e404f02c6.png" alt="Screenshot">
 
 
 
