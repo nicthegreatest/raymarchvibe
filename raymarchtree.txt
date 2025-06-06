@@ -1,0 +1,2296 @@
+.
+├── build
+│   ├── CMakeCache.txt
+│   ├── CMakeFiles
+│   │   ├── 3.31.6
+│   │   │   ├── CMakeCCompiler.cmake
+│   │   │   ├── CMakeCXXCompiler.cmake
+│   │   │   ├── CMakeDetermineCompilerABI_C.bin
+│   │   │   ├── CMakeDetermineCompilerABI_CXX.bin
+│   │   │   ├── CMakeSystem.cmake
+│   │   │   ├── CompilerIdC
+│   │   │   │   ├── a.out
+│   │   │   │   ├── CMakeCCompilerId.c
+│   │   │   │   └── tmp
+│   │   │   └── CompilerIdCXX
+│   │   │       ├── a.out
+│   │   │       ├── CMakeCXXCompilerId.cpp
+│   │   │       └── tmp
+│   │   ├── cmake.check_cache
+│   │   ├── CMakeConfigureLog.yaml
+│   │   ├── CMakeScratch
+│   │   └── pkgRedirects
+│   └── _deps
+│       ├── glfw-build
+│       │   ├── CMakeFiles
+│       │   ├── cmake_uninstall.cmake
+│       │   └── src
+│       │       ├── CMakeFiles
+│       │       ├── glfw3Config.cmake
+│       │       ├── glfw3ConfigVersion.cmake
+│       │       └── glfw3.pc
+│       ├── glfw-src
+│       │   ├── CMake
+│       │   │   ├── cmake_uninstall.cmake.in
+│       │   │   ├── GenerateMappings.cmake
+│       │   │   ├── glfw3Config.cmake.in
+│       │   │   ├── glfw3.pc.in
+│       │   │   ├── i686-w64-mingw32-clang.cmake
+│       │   │   ├── i686-w64-mingw32.cmake
+│       │   │   ├── Info.plist.in
+│       │   │   ├── modules
+│       │   │   │   ├── FindEpollShim.cmake
+│       │   │   │   └── FindOSMesa.cmake
+│       │   │   ├── x86_64-w64-mingw32-clang.cmake
+│       │   │   └── x86_64-w64-mingw32.cmake
+│       │   ├── CMakeLists.txt
+│       │   ├── CONTRIBUTORS.md
+│       │   ├── deps
+│       │   │   ├── getopt.c
+│       │   │   ├── getopt.h
+│       │   │   ├── glad
+│       │   │   │   ├── gles2.h
+│       │   │   │   ├── gl.h
+│       │   │   │   └── vulkan.h
+│       │   │   ├── linmath.h
+│       │   │   ├── mingw
+│       │   │   │   ├── dinput.h
+│       │   │   │   ├── _mingw_dxhelper.h
+│       │   │   │   └── xinput.h
+│       │   │   ├── nuklear_glfw_gl2.h
+│       │   │   ├── nuklear.h
+│       │   │   ├── stb_image_write.h
+│       │   │   ├── tinycthread.c
+│       │   │   ├── tinycthread.h
+│       │   │   └── wayland
+│       │   │       ├── fractional-scale-v1.xml
+│       │   │       ├── idle-inhibit-unstable-v1.xml
+│       │   │       ├── pointer-constraints-unstable-v1.xml
+│       │   │       ├── relative-pointer-unstable-v1.xml
+│       │   │       ├── viewporter.xml
+│       │   │       ├── wayland.xml
+│       │   │       ├── xdg-activation-v1.xml
+│       │   │       ├── xdg-decoration-unstable-v1.xml
+│       │   │       └── xdg-shell.xml
+│       │   ├── docs
+│       │   │   ├── build.md
+│       │   │   ├── CMakeLists.txt
+│       │   │   ├── compat.md
+│       │   │   ├── compile.md
+│       │   │   ├── context.md
+│       │   │   ├── CONTRIBUTING.md
+│       │   │   ├── Doxyfile.in
+│       │   │   ├── DoxygenLayout.xml
+│       │   │   ├── extra.css
+│       │   │   ├── extra.css.map
+│       │   │   ├── extra.scss
+│       │   │   ├── footer.html
+│       │   │   ├── header.html
+│       │   │   ├── input.md
+│       │   │   ├── internal.md
+│       │   │   ├── intro.md
+│       │   │   ├── main.md
+│       │   │   ├── monitor.md
+│       │   │   ├── moving.md
+│       │   │   ├── news.md
+│       │   │   ├── quick.md
+│       │   │   ├── spaces.svg
+│       │   │   ├── SUPPORT.md
+│       │   │   ├── vulkan.md
+│       │   │   └── window.md
+│       │   ├── examples
+│       │   │   ├── boing.c
+│       │   │   ├── CMakeLists.txt
+│       │   │   ├── gears.c
+│       │   │   ├── glfw.icns
+│       │   │   ├── glfw.ico
+│       │   │   ├── glfw.rc
+│       │   │   ├── heightmap.c
+│       │   │   ├── offscreen.c
+│       │   │   ├── particles.c
+│       │   │   ├── sharing.c
+│       │   │   ├── splitview.c
+│       │   │   ├── triangle-opengl.c
+│       │   │   ├── triangle-opengles.c
+│       │   │   ├── wave.c
+│       │   │   └── windows.c
+│       │   ├── include
+│       │   │   └── GLFW
+│       │   │       ├── glfw3.h
+│       │   │       └── glfw3native.h
+│       │   ├── LICENSE.md
+│       │   ├── README.md
+│       │   ├── src
+│       │   │   ├── CMakeLists.txt
+│       │   │   ├── cocoa_init.m
+│       │   │   ├── cocoa_joystick.h
+│       │   │   ├── cocoa_joystick.m
+│       │   │   ├── cocoa_monitor.m
+│       │   │   ├── cocoa_platform.h
+│       │   │   ├── cocoa_time.c
+│       │   │   ├── cocoa_time.h
+│       │   │   ├── cocoa_window.m
+│       │   │   ├── context.c
+│       │   │   ├── egl_context.c
+│       │   │   ├── glfw.rc.in
+│       │   │   ├── glx_context.c
+│       │   │   ├── init.c
+│       │   │   ├── input.c
+│       │   │   ├── internal.h
+│       │   │   ├── linux_joystick.c
+│       │   │   ├── linux_joystick.h
+│       │   │   ├── mappings.h
+│       │   │   ├── mappings.h.in
+│       │   │   ├── monitor.c
+│       │   │   ├── nsgl_context.m
+│       │   │   ├── null_init.c
+│       │   │   ├── null_joystick.c
+│       │   │   ├── null_joystick.h
+│       │   │   ├── null_monitor.c
+│       │   │   ├── null_platform.h
+│       │   │   ├── null_window.c
+│       │   │   ├── osmesa_context.c
+│       │   │   ├── platform.c
+│       │   │   ├── platform.h
+│       │   │   ├── posix_module.c
+│       │   │   ├── posix_poll.c
+│       │   │   ├── posix_poll.h
+│       │   │   ├── posix_thread.c
+│       │   │   ├── posix_thread.h
+│       │   │   ├── posix_time.c
+│       │   │   ├── posix_time.h
+│       │   │   ├── vulkan.c
+│       │   │   ├── wgl_context.c
+│       │   │   ├── win32_init.c
+│       │   │   ├── win32_joystick.c
+│       │   │   ├── win32_joystick.h
+│       │   │   ├── win32_module.c
+│       │   │   ├── win32_monitor.c
+│       │   │   ├── win32_platform.h
+│       │   │   ├── win32_thread.c
+│       │   │   ├── win32_thread.h
+│       │   │   ├── win32_time.c
+│       │   │   ├── win32_time.h
+│       │   │   ├── win32_window.c
+│       │   │   ├── window.c
+│       │   │   ├── wl_init.c
+│       │   │   ├── wl_monitor.c
+│       │   │   ├── wl_platform.h
+│       │   │   ├── wl_window.c
+│       │   │   ├── x11_init.c
+│       │   │   ├── x11_monitor.c
+│       │   │   ├── x11_platform.h
+│       │   │   ├── x11_window.c
+│       │   │   ├── xkb_unicode.c
+│       │   │   └── xkb_unicode.h
+│       │   └── tests
+│       │       ├── allocator.c
+│       │       ├── clipboard.c
+│       │       ├── CMakeLists.txt
+│       │       ├── cursor.c
+│       │       ├── empty.c
+│       │       ├── events.c
+│       │       ├── gamma.c
+│       │       ├── glfwinfo.c
+│       │       ├── icon.c
+│       │       ├── iconify.c
+│       │       ├── inputlag.c
+│       │       ├── joysticks.c
+│       │       ├── monitors.c
+│       │       ├── msaa.c
+│       │       ├── reopen.c
+│       │       ├── tearing.c
+│       │       ├── threads.c
+│       │       ├── timeout.c
+│       │       ├── title.c
+│       │       ├── triangle-vulkan.c
+│       │       └── window.c
+│       ├── glfw-subbuild
+│       │   ├── CMakeCache.txt
+│       │   ├── CMakeFiles
+│       │   │   ├── 3.31.6
+│       │   │   │   └── CMakeSystem.cmake
+│       │   │   ├── cmake.check_cache
+│       │   │   ├── CMakeConfigureLog.yaml
+│       │   │   ├── CMakeDirectoryInformation.cmake
+│       │   │   ├── CMakeRuleHashes.txt
+│       │   │   ├── glfw-populate-complete
+│       │   │   ├── glfw-populate.dir
+│       │   │   │   ├── build.make
+│       │   │   │   ├── cmake_clean.cmake
+│       │   │   │   ├── compiler_depend.make
+│       │   │   │   ├── compiler_depend.ts
+│       │   │   │   ├── DependInfo.cmake
+│       │   │   │   ├── Labels.json
+│       │   │   │   ├── Labels.txt
+│       │   │   │   └── progress.make
+│       │   │   ├── Makefile2
+│       │   │   ├── Makefile.cmake
+│       │   │   ├── pkgRedirects
+│       │   │   ├── progress.marks
+│       │   │   └── TargetDirectories.txt
+│       │   ├── cmake_install.cmake
+│       │   ├── CMakeLists.txt
+│       │   ├── glfw-populate-prefix
+│       │   │   ├── src
+│       │   │   │   └── glfw-populate-stamp
+│       │   │   │       ├── glfw-populate-build
+│       │   │   │       ├── glfw-populate-configure
+│       │   │   │       ├── glfw-populate-done
+│       │   │   │       ├── glfw-populate-download
+│       │   │   │       ├── glfw-populate-gitclone-lastrun.txt
+│       │   │   │       ├── glfw-populate-gitinfo.txt
+│       │   │   │       ├── glfw-populate-install
+│       │   │   │       ├── glfw-populate-mkdir
+│       │   │   │       ├── glfw-populate-patch
+│       │   │   │       ├── glfw-populate-patch-info.txt
+│       │   │   │       ├── glfw-populate-test
+│       │   │   │       └── glfw-populate-update-info.txt
+│       │   │   └── tmp
+│       │   │       ├── glfw-populate-cfgcmd.txt
+│       │   │       ├── glfw-populate-gitclone.cmake
+│       │   │       ├── glfw-populate-gitupdate.cmake
+│       │   │       └── glfw-populate-mkdirs.cmake
+│       │   └── Makefile
+│       ├── httplib_fetch-build
+│       ├── httplib_fetch-src
+│       │   ├── cmake
+│       │   │   └── FindBrotli.cmake
+│       │   ├── CMakeLists.txt
+│       │   ├── example
+│       │   │   ├── benchmark.cc
+│       │   │   ├── ca-bundle.crt
+│       │   │   ├── client.cc
+│       │   │   ├── client.vcxproj
+│       │   │   ├── Dockerfile.hello
+│       │   │   ├── example.sln
+│       │   │   ├── hello.cc
+│       │   │   ├── Makefile
+│       │   │   ├── redirect.cc
+│       │   │   ├── server.cc
+│       │   │   ├── server.vcxproj
+│       │   │   ├── simplecli.cc
+│       │   │   ├── simplesvr.cc
+│       │   │   ├── ssecli.cc
+│       │   │   ├── ssesvr.cc
+│       │   │   ├── upload.cc
+│       │   │   └── uploader.sh
+│       │   ├── httplibConfig.cmake.in
+│       │   ├── httplib.h
+│       │   ├── LICENSE
+│       │   ├── meson.build
+│       │   ├── meson_options.txt
+│       │   ├── README.md
+│       │   ├── split.py
+│       │   └── test
+│       │       ├── ca-bundle.crt
+│       │       ├── CMakeLists.txt
+│       │       ├── fuzzing
+│       │       │   ├── CMakeLists.txt
+│       │       │   ├── corpus
+│       │       │   │   ├── 1
+│       │       │   │   ├── 2
+│       │       │   │   ├── 3
+│       │       │   │   ├── clusterfuzz-testcase-minimized-server_fuzzer-5042094968537088
+│       │       │   │   ├── clusterfuzz-testcase-minimized-server_fuzzer-5372331946541056
+│       │       │   │   ├── clusterfuzz-testcase-minimized-server_fuzzer-5386708825800704
+│       │       │   │   ├── clusterfuzz-testcase-minimized-server_fuzzer-5667822731132928
+│       │       │   │   ├── clusterfuzz-testcase-minimized-server_fuzzer-5886572146327552
+│       │       │   │   ├── clusterfuzz-testcase-minimized-server_fuzzer-5942767436562432
+│       │       │   │   ├── clusterfuzz-testcase-minimized-server_fuzzer-6007379124158464
+│       │       │   │   ├── clusterfuzz-testcase-minimized-server_fuzzer-6508706672541696
+│       │       │   │   └── issue1264
+│       │       │   ├── Makefile
+│       │       │   ├── server_fuzzer.cc
+│       │       │   ├── server_fuzzer.dict
+│       │       │   └── standalone_fuzz_target_runner.cpp
+│       │       ├── gtest
+│       │       │   ├── gtest-all.cc
+│       │       │   ├── gtest.h
+│       │       │   └── gtest_main.cc
+│       │       ├── image.jpg
+│       │       ├── include_httplib.cc
+│       │       ├── Makefile
+│       │       ├── meson.build
+│       │       ├── proxy
+│       │       │   ├── basic_passwd
+│       │       │   ├── basic_squid.conf
+│       │       │   ├── digest_passwd
+│       │       │   ├── digest_squid.conf
+│       │       │   ├── docker-compose.yml
+│       │       │   └── Dockerfile
+│       │       ├── test.cc
+│       │       ├── test.conf
+│       │       ├── test_proxy.cc
+│       │       ├── test.rootCA.conf
+│       │       ├── test.sln
+│       │       ├── test.vcxproj
+│       │       ├── www
+│       │       │   └── dir
+│       │       │       ├── 1MB.txt
+│       │       │       ├── index.html
+│       │       │       ├── meson.build
+│       │       │       ├── test.abcde
+│       │       │       └── test.html
+│       │       ├── www2
+│       │       │   └── dir
+│       │       │       ├── index.html
+│       │       │       ├── meson.build
+│       │       │       └── test.html
+│       │       └── www3
+│       │           └── dir
+│       │               ├── index.html
+│       │               ├── meson.build
+│       │               └── test.html
+│       ├── httplib_fetch-subbuild
+│       │   ├── CMakeCache.txt
+│       │   ├── CMakeFiles
+│       │   │   ├── 3.31.6
+│       │   │   │   └── CMakeSystem.cmake
+│       │   │   ├── cmake.check_cache
+│       │   │   ├── CMakeConfigureLog.yaml
+│       │   │   ├── CMakeDirectoryInformation.cmake
+│       │   │   ├── CMakeRuleHashes.txt
+│       │   │   ├── httplib_fetch-populate-complete
+│       │   │   ├── httplib_fetch-populate.dir
+│       │   │   │   ├── build.make
+│       │   │   │   ├── cmake_clean.cmake
+│       │   │   │   ├── compiler_depend.make
+│       │   │   │   ├── compiler_depend.ts
+│       │   │   │   ├── DependInfo.cmake
+│       │   │   │   ├── Labels.json
+│       │   │   │   ├── Labels.txt
+│       │   │   │   └── progress.make
+│       │   │   ├── Makefile2
+│       │   │   ├── Makefile.cmake
+│       │   │   ├── pkgRedirects
+│       │   │   ├── progress.marks
+│       │   │   └── TargetDirectories.txt
+│       │   ├── cmake_install.cmake
+│       │   ├── CMakeLists.txt
+│       │   ├── httplib_fetch-populate-prefix
+│       │   │   ├── src
+│       │   │   │   └── httplib_fetch-populate-stamp
+│       │   │   │       ├── httplib_fetch-populate-build
+│       │   │   │       ├── httplib_fetch-populate-configure
+│       │   │   │       ├── httplib_fetch-populate-done
+│       │   │   │       ├── httplib_fetch-populate-download
+│       │   │   │       ├── httplib_fetch-populate-gitclone-lastrun.txt
+│       │   │   │       ├── httplib_fetch-populate-gitinfo.txt
+│       │   │   │       ├── httplib_fetch-populate-install
+│       │   │   │       ├── httplib_fetch-populate-mkdir
+│       │   │   │       ├── httplib_fetch-populate-patch
+│       │   │   │       ├── httplib_fetch-populate-patch-info.txt
+│       │   │   │       ├── httplib_fetch-populate-test
+│       │   │   │       └── httplib_fetch-populate-update-info.txt
+│       │   │   └── tmp
+│       │   │       ├── httplib_fetch-populate-cfgcmd.txt
+│       │   │       ├── httplib_fetch-populate-gitclone.cmake
+│       │   │       ├── httplib_fetch-populate-gitupdate.cmake
+│       │   │       └── httplib_fetch-populate-mkdirs.cmake
+│       │   └── Makefile
+│       ├── imgui-build
+│       ├── imguicolortextedit-build
+│       ├── imguicolortextedit-src
+│       │   ├── CONTRIBUTING
+│       │   ├── LICENSE
+│       │   ├── README.md
+│       │   ├── TextEditor.cpp
+│       │   └── TextEditor.h
+│       ├── imguicolortextedit-subbuild
+│       │   ├── CMakeCache.txt
+│       │   ├── CMakeFiles
+│       │   │   ├── 3.31.6
+│       │   │   │   └── CMakeSystem.cmake
+│       │   │   ├── cmake.check_cache
+│       │   │   ├── CMakeConfigureLog.yaml
+│       │   │   ├── CMakeDirectoryInformation.cmake
+│       │   │   ├── CMakeRuleHashes.txt
+│       │   │   ├── imguicolortextedit-populate-complete
+│       │   │   ├── imguicolortextedit-populate.dir
+│       │   │   │   ├── build.make
+│       │   │   │   ├── cmake_clean.cmake
+│       │   │   │   ├── compiler_depend.make
+│       │   │   │   ├── compiler_depend.ts
+│       │   │   │   ├── DependInfo.cmake
+│       │   │   │   ├── Labels.json
+│       │   │   │   ├── Labels.txt
+│       │   │   │   └── progress.make
+│       │   │   ├── Makefile2
+│       │   │   ├── Makefile.cmake
+│       │   │   ├── pkgRedirects
+│       │   │   ├── progress.marks
+│       │   │   └── TargetDirectories.txt
+│       │   ├── cmake_install.cmake
+│       │   ├── CMakeLists.txt
+│       │   ├── imguicolortextedit-populate-prefix
+│       │   │   ├── src
+│       │   │   │   └── imguicolortextedit-populate-stamp
+│       │   │   │       ├── imguicolortextedit-populate-build
+│       │   │   │       ├── imguicolortextedit-populate-configure
+│       │   │   │       ├── imguicolortextedit-populate-done
+│       │   │   │       ├── imguicolortextedit-populate-download
+│       │   │   │       ├── imguicolortextedit-populate-gitclone-lastrun.txt
+│       │   │   │       ├── imguicolortextedit-populate-gitinfo.txt
+│       │   │   │       ├── imguicolortextedit-populate-install
+│       │   │   │       ├── imguicolortextedit-populate-mkdir
+│       │   │   │       ├── imguicolortextedit-populate-patch
+│       │   │   │       ├── imguicolortextedit-populate-patch-info.txt
+│       │   │   │       ├── imguicolortextedit-populate-test
+│       │   │   │       └── imguicolortextedit-populate-update-info.txt
+│       │   │   └── tmp
+│       │   │       ├── imguicolortextedit-populate-cfgcmd.txt
+│       │   │       ├── imguicolortextedit-populate-gitclone.cmake
+│       │   │       ├── imguicolortextedit-populate-gitupdate.cmake
+│       │   │       └── imguicolortextedit-populate-mkdirs.cmake
+│       │   └── Makefile
+│       ├── imgui-src
+│       │   ├── backends
+│       │   │   ├── imgui_impl_allegro5.cpp
+│       │   │   ├── imgui_impl_allegro5.h
+│       │   │   ├── imgui_impl_android.cpp
+│       │   │   ├── imgui_impl_android.h
+│       │   │   ├── imgui_impl_dx10.cpp
+│       │   │   ├── imgui_impl_dx10.h
+│       │   │   ├── imgui_impl_dx11.cpp
+│       │   │   ├── imgui_impl_dx11.h
+│       │   │   ├── imgui_impl_dx12.cpp
+│       │   │   ├── imgui_impl_dx12.h
+│       │   │   ├── imgui_impl_dx9.cpp
+│       │   │   ├── imgui_impl_dx9.h
+│       │   │   ├── imgui_impl_glfw.cpp
+│       │   │   ├── imgui_impl_glfw.h
+│       │   │   ├── imgui_impl_glut.cpp
+│       │   │   ├── imgui_impl_glut.h
+│       │   │   ├── imgui_impl_metal.h
+│       │   │   ├── imgui_impl_metal.mm
+│       │   │   ├── imgui_impl_opengl2.cpp
+│       │   │   ├── imgui_impl_opengl2.h
+│       │   │   ├── imgui_impl_opengl3.cpp
+│       │   │   ├── imgui_impl_opengl3.h
+│       │   │   ├── imgui_impl_opengl3_loader.h
+│       │   │   ├── imgui_impl_osx.h
+│       │   │   ├── imgui_impl_osx.mm
+│       │   │   ├── imgui_impl_sdl2.cpp
+│       │   │   ├── imgui_impl_sdl2.h
+│       │   │   ├── imgui_impl_sdl3.cpp
+│       │   │   ├── imgui_impl_sdl3.h
+│       │   │   ├── imgui_impl_sdlrenderer2.cpp
+│       │   │   ├── imgui_impl_sdlrenderer2.h
+│       │   │   ├── imgui_impl_sdlrenderer3.cpp
+│       │   │   ├── imgui_impl_sdlrenderer3.h
+│       │   │   ├── imgui_impl_vulkan.cpp
+│       │   │   ├── imgui_impl_vulkan.h
+│       │   │   ├── imgui_impl_wgpu.cpp
+│       │   │   ├── imgui_impl_wgpu.h
+│       │   │   ├── imgui_impl_win32.cpp
+│       │   │   ├── imgui_impl_win32.h
+│       │   │   └── vulkan
+│       │   │       ├── generate_spv.sh
+│       │   │       ├── glsl_shader.frag
+│       │   │       └── glsl_shader.vert
+│       │   ├── docs
+│       │   │   ├── BACKENDS.md
+│       │   │   ├── CHANGELOG.txt
+│       │   │   ├── CONTRIBUTING.md
+│       │   │   ├── EXAMPLES.md
+│       │   │   ├── FAQ.md
+│       │   │   ├── FONTS.md
+│       │   │   ├── README.md
+│       │   │   └── TODO.txt
+│       │   ├── examples
+│       │   │   ├── example_allegro5
+│       │   │   │   ├── example_allegro5.vcxproj
+│       │   │   │   ├── example_allegro5.vcxproj.filters
+│       │   │   │   ├── imconfig_allegro5.h
+│       │   │   │   ├── main.cpp
+│       │   │   │   └── README.md
+│       │   │   ├── example_android_opengl3
+│       │   │   │   ├── android
+│       │   │   │   │   ├── app
+│       │   │   │   │   │   ├── build.gradle
+│       │   │   │   │   │   └── src
+│       │   │   │   │   │       └── main
+│       │   │   │   │   │           ├── AndroidManifest.xml
+│       │   │   │   │   │           └── java
+│       │   │   │   │   │               └── MainActivity.kt
+│       │   │   │   │   ├── build.gradle
+│       │   │   │   │   └── settings.gradle
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   └── main.cpp
+│       │   │   ├── example_apple_metal
+│       │   │   │   ├── example_apple_metal.xcodeproj
+│       │   │   │   │   └── project.pbxproj
+│       │   │   │   ├── iOS
+│       │   │   │   │   ├── Info-iOS.plist
+│       │   │   │   │   └── LaunchScreen.storyboard
+│       │   │   │   ├── macOS
+│       │   │   │   │   ├── Info-macOS.plist
+│       │   │   │   │   └── MainMenu.storyboard
+│       │   │   │   ├── main.mm
+│       │   │   │   └── README.md
+│       │   │   ├── example_apple_opengl2
+│       │   │   │   ├── example_apple_opengl2.xcodeproj
+│       │   │   │   │   └── project.pbxproj
+│       │   │   │   └── main.mm
+│       │   │   ├── example_glfw_metal
+│       │   │   │   ├── main.mm
+│       │   │   │   └── Makefile
+│       │   │   ├── example_glfw_opengl2
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_glfw_opengl2.vcxproj
+│       │   │   │   ├── example_glfw_opengl2.vcxproj.filters
+│       │   │   │   ├── main.cpp
+│       │   │   │   └── Makefile
+│       │   │   ├── example_glfw_opengl3
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_glfw_opengl3.vcxproj
+│       │   │   │   ├── example_glfw_opengl3.vcxproj.filters
+│       │   │   │   ├── main.cpp
+│       │   │   │   ├── Makefile
+│       │   │   │   └── Makefile.emscripten
+│       │   │   ├── example_glfw_vulkan
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── build_win64.bat
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── example_glfw_vulkan.vcxproj
+│       │   │   │   ├── example_glfw_vulkan.vcxproj.filters
+│       │   │   │   └── main.cpp
+│       │   │   ├── example_glfw_wgpu
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── main.cpp
+│       │   │   │   ├── Makefile.emscripten
+│       │   │   │   ├── README.md
+│       │   │   │   └── web
+│       │   │   │       └── index.html
+│       │   │   ├── example_glut_opengl2
+│       │   │   │   ├── example_glut_opengl2.vcxproj
+│       │   │   │   ├── example_glut_opengl2.vcxproj.filters
+│       │   │   │   ├── main.cpp
+│       │   │   │   └── Makefile
+│       │   │   ├── example_null
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── main.cpp
+│       │   │   │   └── Makefile
+│       │   │   ├── example_sdl2_directx11
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_sdl2_directx11.vcxproj
+│       │   │   │   ├── example_sdl2_directx11.vcxproj.filters
+│       │   │   │   └── main.cpp
+│       │   │   ├── example_sdl2_metal
+│       │   │   │   ├── main.mm
+│       │   │   │   └── Makefile
+│       │   │   ├── example_sdl2_opengl2
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_sdl2_opengl2.vcxproj
+│       │   │   │   ├── example_sdl2_opengl2.vcxproj.filters
+│       │   │   │   ├── main.cpp
+│       │   │   │   ├── Makefile
+│       │   │   │   └── README.md
+│       │   │   ├── example_sdl2_opengl3
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_sdl2_opengl3.vcxproj
+│       │   │   │   ├── example_sdl2_opengl3.vcxproj.filters
+│       │   │   │   ├── main.cpp
+│       │   │   │   ├── Makefile
+│       │   │   │   ├── Makefile.emscripten
+│       │   │   │   └── README.md
+│       │   │   ├── example_sdl2_sdlrenderer2
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_sdl2_sdlrenderer2.vcxproj
+│       │   │   │   ├── example_sdl2_sdlrenderer2.vcxproj.filters
+│       │   │   │   ├── main.cpp
+│       │   │   │   ├── Makefile
+│       │   │   │   └── README.md
+│       │   │   ├── example_sdl2_vulkan
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_sdl2_vulkan.vcxproj
+│       │   │   │   ├── example_sdl2_vulkan.vcxproj.filters
+│       │   │   │   └── main.cpp
+│       │   │   ├── example_sdl3_opengl3
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_sdl3_opengl3.vcxproj
+│       │   │   │   ├── example_sdl3_opengl3.vcxproj.filters
+│       │   │   │   ├── main.cpp
+│       │   │   │   ├── Makefile
+│       │   │   │   ├── Makefile.emscripten
+│       │   │   │   └── README.md
+│       │   │   ├── example_sdl3_sdlrenderer3
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_sdl3_sdlrenderer3.vcxproj
+│       │   │   │   ├── example_sdl3_sdlrenderer3.vcxproj.filters
+│       │   │   │   ├── main.cpp
+│       │   │   │   └── Makefile
+│       │   │   ├── example_win32_directx10
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_win32_directx10.vcxproj
+│       │   │   │   ├── example_win32_directx10.vcxproj.filters
+│       │   │   │   └── main.cpp
+│       │   │   ├── example_win32_directx11
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_win32_directx11.vcxproj
+│       │   │   │   ├── example_win32_directx11.vcxproj.filters
+│       │   │   │   └── main.cpp
+│       │   │   ├── example_win32_directx12
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_win32_directx12.vcxproj
+│       │   │   │   ├── example_win32_directx12.vcxproj.filters
+│       │   │   │   └── main.cpp
+│       │   │   ├── example_win32_directx9
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_win32_directx9.vcxproj
+│       │   │   │   ├── example_win32_directx9.vcxproj.filters
+│       │   │   │   └── main.cpp
+│       │   │   ├── example_win32_opengl3
+│       │   │   │   ├── build_win32.bat
+│       │   │   │   ├── example_win32_opengl3.vcxproj
+│       │   │   │   ├── example_win32_opengl3.vcxproj.filters
+│       │   │   │   └── main.cpp
+│       │   │   ├── imgui_examples.sln
+│       │   │   ├── libs
+│       │   │   │   ├── emscripten
+│       │   │   │   │   ├── emscripten_mainloop_stub.h
+│       │   │   │   │   └── shell_minimal.html
+│       │   │   │   ├── glfw
+│       │   │   │   │   ├── COPYING.txt
+│       │   │   │   │   ├── include
+│       │   │   │   │   │   └── GLFW
+│       │   │   │   │   │       ├── glfw3.h
+│       │   │   │   │   │       └── glfw3native.h
+│       │   │   │   │   ├── lib-vc2010-32
+│       │   │   │   │   │   └── glfw3.lib
+│       │   │   │   │   └── lib-vc2010-64
+│       │   │   │   │       └── glfw3.lib
+│       │   │   │   └── usynergy
+│       │   │   │       ├── README.txt
+│       │   │   │       ├── uSynergy.c
+│       │   │   │       └── uSynergy.h
+│       │   │   └── README.txt
+│       │   ├── imconfig.h
+│       │   ├── imgui.cpp
+│       │   ├── imgui_demo.cpp
+│       │   ├── imgui_draw.cpp
+│       │   ├── imgui.h
+│       │   ├── imgui_internal.h
+│       │   ├── imgui_tables.cpp
+│       │   ├── imgui_widgets.cpp
+│       │   ├── imstb_rectpack.h
+│       │   ├── imstb_textedit.h
+│       │   ├── imstb_truetype.h
+│       │   ├── LICENSE.txt
+│       │   └── misc
+│       │       ├── cpp
+│       │       │   ├── imgui_stdlib.cpp
+│       │       │   ├── imgui_stdlib.h
+│       │       │   └── README.txt
+│       │       ├── debuggers
+│       │       │   ├── imgui.gdb
+│       │       │   ├── imgui.natstepfilter
+│       │       │   ├── imgui.natvis
+│       │       │   └── README.txt
+│       │       ├── fonts
+│       │       │   ├── binary_to_compressed_c.cpp
+│       │       │   ├── Cousine-Regular.ttf
+│       │       │   ├── DroidSans.ttf
+│       │       │   ├── Karla-Regular.ttf
+│       │       │   ├── ProggyClean.ttf
+│       │       │   ├── ProggyTiny.ttf
+│       │       │   └── Roboto-Medium.ttf
+│       │       ├── freetype
+│       │       │   ├── imgui_freetype.cpp
+│       │       │   ├── imgui_freetype.h
+│       │       │   └── README.md
+│       │       ├── README.txt
+│       │       └── single_file
+│       │           └── imgui_single_file.h
+│       ├── imgui-subbuild
+│       │   ├── CMakeCache.txt
+│       │   ├── CMakeFiles
+│       │   │   ├── 3.31.6
+│       │   │   │   └── CMakeSystem.cmake
+│       │   │   ├── cmake.check_cache
+│       │   │   ├── CMakeConfigureLog.yaml
+│       │   │   ├── CMakeDirectoryInformation.cmake
+│       │   │   ├── CMakeRuleHashes.txt
+│       │   │   ├── imgui-populate-complete
+│       │   │   ├── imgui-populate.dir
+│       │   │   │   ├── build.make
+│       │   │   │   ├── cmake_clean.cmake
+│       │   │   │   ├── compiler_depend.make
+│       │   │   │   ├── compiler_depend.ts
+│       │   │   │   ├── DependInfo.cmake
+│       │   │   │   ├── Labels.json
+│       │   │   │   ├── Labels.txt
+│       │   │   │   └── progress.make
+│       │   │   ├── Makefile2
+│       │   │   ├── Makefile.cmake
+│       │   │   ├── pkgRedirects
+│       │   │   ├── progress.marks
+│       │   │   └── TargetDirectories.txt
+│       │   ├── cmake_install.cmake
+│       │   ├── CMakeLists.txt
+│       │   ├── imgui-populate-prefix
+│       │   │   ├── src
+│       │   │   │   └── imgui-populate-stamp
+│       │   │   │       ├── imgui-populate-build
+│       │   │   │       ├── imgui-populate-configure
+│       │   │   │       ├── imgui-populate-done
+│       │   │   │       ├── imgui-populate-download
+│       │   │   │       ├── imgui-populate-gitclone-lastrun.txt
+│       │   │   │       ├── imgui-populate-gitinfo.txt
+│       │   │   │       ├── imgui-populate-install
+│       │   │   │       ├── imgui-populate-mkdir
+│       │   │   │       ├── imgui-populate-patch
+│       │   │   │       ├── imgui-populate-patch-info.txt
+│       │   │   │       ├── imgui-populate-test
+│       │   │   │       └── imgui-populate-update-info.txt
+│       │   │   └── tmp
+│       │   │       ├── imgui-populate-cfgcmd.txt
+│       │   │       ├── imgui-populate-gitclone.cmake
+│       │   │       ├── imgui-populate-gitupdate.cmake
+│       │   │       └── imgui-populate-mkdirs.cmake
+│       │   └── Makefile
+│       ├── miniaudio-build
+│       │   └── CMakeFiles
+│       ├── miniaudio-src
+│       │   ├── CHANGES.md
+│       │   ├── CMakeLists.txt
+│       │   ├── CONTRIBUTING.md
+│       │   ├── data
+│       │   │   ├── 16-44100-stereo.flac
+│       │   │   ├── 48000-stereo.ogg
+│       │   │   ├── 48000-stereo.opus
+│       │   │   └── README
+│       │   ├── examples
+│       │   │   ├── build
+│       │   │   │   └── README.md
+│       │   │   ├── custom_backend.c
+│       │   │   ├── custom_decoder.c
+│       │   │   ├── custom_decoder_engine.c
+│       │   │   ├── data_source_chaining.c
+│       │   │   ├── duplex_effect.c
+│       │   │   ├── engine_advanced.c
+│       │   │   ├── engine_effects.c
+│       │   │   ├── engine_hello_world.c
+│       │   │   ├── engine_sdl.c
+│       │   │   ├── engine_steamaudio.c
+│       │   │   ├── hilo_interop.c
+│       │   │   ├── node_graph.c
+│       │   │   ├── resource_manager_advanced.c
+│       │   │   ├── resource_manager.c
+│       │   │   ├── simple_capture.c
+│       │   │   ├── simple_duplex.c
+│       │   │   ├── simple_enumeration.c
+│       │   │   ├── simple_loopback.c
+│       │   │   ├── simple_looping.c
+│       │   │   ├── simple_mixing.c
+│       │   │   ├── simple_playback.c
+│       │   │   ├── simple_playback_sine.c
+│       │   │   └── simple_spatialization.c
+│       │   ├── external
+│       │   │   └── fs
+│       │   │       ├── fs.c
+│       │   │       └── fs.h
+│       │   ├── extras
+│       │   │   ├── decoders
+│       │   │   │   ├── libopus
+│       │   │   │   │   ├── miniaudio_libopus.c
+│       │   │   │   │   └── miniaudio_libopus.h
+│       │   │   │   └── libvorbis
+│       │   │   │       ├── miniaudio_libvorbis.c
+│       │   │   │       └── miniaudio_libvorbis.h
+│       │   │   ├── miniaudio_libopus.h
+│       │   │   ├── miniaudio_libvorbis.h
+│       │   │   ├── miniaudio_split
+│       │   │   │   ├── miniaudio.c
+│       │   │   │   ├── miniaudio.h
+│       │   │   │   └── README.md
+│       │   │   ├── nodes
+│       │   │   │   ├── ma_channel_combiner_node
+│       │   │   │   │   ├── ma_channel_combiner_node.c
+│       │   │   │   │   ├── ma_channel_combiner_node_example.c
+│       │   │   │   │   └── ma_channel_combiner_node.h
+│       │   │   │   ├── ma_channel_separator_node
+│       │   │   │   │   ├── ma_channel_separator_node.c
+│       │   │   │   │   ├── ma_channel_separator_node_example.c
+│       │   │   │   │   └── ma_channel_separator_node.h
+│       │   │   │   ├── ma_ltrim_node
+│       │   │   │   │   ├── ma_ltrim_node.c
+│       │   │   │   │   ├── ma_ltrim_node_example.c
+│       │   │   │   │   └── ma_ltrim_node.h
+│       │   │   │   ├── ma_reverb_node
+│       │   │   │   │   ├── ma_reverb_node.c
+│       │   │   │   │   ├── ma_reverb_node_example.c
+│       │   │   │   │   ├── ma_reverb_node.h
+│       │   │   │   │   └── verblib.h
+│       │   │   │   └── ma_vocoder_node
+│       │   │   │       ├── ma_vocoder_node.c
+│       │   │   │       ├── ma_vocoder_node_example.c
+│       │   │   │       ├── ma_vocoder_node.h
+│       │   │   │       └── voclib.h
+│       │   │   ├── osaudio
+│       │   │   │   ├── osaudio_dos_soundblaster.c
+│       │   │   │   ├── osaudio.h
+│       │   │   │   ├── osaudio_miniaudio.c
+│       │   │   │   ├── README.md
+│       │   │   │   └── tests
+│       │   │   │       ├── osaudio_deviceio.c
+│       │   │   │       └── osaudio_sine.c
+│       │   │   └── stb_vorbis.c
+│       │   ├── LICENSE
+│       │   ├── miniaudio.c
+│       │   ├── miniaudio.h
+│       │   ├── README.md
+│       │   ├── research
+│       │   │   └── README.txt
+│       │   ├── resources
+│       │   │   └── branding
+│       │   │       ├── icon-128x128.png
+│       │   │       ├── icon-256x256.png
+│       │   │       ├── icon-64x64.png
+│       │   │       ├── miniaudio_logo1.png
+│       │   │       └── miniaudio_logo_400.png
+│       │   ├── tests
+│       │   │   ├── android
+│       │   │   │   └── MiniaudioTester
+│       │   │   │       ├── app
+│       │   │   │       │   ├── build.gradle.kts
+│       │   │   │       │   ├── proguard-rules.pro
+│       │   │   │       │   └── src
+│       │   │   │       │       ├── androidTest
+│       │   │   │       │       │   └── java
+│       │   │   │       │       │       └── io
+│       │   │   │       │       │           └── miniaud
+│       │   │   │       │       │               └── miniaudiotester
+│       │   │   │       │       │                   └── ExampleInstrumentedTest.kt
+│       │   │   │       │       ├── main
+│       │   │   │       │       │   ├── AndroidManifest.xml
+│       │   │   │       │       │   ├── cpp
+│       │   │   │       │       │   │   ├── CMakeLists.txt
+│       │   │   │       │       │   │   └── native-lib.cpp
+│       │   │   │       │       │   ├── java
+│       │   │   │       │       │   │   └── io
+│       │   │   │       │       │   │       └── miniaud
+│       │   │   │       │       │   │           └── miniaudiotester
+│       │   │   │       │       │   │               └── MainActivity.kt
+│       │   │   │       │       │   └── res
+│       │   │   │       │       │       ├── drawable
+│       │   │   │       │       │       │   ├── ic_launcher_background.xml
+│       │   │   │       │       │       │   └── ic_launcher_foreground.xml
+│       │   │   │       │       │       ├── layout
+│       │   │   │       │       │       │   └── activity_main.xml
+│       │   │   │       │       │       ├── mipmap-anydpi
+│       │   │   │       │       │       │   ├── ic_launcher_round.xml
+│       │   │   │       │       │       │   └── ic_launcher.xml
+│       │   │   │       │       │       ├── mipmap-hdpi
+│       │   │   │       │       │       │   ├── ic_launcher_round.webp
+│       │   │   │       │       │       │   └── ic_launcher.webp
+│       │   │   │       │       │       ├── mipmap-mdpi
+│       │   │   │       │       │       │   ├── ic_launcher_round.webp
+│       │   │   │       │       │       │   └── ic_launcher.webp
+│       │   │   │       │       │       ├── mipmap-xhdpi
+│       │   │   │       │       │       │   ├── ic_launcher_round.webp
+│       │   │   │       │       │       │   └── ic_launcher.webp
+│       │   │   │       │       │       ├── mipmap-xxhdpi
+│       │   │   │       │       │       │   ├── ic_launcher_round.webp
+│       │   │   │       │       │       │   └── ic_launcher.webp
+│       │   │   │       │       │       ├── mipmap-xxxhdpi
+│       │   │   │       │       │       │   ├── ic_launcher_round.webp
+│       │   │   │       │       │       │   └── ic_launcher.webp
+│       │   │   │       │       │       ├── values
+│       │   │   │       │       │       │   ├── colors.xml
+│       │   │   │       │       │       │   ├── strings.xml
+│       │   │   │       │       │       │   └── themes.xml
+│       │   │   │       │       │       ├── values-night
+│       │   │   │       │       │       │   └── themes.xml
+│       │   │   │       │       │       └── xml
+│       │   │   │       │       │           ├── backup_rules.xml
+│       │   │   │       │       │           └── data_extraction_rules.xml
+│       │   │   │       │       └── test
+│       │   │   │       │           └── java
+│       │   │   │       │               └── io
+│       │   │   │       │                   └── miniaud
+│       │   │   │       │                       └── miniaudiotester
+│       │   │   │       │                           └── ExampleUnitTest.kt
+│       │   │   │       ├── build.gradle.kts
+│       │   │   │       ├── gradle
+│       │   │   │       │   ├── libs.versions.toml
+│       │   │   │       │   └── wrapper
+│       │   │   │       │       ├── gradle-wrapper.jar
+│       │   │   │       │       └── gradle-wrapper.properties
+│       │   │   │       ├── gradle.properties
+│       │   │   │       ├── gradlew
+│       │   │   │       ├── gradlew.bat
+│       │   │   │       └── settings.gradle.kts
+│       │   │   ├── _build
+│       │   │   │   ├── README.md
+│       │   │   │   └── res
+│       │   │   │       ├── benchmarks
+│       │   │   │       │   ├── pcm_f32_to_f32__mono_8000.raw
+│       │   │   │       │   ├── pcm_f32_to_s16__mono_8000.raw
+│       │   │   │       │   ├── pcm_f32_to_s24__mono_8000.raw
+│       │   │   │       │   ├── pcm_f32_to_s32__mono_8000.raw
+│       │   │   │       │   ├── pcm_f32_to_u8__mono_8000.raw
+│       │   │   │       │   ├── pcm_s16_to_f32__mono_8000.raw
+│       │   │   │       │   ├── pcm_s16_to_s16__mono_8000.raw
+│       │   │   │       │   ├── pcm_s16_to_s24__mono_8000.raw
+│       │   │   │       │   ├── pcm_s16_to_s32__mono_8000.raw
+│       │   │   │       │   ├── pcm_s16_to_u8__mono_8000.raw
+│       │   │   │       │   ├── pcm_s24_to_f32__mono_8000.raw
+│       │   │   │       │   ├── pcm_s24_to_s16__mono_8000.raw
+│       │   │   │       │   ├── pcm_s24_to_s24__mono_8000.raw
+│       │   │   │       │   ├── pcm_s24_to_s32__mono_8000.raw
+│       │   │   │       │   ├── pcm_s24_to_u8__mono_8000.raw
+│       │   │   │       │   ├── pcm_s32_to_f32__mono_8000.raw
+│       │   │   │       │   ├── pcm_s32_to_s16__mono_8000.raw
+│       │   │   │       │   ├── pcm_s32_to_s24__mono_8000.raw
+│       │   │   │       │   ├── pcm_s32_to_s32__mono_8000.raw
+│       │   │   │       │   ├── pcm_s32_to_u8__mono_8000.raw
+│       │   │   │       │   ├── pcm_u8_to_f32__mono_8000.raw
+│       │   │   │       │   ├── pcm_u8_to_s16__mono_8000.raw
+│       │   │   │       │   ├── pcm_u8_to_s24__mono_8000.raw
+│       │   │   │       │   ├── pcm_u8_to_s32__mono_8000.raw
+│       │   │   │       │   └── pcm_u8_to_u8__mono_8000.raw
+│       │   │   │       ├── output
+│       │   │   │       │   └── DO_NOT_DELETE
+│       │   │   │       └── sine_s16_mono_48000.wav
+│       │   │   ├── common
+│       │   │   │   └── common.c
+│       │   │   ├── conversion
+│       │   │   │   └── conversion.c
+│       │   │   ├── cpp
+│       │   │   │   └── cpp.cpp
+│       │   │   ├── debugging
+│       │   │   │   └── debugging.cpp
+│       │   │   ├── deviceio
+│       │   │   │   └── deviceio.c
+│       │   │   ├── emscripten
+│       │   │   │   ├── emscripten.c
+│       │   │   │   └── emscripten.html
+│       │   │   ├── filtering
+│       │   │   │   ├── filtering_bpf.c
+│       │   │   │   ├── filtering.c
+│       │   │   │   ├── filtering_dithering.c
+│       │   │   │   ├── filtering_hishelf.c
+│       │   │   │   ├── filtering_hpf.c
+│       │   │   │   ├── filtering_loshelf.c
+│       │   │   │   ├── filtering_lpf.c
+│       │   │   │   ├── filtering_notch.c
+│       │   │   │   └── filtering_peak.c
+│       │   │   └── generation
+│       │   │       ├── generation.c
+│       │   │       ├── generation_noise.c
+│       │   │       └── generation_waveform.c
+│       │   ├── tools
+│       │   │   └── audioconverter
+│       │   │       └── audioconverter.c
+│       │   └── website
+│       │       ├── CNAME
+│       │       ├── css
+│       │       │   └── main.css
+│       │       ├── img
+│       │       │   ├── Discord-Logo-White.svg
+│       │       │   ├── favicon.png
+│       │       │   ├── github_white.png
+│       │       │   ├── logo1_large.png
+│       │       │   ├── logo1_large_white.png
+│       │       │   ├── mastodon_white.svg
+│       │       │   ├── miniaudio_wide.png
+│       │       │   ├── platforms
+│       │       │   │   ├── android
+│       │       │   │   │   └── android.svg
+│       │       │   │   ├── apple
+│       │       │   │   │   └── apple-black.svg
+│       │       │   │   ├── bsd
+│       │       │   │   │   └── freebsd.svg
+│       │       │   │   ├── linux
+│       │       │   │   │   └── linux.svg
+│       │       │   │   ├── web
+│       │       │   │   │   └── html5.svg
+│       │       │   │   └── windows
+│       │       │   │       └── windows-10.svg
+│       │       │   ├── reddit_white.svg
+│       │       │   └── twitter_white.png
+│       │       └── index.html
+│       ├── miniaudio-subbuild
+│       │   ├── CMakeCache.txt
+│       │   ├── CMakeFiles
+│       │   │   ├── 3.31.6
+│       │   │   │   └── CMakeSystem.cmake
+│       │   │   ├── cmake.check_cache
+│       │   │   ├── CMakeConfigureLog.yaml
+│       │   │   ├── CMakeDirectoryInformation.cmake
+│       │   │   ├── CMakeRuleHashes.txt
+│       │   │   ├── Makefile2
+│       │   │   ├── Makefile.cmake
+│       │   │   ├── miniaudio-populate-complete
+│       │   │   ├── miniaudio-populate.dir
+│       │   │   │   ├── build.make
+│       │   │   │   ├── cmake_clean.cmake
+│       │   │   │   ├── compiler_depend.make
+│       │   │   │   ├── compiler_depend.ts
+│       │   │   │   ├── DependInfo.cmake
+│       │   │   │   ├── Labels.json
+│       │   │   │   ├── Labels.txt
+│       │   │   │   └── progress.make
+│       │   │   ├── pkgRedirects
+│       │   │   ├── progress.marks
+│       │   │   └── TargetDirectories.txt
+│       │   ├── cmake_install.cmake
+│       │   ├── CMakeLists.txt
+│       │   ├── Makefile
+│       │   └── miniaudio-populate-prefix
+│       │       ├── src
+│       │       │   └── miniaudio-populate-stamp
+│       │       │       ├── miniaudio-populate-build
+│       │       │       ├── miniaudio-populate-configure
+│       │       │       ├── miniaudio-populate-done
+│       │       │       ├── miniaudio-populate-download
+│       │       │       ├── miniaudio-populate-gitclone-lastrun.txt
+│       │       │       ├── miniaudio-populate-gitinfo.txt
+│       │       │       ├── miniaudio-populate-install
+│       │       │       ├── miniaudio-populate-mkdir
+│       │       │       ├── miniaudio-populate-patch
+│       │       │       ├── miniaudio-populate-patch-info.txt
+│       │       │       ├── miniaudio-populate-test
+│       │       │       └── miniaudio-populate-update-info.txt
+│       │       └── tmp
+│       │           ├── miniaudio-populate-cfgcmd.txt
+│       │           ├── miniaudio-populate-gitclone.cmake
+│       │           ├── miniaudio-populate-gitupdate.cmake
+│       │           └── miniaudio-populate-mkdirs.cmake
+│       ├── nlohmann_json-build
+│       │   ├── CMakeFiles
+│       │   ├── nlohmann_jsonConfig.cmake
+│       │   ├── nlohmann_jsonConfigVersion.cmake
+│       │   └── nlohmann_json.pc
+│       ├── nlohmann_json-src
+│       │   ├── BUILD.bazel
+│       │   ├── ChangeLog.md
+│       │   ├── CITATION.cff
+│       │   ├── cmake
+│       │   │   ├── ci.cmake
+│       │   │   ├── config.cmake.in
+│       │   │   ├── download_test_data.cmake
+│       │   │   ├── nlohmann_jsonConfigVersion.cmake.in
+│       │   │   ├── pkg-config.pc.in
+│       │   │   ├── scripts
+│       │   │   │   └── gen_bazel_build_file.cmake
+│       │   │   └── test.cmake
+│       │   ├── CMakeLists.txt
+│       │   ├── docs
+│       │   │   ├── avatars.png
+│       │   │   ├── docset
+│       │   │   │   ├── docset.json
+│       │   │   │   ├── docSet.sql
+│       │   │   │   ├── icon@2x.png
+│       │   │   │   ├── icon.png
+│       │   │   │   ├── Info.plist
+│       │   │   │   ├── Makefile
+│       │   │   │   └── README.md
+│       │   │   ├── examples
+│       │   │   │   ├── accept__string.cpp
+│       │   │   │   ├── accept__string.output
+│       │   │   │   ├── array.cpp
+│       │   │   │   ├── array.output
+│       │   │   │   ├── array_t.cpp
+│       │   │   │   ├── array_t.output
+│       │   │   │   ├── at__json_pointer_const.cpp
+│       │   │   │   ├── at__json_pointer_const.output
+│       │   │   │   ├── at__json_pointer.cpp
+│       │   │   │   ├── at__json_pointer.output
+│       │   │   │   ├── at__keytype.c++17.cpp
+│       │   │   │   ├── at__keytype.c++17.output
+│       │   │   │   ├── at__keytype_const.c++17.cpp
+│       │   │   │   ├── at__keytype_const.c++17.output
+│       │   │   │   ├── at__object_t_key_type_const.cpp
+│       │   │   │   ├── at__object_t_key_type_const.output
+│       │   │   │   ├── at__object_t_key_type.cpp
+│       │   │   │   ├── at__object_t_key_type.output
+│       │   │   │   ├── at__size_type_const.cpp
+│       │   │   │   ├── at__size_type_const.output
+│       │   │   │   ├── at__size_type.cpp
+│       │   │   │   ├── at__size_type.output
+│       │   │   │   ├── back.cpp
+│       │   │   │   ├── back.output
+│       │   │   │   ├── basic_json__basic_json.cpp
+│       │   │   │   ├── basic_json__basic_json.output
+│       │   │   │   ├── basic_json__CompatibleType.cpp
+│       │   │   │   ├── basic_json__CompatibleType.output
+│       │   │   │   ├── basic_json__copyassignment.cpp
+│       │   │   │   ├── basic_json__copyassignment.output
+│       │   │   │   ├── basic_json__InputIt_InputIt.cpp
+│       │   │   │   ├── basic_json__InputIt_InputIt.output
+│       │   │   │   ├── basic_json__list_init_t.cpp
+│       │   │   │   ├── basic_json__list_init_t.output
+│       │   │   │   ├── basic_json__moveconstructor.cpp
+│       │   │   │   ├── basic_json__moveconstructor.output
+│       │   │   │   ├── basic_json__nullptr_t.cpp
+│       │   │   │   ├── basic_json__nullptr_t.output
+│       │   │   │   ├── basic_json__size_type_basic_json.cpp
+│       │   │   │   ├── basic_json__size_type_basic_json.output
+│       │   │   │   ├── basic_json__value_t.cpp
+│       │   │   │   ├── basic_json__value_t.output
+│       │   │   │   ├── begin.cpp
+│       │   │   │   ├── begin.output
+│       │   │   │   ├── binary.cpp
+│       │   │   │   ├── binary.output
+│       │   │   │   ├── binary_t.cpp
+│       │   │   │   ├── binary_t.output
+│       │   │   │   ├── boolean_t.cpp
+│       │   │   │   ├── boolean_t.output
+│       │   │   │   ├── byte_container_with_subtype__byte_container_with_subtype.cpp
+│       │   │   │   ├── byte_container_with_subtype__byte_container_with_subtype.output
+│       │   │   │   ├── byte_container_with_subtype__clear_subtype.cpp
+│       │   │   │   ├── byte_container_with_subtype__clear_subtype.output
+│       │   │   │   ├── byte_container_with_subtype__has_subtype.cpp
+│       │   │   │   ├── byte_container_with_subtype__has_subtype.output
+│       │   │   │   ├── byte_container_with_subtype__set_subtype.cpp
+│       │   │   │   ├── byte_container_with_subtype__set_subtype.output
+│       │   │   │   ├── byte_container_with_subtype__subtype.cpp
+│       │   │   │   ├── byte_container_with_subtype__subtype.output
+│       │   │   │   ├── cbegin.cpp
+│       │   │   │   ├── cbegin.output
+│       │   │   │   ├── cbor_tag_handler_t.cpp
+│       │   │   │   ├── cbor_tag_handler_t.output
+│       │   │   │   ├── cend.cpp
+│       │   │   │   ├── cend.output
+│       │   │   │   ├── clear.cpp
+│       │   │   │   ├── clear.output
+│       │   │   │   ├── contains__json_pointer.cpp
+│       │   │   │   ├── contains__json_pointer.output
+│       │   │   │   ├── contains__keytype.c++17.cpp
+│       │   │   │   ├── contains__keytype.c++17.output
+│       │   │   │   ├── contains__object_t_key_type.cpp
+│       │   │   │   ├── contains__object_t_key_type.output
+│       │   │   │   ├── count__keytype.c++17.cpp
+│       │   │   │   ├── count__keytype.c++17.output
+│       │   │   │   ├── count__object_t_key_type.cpp
+│       │   │   │   ├── count__object_t_key_type.output
+│       │   │   │   ├── crbegin.cpp
+│       │   │   │   ├── crbegin.output
+│       │   │   │   ├── crend.cpp
+│       │   │   │   ├── crend.output
+│       │   │   │   ├── default_object_comparator_t.cpp
+│       │   │   │   ├── default_object_comparator_t.output
+│       │   │   │   ├── diagnostics_extended.cpp
+│       │   │   │   ├── diagnostics_extended.output
+│       │   │   │   ├── diagnostics_standard.cpp
+│       │   │   │   ├── diagnostics_standard.output
+│       │   │   │   ├── diff.cpp
+│       │   │   │   ├── diff.output
+│       │   │   │   ├── dump.cpp
+│       │   │   │   ├── dump.output
+│       │   │   │   ├── emplace_back.cpp
+│       │   │   │   ├── emplace_back.output
+│       │   │   │   ├── emplace.cpp
+│       │   │   │   ├── emplace.output
+│       │   │   │   ├── empty.cpp
+│       │   │   │   ├── empty.output
+│       │   │   │   ├── end.cpp
+│       │   │   │   ├── end.output
+│       │   │   │   ├── erase__IteratorType.cpp
+│       │   │   │   ├── erase__IteratorType_IteratorType.cpp
+│       │   │   │   ├── erase__IteratorType_IteratorType.output
+│       │   │   │   ├── erase__IteratorType.output
+│       │   │   │   ├── erase__keytype.c++17.cpp
+│       │   │   │   ├── erase__keytype.c++17.output
+│       │   │   │   ├── erase__object_t_key_type.cpp
+│       │   │   │   ├── erase__object_t_key_type.output
+│       │   │   │   ├── erase__size_type.cpp
+│       │   │   │   ├── erase__size_type.output
+│       │   │   │   ├── error_handler_t.cpp
+│       │   │   │   ├── error_handler_t.output
+│       │   │   │   ├── exception.cpp
+│       │   │   │   ├── exception.output
+│       │   │   │   ├── find__keytype.c++17.cpp
+│       │   │   │   ├── find__keytype.c++17.output
+│       │   │   │   ├── find__object_t_key_type.cpp
+│       │   │   │   ├── find__object_t_key_type.output
+│       │   │   │   ├── flatten.cpp
+│       │   │   │   ├── flatten.output
+│       │   │   │   ├── from_bjdata.cpp
+│       │   │   │   ├── from_bjdata.output
+│       │   │   │   ├── from_bson.cpp
+│       │   │   │   ├── from_bson.output
+│       │   │   │   ├── from_cbor.cpp
+│       │   │   │   ├── from_cbor.output
+│       │   │   │   ├── from_json__default_constructible.cpp
+│       │   │   │   ├── from_json__default_constructible.output
+│       │   │   │   ├── from_json__non_default_constructible.cpp
+│       │   │   │   ├── from_json__non_default_constructible.output
+│       │   │   │   ├── from_msgpack.cpp
+│       │   │   │   ├── from_msgpack.output
+│       │   │   │   ├── from_ubjson.cpp
+│       │   │   │   ├── from_ubjson.output
+│       │   │   │   ├── front.cpp
+│       │   │   │   ├── front.output
+│       │   │   │   ├── get_allocator.cpp
+│       │   │   │   ├── get_allocator.output
+│       │   │   │   ├── get_binary.cpp
+│       │   │   │   ├── get_binary.output
+│       │   │   │   ├── get__PointerType.cpp
+│       │   │   │   ├── get__PointerType.output
+│       │   │   │   ├── get_ptr.cpp
+│       │   │   │   ├── get_ptr.output
+│       │   │   │   ├── get_ref.cpp
+│       │   │   │   ├── get_ref.output
+│       │   │   │   ├── get_to.cpp
+│       │   │   │   ├── get_to.output
+│       │   │   │   ├── get__ValueType_const.cpp
+│       │   │   │   ├── get__ValueType_const.output
+│       │   │   │   ├── insert__count.cpp
+│       │   │   │   ├── insert__count.output
+│       │   │   │   ├── insert.cpp
+│       │   │   │   ├── insert__ilist.cpp
+│       │   │   │   ├── insert__ilist.output
+│       │   │   │   ├── insert.output
+│       │   │   │   ├── insert__range.cpp
+│       │   │   │   ├── insert__range_object.cpp
+│       │   │   │   ├── insert__range_object.output
+│       │   │   │   ├── insert__range.output
+│       │   │   │   ├── invalid_iterator.cpp
+│       │   │   │   ├── invalid_iterator.output
+│       │   │   │   ├── is_array.cpp
+│       │   │   │   ├── is_array.output
+│       │   │   │   ├── is_binary.cpp
+│       │   │   │   ├── is_binary.output
+│       │   │   │   ├── is_boolean.cpp
+│       │   │   │   ├── is_boolean.output
+│       │   │   │   ├── is_discarded.cpp
+│       │   │   │   ├── is_discarded.output
+│       │   │   │   ├── is_null.cpp
+│       │   │   │   ├── is_null.output
+│       │   │   │   ├── is_number.cpp
+│       │   │   │   ├── is_number_float.cpp
+│       │   │   │   ├── is_number_float.output
+│       │   │   │   ├── is_number_integer.cpp
+│       │   │   │   ├── is_number_integer.output
+│       │   │   │   ├── is_number.output
+│       │   │   │   ├── is_number_unsigned.cpp
+│       │   │   │   ├── is_number_unsigned.output
+│       │   │   │   ├── is_object.cpp
+│       │   │   │   ├── is_object.output
+│       │   │   │   ├── is_primitive.cpp
+│       │   │   │   ├── is_primitive.output
+│       │   │   │   ├── is_string.cpp
+│       │   │   │   ├── is_string.output
+│       │   │   │   ├── is_structured.cpp
+│       │   │   │   ├── is_structured.output
+│       │   │   │   ├── items.cpp
+│       │   │   │   ├── items.output
+│       │   │   │   ├── json_base_class_t.cpp
+│       │   │   │   ├── json_base_class_t.output
+│       │   │   │   ├── json_lines.cpp
+│       │   │   │   ├── json_lines.output
+│       │   │   │   ├── json_pointer__back.cpp
+│       │   │   │   ├── json_pointer__back.output
+│       │   │   │   ├── json_pointer.cpp
+│       │   │   │   ├── json_pointer__empty.cpp
+│       │   │   │   ├── json_pointer__empty.output
+│       │   │   │   ├── json_pointer__operator_add_binary.cpp
+│       │   │   │   ├── json_pointer__operator_add_binary.output
+│       │   │   │   ├── json_pointer__operator_add.cpp
+│       │   │   │   ├── json_pointer__operator_add.output
+│       │   │   │   ├── json_pointer__operator__equal.cpp
+│       │   │   │   ├── json_pointer__operator__equal.output
+│       │   │   │   ├── json_pointer__operator__equal_stringtype.cpp
+│       │   │   │   ├── json_pointer__operator__equal_stringtype.output
+│       │   │   │   ├── json_pointer__operator__notequal.cpp
+│       │   │   │   ├── json_pointer__operator__notequal.output
+│       │   │   │   ├── json_pointer__operator__notequal_stringtype.cpp
+│       │   │   │   ├── json_pointer__operator__notequal_stringtype.output
+│       │   │   │   ├── json_pointer__operator_string_t.cpp
+│       │   │   │   ├── json_pointer__operator_string_t.output
+│       │   │   │   ├── json_pointer.output
+│       │   │   │   ├── json_pointer__parent_pointer.cpp
+│       │   │   │   ├── json_pointer__parent_pointer.output
+│       │   │   │   ├── json_pointer__pop_back.cpp
+│       │   │   │   ├── json_pointer__pop_back.output
+│       │   │   │   ├── json_pointer__push_back.cpp
+│       │   │   │   ├── json_pointer__push_back.output
+│       │   │   │   ├── json_pointer__string_t.cpp
+│       │   │   │   ├── json_pointer__string_t.output
+│       │   │   │   ├── json_pointer__to_string.cpp
+│       │   │   │   ├── json_pointer__to_string.output
+│       │   │   │   ├── max_size.cpp
+│       │   │   │   ├── max_size.output
+│       │   │   │   ├── merge_patch.cpp
+│       │   │   │   ├── merge_patch.output
+│       │   │   │   ├── meta.cpp
+│       │   │   │   ├── meta.output
+│       │   │   │   ├── nlohmann_define_type_intrusive_explicit.cpp
+│       │   │   │   ├── nlohmann_define_type_intrusive_explicit.output
+│       │   │   │   ├── nlohmann_define_type_intrusive_macro.cpp
+│       │   │   │   ├── nlohmann_define_type_intrusive_macro.output
+│       │   │   │   ├── nlohmann_define_type_intrusive_only_serialize_explicit.cpp
+│       │   │   │   ├── nlohmann_define_type_intrusive_only_serialize_explicit.output
+│       │   │   │   ├── nlohmann_define_type_intrusive_only_serialize_macro.cpp
+│       │   │   │   ├── nlohmann_define_type_intrusive_only_serialize_macro.output
+│       │   │   │   ├── nlohmann_define_type_intrusive_with_default_explicit.cpp
+│       │   │   │   ├── nlohmann_define_type_intrusive_with_default_explicit.output
+│       │   │   │   ├── nlohmann_define_type_intrusive_with_default_macro.cpp
+│       │   │   │   ├── nlohmann_define_type_intrusive_with_default_macro.output
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_explicit.cpp
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_explicit.output
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_macro.cpp
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_macro.output
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_only_serialize_explicit.cpp
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_only_serialize_explicit.output
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_only_serialize_macro.cpp
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_only_serialize_macro.output
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_with_default_explicit.cpp
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_with_default_explicit.output
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_with_default_macro.cpp
+│       │   │   │   ├── nlohmann_define_type_non_intrusive_with_default_macro.output
+│       │   │   │   ├── nlohmann_json_namespace_begin.c++17.cpp
+│       │   │   │   ├── nlohmann_json_namespace_begin.c++17.output
+│       │   │   │   ├── nlohmann_json_namespace.cpp
+│       │   │   │   ├── nlohmann_json_namespace_no_version.cpp
+│       │   │   │   ├── nlohmann_json_namespace_no_version.output
+│       │   │   │   ├── nlohmann_json_namespace.output
+│       │   │   │   ├── nlohmann_json_serialize_enum_2.cpp
+│       │   │   │   ├── nlohmann_json_serialize_enum_2.output
+│       │   │   │   ├── nlohmann_json_serialize_enum.cpp
+│       │   │   │   ├── nlohmann_json_serialize_enum.output
+│       │   │   │   ├── nlohmann_json_version.cpp
+│       │   │   │   ├── nlohmann_json_version.output
+│       │   │   │   ├── number_float_t.cpp
+│       │   │   │   ├── number_float_t.output
+│       │   │   │   ├── number_integer_t.cpp
+│       │   │   │   ├── number_integer_t.output
+│       │   │   │   ├── number_unsigned_t.cpp
+│       │   │   │   ├── number_unsigned_t.output
+│       │   │   │   ├── object_comparator_t.cpp
+│       │   │   │   ├── object_comparator_t.output
+│       │   │   │   ├── object.cpp
+│       │   │   │   ├── object.output
+│       │   │   │   ├── object_t.cpp
+│       │   │   │   ├── object_t.output
+│       │   │   │   ├── operator_array__json_pointer_const.cpp
+│       │   │   │   ├── operator_array__json_pointer_const.output
+│       │   │   │   ├── operator_array__json_pointer.cpp
+│       │   │   │   ├── operator_array__json_pointer.output
+│       │   │   │   ├── operator_array__keytype.c++17.cpp
+│       │   │   │   ├── operator_array__keytype.c++17.output
+│       │   │   │   ├── operator_array__keytype_const.c++17.cpp
+│       │   │   │   ├── operator_array__keytype_const.c++17.output
+│       │   │   │   ├── operator_array__object_t_key_type_const.cpp
+│       │   │   │   ├── operator_array__object_t_key_type_const.output
+│       │   │   │   ├── operator_array__object_t_key_type.cpp
+│       │   │   │   ├── operator_array__object_t_key_type.output
+│       │   │   │   ├── operator_array__size_type_const.cpp
+│       │   │   │   ├── operator_array__size_type_const.output
+│       │   │   │   ├── operator_array__size_type.cpp
+│       │   │   │   ├── operator_array__size_type.output
+│       │   │   │   ├── operator_deserialize.cpp
+│       │   │   │   ├── operator_deserialize.output
+│       │   │   │   ├── operator__equal.cpp
+│       │   │   │   ├── operator__equal__nullptr_t.cpp
+│       │   │   │   ├── operator__equal__nullptr_t.output
+│       │   │   │   ├── operator__equal.output
+│       │   │   │   ├── operator__equal__specializations.cpp
+│       │   │   │   ├── operator__equal__specializations.output
+│       │   │   │   ├── operator__greater.cpp
+│       │   │   │   ├── operator__greaterequal.cpp
+│       │   │   │   ├── operator__greaterequal.output
+│       │   │   │   ├── operator__greater.output
+│       │   │   │   ├── operator__less.cpp
+│       │   │   │   ├── operator__lessequal.cpp
+│       │   │   │   ├── operator__lessequal.output
+│       │   │   │   ├── operator__less.output
+│       │   │   │   ├── operator_literal_json.cpp
+│       │   │   │   ├── operator_literal_json.output
+│       │   │   │   ├── operator_literal_json_pointer.cpp
+│       │   │   │   ├── operator_literal_json_pointer.output
+│       │   │   │   ├── operator_ltlt__basic_json.cpp
+│       │   │   │   ├── operator_ltlt__basic_json.output
+│       │   │   │   ├── operator_ltlt__json_pointer.cpp
+│       │   │   │   ├── operator_ltlt__json_pointer.output
+│       │   │   │   ├── operator__notequal.cpp
+│       │   │   │   ├── operator__notequal__nullptr_t.cpp
+│       │   │   │   ├── operator__notequal__nullptr_t.output
+│       │   │   │   ├── operator__notequal.output
+│       │   │   │   ├── operator_spaceship__const_reference.c++20.cpp
+│       │   │   │   ├── operator_spaceship__const_reference.c++20.output
+│       │   │   │   ├── operator_spaceship__scalartype.c++20.cpp
+│       │   │   │   ├── operator_spaceship__scalartype.c++20.output
+│       │   │   │   ├── operator__value_t.cpp
+│       │   │   │   ├── operator__value_t.output
+│       │   │   │   ├── operator__ValueType.cpp
+│       │   │   │   ├── operator__ValueType.output
+│       │   │   │   ├── ordered_json.cpp
+│       │   │   │   ├── ordered_json.output
+│       │   │   │   ├── ordered_map.cpp
+│       │   │   │   ├── ordered_map.output
+│       │   │   │   ├── other_error.cpp
+│       │   │   │   ├── other_error.output
+│       │   │   │   ├── out_of_range.cpp
+│       │   │   │   ├── out_of_range.output
+│       │   │   │   ├── parse__allow_exceptions.cpp
+│       │   │   │   ├── parse__allow_exceptions.output
+│       │   │   │   ├── parse__array__parser_callback_t.cpp
+│       │   │   │   ├── parse__array__parser_callback_t.output
+│       │   │   │   ├── parse__contiguouscontainer__parser_callback_t.cpp
+│       │   │   │   ├── parse__contiguouscontainer__parser_callback_t.output
+│       │   │   │   ├── parse_error.cpp
+│       │   │   │   ├── parse_error.output
+│       │   │   │   ├── parse__istream__parser_callback_t.cpp
+│       │   │   │   ├── parse__istream__parser_callback_t.output
+│       │   │   │   ├── parse__iterator_pair.cpp
+│       │   │   │   ├── parse__iterator_pair.link
+│       │   │   │   ├── parse__iterator_pair.output
+│       │   │   │   ├── parse__pointers.cpp
+│       │   │   │   ├── parse__pointers.link
+│       │   │   │   ├── parse__pointers.output
+│       │   │   │   ├── parse__string__parser_callback_t.cpp
+│       │   │   │   ├── parse__string__parser_callback_t.output
+│       │   │   │   ├── patch.cpp
+│       │   │   │   ├── patch_inplace.cpp
+│       │   │   │   ├── patch_inplace.output
+│       │   │   │   ├── patch.output
+│       │   │   │   ├── push_back.cpp
+│       │   │   │   ├── push_back__initializer_list.cpp
+│       │   │   │   ├── push_back__initializer_list.output
+│       │   │   │   ├── push_back__object_t__value.cpp
+│       │   │   │   ├── push_back__object_t__value.output
+│       │   │   │   ├── push_back.output
+│       │   │   │   ├── rbegin.cpp
+│       │   │   │   ├── rbegin.output
+│       │   │   │   ├── README.cpp
+│       │   │   │   ├── README.output
+│       │   │   │   ├── rend.cpp
+│       │   │   │   ├── rend.output
+│       │   │   │   ├── sax_parse__binary.cpp
+│       │   │   │   ├── sax_parse__binary.output
+│       │   │   │   ├── sax_parse.cpp
+│       │   │   │   ├── sax_parse.output
+│       │   │   │   ├── size.cpp
+│       │   │   │   ├── size.output
+│       │   │   │   ├── std_hash.cpp
+│       │   │   │   ├── std_hash.output
+│       │   │   │   ├── std_swap.cpp
+│       │   │   │   ├── std_swap.output
+│       │   │   │   ├── string_t.cpp
+│       │   │   │   ├── string_t.output
+│       │   │   │   ├── swap__array_t.cpp
+│       │   │   │   ├── swap__array_t.output
+│       │   │   │   ├── swap__binary_t.cpp
+│       │   │   │   ├── swap__binary_t.output
+│       │   │   │   ├── swap__object_t.cpp
+│       │   │   │   ├── swap__object_t.output
+│       │   │   │   ├── swap__reference.cpp
+│       │   │   │   ├── swap__reference.output
+│       │   │   │   ├── swap__string_t.cpp
+│       │   │   │   ├── swap__string_t.output
+│       │   │   │   ├── to_bjdata.cpp
+│       │   │   │   ├── to_bjdata.output
+│       │   │   │   ├── to_bson.cpp
+│       │   │   │   ├── to_bson.output
+│       │   │   │   ├── to_cbor.cpp
+│       │   │   │   ├── to_cbor.output
+│       │   │   │   ├── to_json.cpp
+│       │   │   │   ├── to_json.output
+│       │   │   │   ├── to_msgpack.cpp
+│       │   │   │   ├── to_msgpack.output
+│       │   │   │   ├── to_string.cpp
+│       │   │   │   ├── to_string.output
+│       │   │   │   ├── to_ubjson.cpp
+│       │   │   │   ├── to_ubjson.output
+│       │   │   │   ├── type.cpp
+│       │   │   │   ├── type_error.cpp
+│       │   │   │   ├── type_error.output
+│       │   │   │   ├── type_name.cpp
+│       │   │   │   ├── type_name.output
+│       │   │   │   ├── type.output
+│       │   │   │   ├── unflatten.cpp
+│       │   │   │   ├── unflatten.output
+│       │   │   │   ├── update.cpp
+│       │   │   │   ├── update.output
+│       │   │   │   ├── update__range.cpp
+│       │   │   │   ├── update__range.output
+│       │   │   │   ├── value__json_ptr.cpp
+│       │   │   │   ├── value__json_ptr.output
+│       │   │   │   ├── value__keytype.c++17.cpp
+│       │   │   │   ├── value__keytype.c++17.output
+│       │   │   │   ├── value__object_t_key_type.cpp
+│       │   │   │   └── value__object_t_key_type.output
+│       │   │   ├── json.gif
+│       │   │   ├── Makefile
+│       │   │   ├── mkdocs
+│       │   │   │   ├── docs
+│       │   │   │   │   ├── api
+│       │   │   │   │   │   ├── adl_serializer
+│       │   │   │   │   │   │   ├── from_json.md
+│       │   │   │   │   │   │   ├── index.md
+│       │   │   │   │   │   │   └── to_json.md
+│       │   │   │   │   │   ├── basic_json
+│       │   │   │   │   │   │   ├── accept.md
+│       │   │   │   │   │   │   ├── array.md
+│       │   │   │   │   │   │   ├── array_t.md
+│       │   │   │   │   │   │   ├── at.md
+│       │   │   │   │   │   │   ├── back.md
+│       │   │   │   │   │   │   ├── ~basic_json.md
+│       │   │   │   │   │   │   ├── basic_json.md
+│       │   │   │   │   │   │   ├── begin.md
+│       │   │   │   │   │   │   ├── binary.md
+│       │   │   │   │   │   │   ├── binary_t.md
+│       │   │   │   │   │   │   ├── boolean_t.md
+│       │   │   │   │   │   │   ├── cbegin.md
+│       │   │   │   │   │   │   ├── cbor_tag_handler_t.md
+│       │   │   │   │   │   │   ├── cend.md
+│       │   │   │   │   │   │   ├── clear.md
+│       │   │   │   │   │   │   ├── contains.md
+│       │   │   │   │   │   │   ├── count.md
+│       │   │   │   │   │   │   ├── crbegin.md
+│       │   │   │   │   │   │   ├── crend.md
+│       │   │   │   │   │   │   ├── default_object_comparator_t.md
+│       │   │   │   │   │   │   ├── diff.md
+│       │   │   │   │   │   │   ├── dump.md
+│       │   │   │   │   │   │   ├── emplace_back.md
+│       │   │   │   │   │   │   ├── emplace.md
+│       │   │   │   │   │   │   ├── empty.md
+│       │   │   │   │   │   │   ├── end.md
+│       │   │   │   │   │   │   ├── erase.md
+│       │   │   │   │   │   │   ├── error_handler_t.md
+│       │   │   │   │   │   │   ├── exception.md
+│       │   │   │   │   │   │   ├── find.md
+│       │   │   │   │   │   │   ├── flatten.md
+│       │   │   │   │   │   │   ├── from_bjdata.md
+│       │   │   │   │   │   │   ├── from_bson.md
+│       │   │   │   │   │   │   ├── from_cbor.md
+│       │   │   │   │   │   │   ├── from_msgpack.md
+│       │   │   │   │   │   │   ├── from_ubjson.md
+│       │   │   │   │   │   │   ├── front.md
+│       │   │   │   │   │   │   ├── get_allocator.md
+│       │   │   │   │   │   │   ├── get_binary.md
+│       │   │   │   │   │   │   ├── get.md
+│       │   │   │   │   │   │   ├── get_ptr.md
+│       │   │   │   │   │   │   ├── get_ref.md
+│       │   │   │   │   │   │   ├── get_to.md
+│       │   │   │   │   │   │   ├── index.md
+│       │   │   │   │   │   │   ├── input_format_t.md
+│       │   │   │   │   │   │   ├── insert.md
+│       │   │   │   │   │   │   ├── invalid_iterator.md
+│       │   │   │   │   │   │   ├── is_array.md
+│       │   │   │   │   │   │   ├── is_binary.md
+│       │   │   │   │   │   │   ├── is_boolean.md
+│       │   │   │   │   │   │   ├── is_discarded.md
+│       │   │   │   │   │   │   ├── is_null.md
+│       │   │   │   │   │   │   ├── is_number_float.md
+│       │   │   │   │   │   │   ├── is_number_integer.md
+│       │   │   │   │   │   │   ├── is_number.md
+│       │   │   │   │   │   │   ├── is_number_unsigned.md
+│       │   │   │   │   │   │   ├── is_object.md
+│       │   │   │   │   │   │   ├── is_primitive.md
+│       │   │   │   │   │   │   ├── is_string.md
+│       │   │   │   │   │   │   ├── is_structured.md
+│       │   │   │   │   │   │   ├── items.md
+│       │   │   │   │   │   │   ├── json_base_class_t.md
+│       │   │   │   │   │   │   ├── json_serializer.md
+│       │   │   │   │   │   │   ├── max_size.md
+│       │   │   │   │   │   │   ├── merge_patch.md
+│       │   │   │   │   │   │   ├── meta.md
+│       │   │   │   │   │   │   ├── number_float_t.md
+│       │   │   │   │   │   │   ├── number_integer_t.md
+│       │   │   │   │   │   │   ├── number_unsigned_t.md
+│       │   │   │   │   │   │   ├── object_comparator_t.md
+│       │   │   │   │   │   │   ├── object.md
+│       │   │   │   │   │   │   ├── object_t.md
+│       │   │   │   │   │   │   ├── operator_eq.md
+│       │   │   │   │   │   │   ├── operator_ge.md
+│       │   │   │   │   │   │   ├── operator_gt.md
+│       │   │   │   │   │   │   ├── operator_le.md
+│       │   │   │   │   │   │   ├── operator_lt.md
+│       │   │   │   │   │   │   ├── operator+=.md
+│       │   │   │   │   │   │   ├── operator=.md
+│       │   │   │   │   │   │   ├── operator[].md
+│       │   │   │   │   │   │   ├── operator_ne.md
+│       │   │   │   │   │   │   ├── operator_spaceship.md
+│       │   │   │   │   │   │   ├── operator_value_t.md
+│       │   │   │   │   │   │   ├── operator_ValueType.md
+│       │   │   │   │   │   │   ├── other_error.md
+│       │   │   │   │   │   │   ├── out_of_range.md
+│       │   │   │   │   │   │   ├── parse_error.md
+│       │   │   │   │   │   │   ├── parse_event_t.md
+│       │   │   │   │   │   │   ├── parse.md
+│       │   │   │   │   │   │   ├── parser_callback_t.md
+│       │   │   │   │   │   │   ├── patch_inplace.md
+│       │   │   │   │   │   │   ├── patch.md
+│       │   │   │   │   │   │   ├── push_back.md
+│       │   │   │   │   │   │   ├── rbegin.md
+│       │   │   │   │   │   │   ├── rend.md
+│       │   │   │   │   │   │   ├── sax_parse.md
+│       │   │   │   │   │   │   ├── size.md
+│       │   │   │   │   │   │   ├── std_hash.md
+│       │   │   │   │   │   │   ├── std_swap.md
+│       │   │   │   │   │   │   ├── string_t.md
+│       │   │   │   │   │   │   ├── swap.md
+│       │   │   │   │   │   │   ├── to_bjdata.md
+│       │   │   │   │   │   │   ├── to_bson.md
+│       │   │   │   │   │   │   ├── to_cbor.md
+│       │   │   │   │   │   │   ├── to_msgpack.md
+│       │   │   │   │   │   │   ├── to_string.md
+│       │   │   │   │   │   │   ├── to_ubjson.md
+│       │   │   │   │   │   │   ├── type_error.md
+│       │   │   │   │   │   │   ├── type.md
+│       │   │   │   │   │   │   ├── type_name.md
+│       │   │   │   │   │   │   ├── unflatten.md
+│       │   │   │   │   │   │   ├── update.md
+│       │   │   │   │   │   │   ├── value.md
+│       │   │   │   │   │   │   └── value_t.md
+│       │   │   │   │   │   ├── byte_container_with_subtype
+│       │   │   │   │   │   │   ├── byte_container_with_subtype.md
+│       │   │   │   │   │   │   ├── clear_subtype.md
+│       │   │   │   │   │   │   ├── has_subtype.md
+│       │   │   │   │   │   │   ├── index.md
+│       │   │   │   │   │   │   ├── set_subtype.md
+│       │   │   │   │   │   │   └── subtype.md
+│       │   │   │   │   │   ├── json.md
+│       │   │   │   │   │   ├── json_pointer
+│       │   │   │   │   │   │   ├── back.md
+│       │   │   │   │   │   │   ├── empty.md
+│       │   │   │   │   │   │   ├── index.md
+│       │   │   │   │   │   │   ├── json_pointer.md
+│       │   │   │   │   │   │   ├── operator_eq.md
+│       │   │   │   │   │   │   ├── operator_ne.md
+│       │   │   │   │   │   │   ├── operator_slasheq.md
+│       │   │   │   │   │   │   ├── operator_slash.md
+│       │   │   │   │   │   │   ├── operator_string_t.md
+│       │   │   │   │   │   │   ├── parent_pointer.md
+│       │   │   │   │   │   │   ├── pop_back.md
+│       │   │   │   │   │   │   ├── push_back.md
+│       │   │   │   │   │   │   ├── string_t.md
+│       │   │   │   │   │   │   └── to_string.md
+│       │   │   │   │   │   ├── json_sax
+│       │   │   │   │   │   │   ├── binary.md
+│       │   │   │   │   │   │   ├── boolean.md
+│       │   │   │   │   │   │   ├── end_array.md
+│       │   │   │   │   │   │   ├── end_object.md
+│       │   │   │   │   │   │   ├── index.md
+│       │   │   │   │   │   │   ├── key.md
+│       │   │   │   │   │   │   ├── null.md
+│       │   │   │   │   │   │   ├── number_float.md
+│       │   │   │   │   │   │   ├── number_integer.md
+│       │   │   │   │   │   │   ├── number_unsigned.md
+│       │   │   │   │   │   │   ├── parse_error.md
+│       │   │   │   │   │   │   ├── start_array.md
+│       │   │   │   │   │   │   ├── start_object.md
+│       │   │   │   │   │   │   └── string.md
+│       │   │   │   │   │   ├── macros
+│       │   │   │   │   │   │   ├── index.md
+│       │   │   │   │   │   │   ├── json_assert.md
+│       │   │   │   │   │   │   ├── json_diagnostics.md
+│       │   │   │   │   │   │   ├── json_disable_enum_serialization.md
+│       │   │   │   │   │   │   ├── json_has_cpp_11.md
+│       │   │   │   │   │   │   ├── json_has_filesystem.md
+│       │   │   │   │   │   │   ├── json_has_ranges.md
+│       │   │   │   │   │   │   ├── json_has_static_rtti.md
+│       │   │   │   │   │   │   ├── json_has_three_way_comparison.md
+│       │   │   │   │   │   │   ├── json_noexception.md
+│       │   │   │   │   │   │   ├── json_no_io.md
+│       │   │   │   │   │   │   ├── json_skip_library_version_check.md
+│       │   │   │   │   │   │   ├── json_skip_unsupported_compiler_check.md
+│       │   │   │   │   │   │   ├── json_throw_user.md
+│       │   │   │   │   │   │   ├── json_use_global_udls.md
+│       │   │   │   │   │   │   ├── json_use_implicit_conversions.md
+│       │   │   │   │   │   │   ├── json_use_legacy_discarded_value_comparison.md
+│       │   │   │   │   │   │   ├── nlohmann_define_type_intrusive.md
+│       │   │   │   │   │   │   ├── nlohmann_define_type_non_intrusive.md
+│       │   │   │   │   │   │   ├── nlohmann_json_namespace_begin.md
+│       │   │   │   │   │   │   ├── nlohmann_json_namespace.md
+│       │   │   │   │   │   │   ├── nlohmann_json_namespace_no_version.md
+│       │   │   │   │   │   │   ├── nlohmann_json_serialize_enum.md
+│       │   │   │   │   │   │   └── nlohmann_json_version_major.md
+│       │   │   │   │   │   ├── operator_gtgt.md
+│       │   │   │   │   │   ├── operator_literal_json.md
+│       │   │   │   │   │   ├── operator_literal_json_pointer.md
+│       │   │   │   │   │   ├── operator_ltlt.md
+│       │   │   │   │   │   ├── ordered_json.md
+│       │   │   │   │   │   └── ordered_map.md
+│       │   │   │   │   ├── css
+│       │   │   │   │   │   └── custom.css
+│       │   │   │   │   ├── features
+│       │   │   │   │   │   ├── arbitrary_types.md
+│       │   │   │   │   │   ├── assertions.md
+│       │   │   │   │   │   ├── binary_formats
+│       │   │   │   │   │   │   ├── bjdata.md
+│       │   │   │   │   │   │   ├── bson.md
+│       │   │   │   │   │   │   ├── cbor.md
+│       │   │   │   │   │   │   ├── index.md
+│       │   │   │   │   │   │   ├── messagepack.md
+│       │   │   │   │   │   │   └── ubjson.md
+│       │   │   │   │   │   ├── binary_values.md
+│       │   │   │   │   │   ├── comments.md
+│       │   │   │   │   │   ├── element_access
+│       │   │   │   │   │   │   ├── checked_access.md
+│       │   │   │   │   │   │   ├── default_value.md
+│       │   │   │   │   │   │   ├── index.md
+│       │   │   │   │   │   │   └── unchecked_access.md
+│       │   │   │   │   │   ├── enum_conversion.md
+│       │   │   │   │   │   ├── iterators.md
+│       │   │   │   │   │   ├── json_patch.md
+│       │   │   │   │   │   ├── json_pointer.md
+│       │   │   │   │   │   ├── macros.md
+│       │   │   │   │   │   ├── merge_patch.md
+│       │   │   │   │   │   ├── namespace.md
+│       │   │   │   │   │   ├── object_order.md
+│       │   │   │   │   │   ├── parsing
+│       │   │   │   │   │   │   ├── index.md
+│       │   │   │   │   │   │   ├── json_lines.md
+│       │   │   │   │   │   │   ├── parse_exceptions.md
+│       │   │   │   │   │   │   ├── parser_callbacks.md
+│       │   │   │   │   │   │   └── sax_interface.md
+│       │   │   │   │   │   └── types
+│       │   │   │   │   │       ├── index.md
+│       │   │   │   │   │       └── number_handling.md
+│       │   │   │   │   ├── home
+│       │   │   │   │   │   ├── code_of_conduct.md
+│       │   │   │   │   │   ├── design_goals.md
+│       │   │   │   │   │   ├── exceptions.md
+│       │   │   │   │   │   ├── faq.md
+│       │   │   │   │   │   ├── license.md
+│       │   │   │   │   │   ├── releases.md
+│       │   │   │   │   │   └── sponsors.md
+│       │   │   │   │   ├── images
+│       │   │   │   │   │   ├── callback_events.png
+│       │   │   │   │   │   ├── json_syntax_number.png
+│       │   │   │   │   │   ├── range-begin-end.svg
+│       │   │   │   │   │   └── range-rbegin-rend.svg
+│       │   │   │   │   ├── index.md
+│       │   │   │   │   └── integration
+│       │   │   │   │       ├── cmake.md
+│       │   │   │   │       ├── conan
+│       │   │   │   │       │   ├── CMakeLists.txt
+│       │   │   │   │       │   ├── Conanfile.txt
+│       │   │   │   │       │   └── example.cpp
+│       │   │   │   │       ├── example.cpp
+│       │   │   │   │       ├── index.md
+│       │   │   │   │       ├── migration_guide.md
+│       │   │   │   │       ├── package_managers.md
+│       │   │   │   │       ├── pkg-config.md
+│       │   │   │   │       └── vcpkg
+│       │   │   │   │           ├── CMakeLists.txt
+│       │   │   │   │           └── example.cpp
+│       │   │   │   ├── Makefile
+│       │   │   │   ├── mkdocs.yml
+│       │   │   │   ├── requirements.txt
+│       │   │   │   └── scripts
+│       │   │   │       └── check_structure.py
+│       │   │   ├── README.md
+│       │   │   └── usages
+│       │   │       ├── ios.png
+│       │   │       └── macos.png
+│       │   ├── include
+│       │   │   └── nlohmann
+│       │   │       ├── adl_serializer.hpp
+│       │   │       ├── byte_container_with_subtype.hpp
+│       │   │       ├── detail
+│       │   │       │   ├── abi_macros.hpp
+│       │   │       │   ├── conversions
+│       │   │       │   │   ├── from_json.hpp
+│       │   │       │   │   ├── to_chars.hpp
+│       │   │       │   │   └── to_json.hpp
+│       │   │       │   ├── exceptions.hpp
+│       │   │       │   ├── hash.hpp
+│       │   │       │   ├── input
+│       │   │       │   │   ├── binary_reader.hpp
+│       │   │       │   │   ├── input_adapters.hpp
+│       │   │       │   │   ├── json_sax.hpp
+│       │   │       │   │   ├── lexer.hpp
+│       │   │       │   │   ├── parser.hpp
+│       │   │       │   │   └── position_t.hpp
+│       │   │       │   ├── iterators
+│       │   │       │   │   ├── internal_iterator.hpp
+│       │   │       │   │   ├── iteration_proxy.hpp
+│       │   │       │   │   ├── iterator_traits.hpp
+│       │   │       │   │   ├── iter_impl.hpp
+│       │   │       │   │   ├── json_reverse_iterator.hpp
+│       │   │       │   │   └── primitive_iterator.hpp
+│       │   │       │   ├── json_custom_base_class.hpp
+│       │   │       │   ├── json_pointer.hpp
+│       │   │       │   ├── json_ref.hpp
+│       │   │       │   ├── macro_scope.hpp
+│       │   │       │   ├── macro_unscope.hpp
+│       │   │       │   ├── meta
+│       │   │       │   │   ├── call_std
+│       │   │       │   │   │   ├── begin.hpp
+│       │   │       │   │   │   └── end.hpp
+│       │   │       │   │   ├── cpp_future.hpp
+│       │   │       │   │   ├── detected.hpp
+│       │   │       │   │   ├── identity_tag.hpp
+│       │   │       │   │   ├── is_sax.hpp
+│       │   │       │   │   ├── std_fs.hpp
+│       │   │       │   │   ├── type_traits.hpp
+│       │   │       │   │   └── void_t.hpp
+│       │   │       │   ├── output
+│       │   │       │   │   ├── binary_writer.hpp
+│       │   │       │   │   ├── output_adapters.hpp
+│       │   │       │   │   └── serializer.hpp
+│       │   │       │   ├── string_concat.hpp
+│       │   │       │   ├── string_escape.hpp
+│       │   │       │   └── value_t.hpp
+│       │   │       ├── json_fwd.hpp
+│       │   │       ├── json.hpp
+│       │   │       ├── ordered_map.hpp
+│       │   │       └── thirdparty
+│       │   │           └── hedley
+│       │   │               ├── hedley.hpp
+│       │   │               └── hedley_undef.hpp
+│       │   ├── LICENSE.MIT
+│       │   ├── LICENSES
+│       │   │   ├── Apache-2.0.txt
+│       │   │   ├── BSD-3-Clause.txt
+│       │   │   ├── GPL-3.0-only.txt
+│       │   │   └── MIT.txt
+│       │   ├── Makefile
+│       │   ├── meson.build
+│       │   ├── nlohmann_json.natvis
+│       │   ├── Package.swift
+│       │   ├── README.md
+│       │   ├── single_include
+│       │   │   └── nlohmann
+│       │   │       ├── json_fwd.hpp
+│       │   │       └── json.hpp
+│       │   ├── tests
+│       │   │   ├── abi
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   ├── config
+│       │   │   │   │   ├── CMakeLists.txt
+│       │   │   │   │   ├── config.hpp
+│       │   │   │   │   ├── custom.cpp
+│       │   │   │   │   ├── default.cpp
+│       │   │   │   │   └── noversion.cpp
+│       │   │   │   ├── diag
+│       │   │   │   │   ├── CMakeLists.txt
+│       │   │   │   │   ├── diag.cpp
+│       │   │   │   │   ├── diag.hpp
+│       │   │   │   │   ├── diag_off.cpp
+│       │   │   │   │   └── diag_on.cpp
+│       │   │   │   ├── include
+│       │   │   │   │   └── nlohmann
+│       │   │   │   │       └── json_v3_10_5.hpp
+│       │   │   │   ├── inline_ns
+│       │   │   │   │   ├── CMakeLists.txt
+│       │   │   │   │   ├── use_current.cpp
+│       │   │   │   │   └── use_v3_10_5.cpp
+│       │   │   │   └── main.cpp
+│       │   │   ├── benchmarks
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   └── src
+│       │   │   │       └── benchmarks.cpp
+│       │   │   ├── cmake_add_subdirectory
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   └── project
+│       │   │   │       ├── CMakeLists.txt
+│       │   │   │       └── main.cpp
+│       │   │   ├── cmake_fetch_content
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   └── project
+│       │   │   │       ├── CMakeLists.txt
+│       │   │   │       └── main.cpp
+│       │   │   ├── cmake_fetch_content2
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   └── project
+│       │   │   │       ├── CMakeLists.txt
+│       │   │   │       └── main.cpp
+│       │   │   ├── cmake_import
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   └── project
+│       │   │   │       ├── CMakeLists.txt
+│       │   │   │       └── main.cpp
+│       │   │   ├── cmake_import_minver
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   └── project
+│       │   │   │       ├── CMakeLists.txt
+│       │   │   │       └── main.cpp
+│       │   │   ├── CMakeLists.txt
+│       │   │   ├── cmake_target_include_directories
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   └── project
+│       │   │   │       ├── Bar.cpp
+│       │   │   │       ├── Bar.hpp
+│       │   │   │       ├── CMakeLists.txt
+│       │   │   │       ├── Foo.cpp
+│       │   │   │       ├── Foo.hpp
+│       │   │   │       └── main.cpp
+│       │   │   ├── cuda_example
+│       │   │   │   ├── CMakeLists.txt
+│       │   │   │   └── json_cuda.cu
+│       │   │   ├── fuzzing.md
+│       │   │   ├── Makefile
+│       │   │   ├── reports
+│       │   │   │   ├── 2016-08-29-fuzz
+│       │   │   │   │   ├── exec_speed.png
+│       │   │   │   │   ├── fuzz.tiff
+│       │   │   │   │   ├── high_freq.png
+│       │   │   │   │   ├── index.html
+│       │   │   │   │   └── low_freq.png
+│       │   │   │   ├── 2016-09-09-nativejson_benchmark
+│       │   │   │   │   ├── conformance_Nlohmann (C++11).md
+│       │   │   │   │   ├── conformance_overall_Result.png
+│       │   │   │   │   ├── performance_Corei7-4980HQ@2.80GHz_mac64_clang7.0_1._Parse_Memory_(byte).png
+│       │   │   │   │   ├── performance_Corei7-4980HQ@2.80GHz_mac64_clang7.0_1._Parse_Time_(ms).png
+│       │   │   │   │   ├── performance_Corei7-4980HQ@2.80GHz_mac64_clang7.0_2._Stringify_Time_(ms).png
+│       │   │   │   │   ├── performance_Corei7-4980HQ@2.80GHz_mac64_clang7.0_3._Prettify_Time_(ms).png
+│       │   │   │   │   ├── performance_Corei7-4980HQ@2.80GHz_mac64_clang7.0_7._Code_size_FileSize_(byte).png
+│       │   │   │   │   └── README.md
+│       │   │   │   └── 2016-10-02-fuzz
+│       │   │   │       ├── exec_speed.png
+│       │   │   │       ├── fuzz.tiff
+│       │   │   │       ├── high_freq.png
+│       │   │   │       ├── index.html
+│       │   │   │       └── low_freq.png
+│       │   │   ├── src
+│       │   │   │   ├── fuzzer-driver_afl.cpp
+│       │   │   │   ├── fuzzer-parse_bjdata.cpp
+│       │   │   │   ├── fuzzer-parse_bson.cpp
+│       │   │   │   ├── fuzzer-parse_cbor.cpp
+│       │   │   │   ├── fuzzer-parse_json.cpp
+│       │   │   │   ├── fuzzer-parse_msgpack.cpp
+│       │   │   │   ├── fuzzer-parse_ubjson.cpp
+│       │   │   │   ├── make_test_data_available.hpp
+│       │   │   │   ├── test_utils.hpp
+│       │   │   │   ├── unit-32bit.cpp
+│       │   │   │   ├── unit-algorithms.cpp
+│       │   │   │   ├── unit-allocator.cpp
+│       │   │   │   ├── unit-alt-string.cpp
+│       │   │   │   ├── unit-assert_macro.cpp
+│       │   │   │   ├── unit-binary_formats.cpp
+│       │   │   │   ├── unit-bjdata.cpp
+│       │   │   │   ├── unit-bson.cpp
+│       │   │   │   ├── unit-byte_container_with_subtype.cpp
+│       │   │   │   ├── unit-capacity.cpp
+│       │   │   │   ├── unit-cbor.cpp
+│       │   │   │   ├── unit-class_const_iterator.cpp
+│       │   │   │   ├── unit-class_iterator.cpp
+│       │   │   │   ├── unit-class_lexer.cpp
+│       │   │   │   ├── unit-class_parser.cpp
+│       │   │   │   ├── unit-comparison.cpp
+│       │   │   │   ├── unit-concepts.cpp
+│       │   │   │   ├── unit-constructor1.cpp
+│       │   │   │   ├── unit-constructor2.cpp
+│       │   │   │   ├── unit-convenience.cpp
+│       │   │   │   ├── unit-conversions.cpp
+│       │   │   │   ├── unit.cpp
+│       │   │   │   ├── unit-custom-base-class.cpp
+│       │   │   │   ├── unit-deserialization.cpp
+│       │   │   │   ├── unit-diagnostics.cpp
+│       │   │   │   ├── unit-disabled_exceptions.cpp
+│       │   │   │   ├── unit-element_access1.cpp
+│       │   │   │   ├── unit-element_access2.cpp
+│       │   │   │   ├── unit-hash.cpp
+│       │   │   │   ├── unit-inspection.cpp
+│       │   │   │   ├── unit-items.cpp
+│       │   │   │   ├── unit-iterators1.cpp
+│       │   │   │   ├── unit-iterators2.cpp
+│       │   │   │   ├── unit-json_patch.cpp
+│       │   │   │   ├── unit-json_pointer.cpp
+│       │   │   │   ├── unit-large_json.cpp
+│       │   │   │   ├── unit-merge_patch.cpp
+│       │   │   │   ├── unit-meta.cpp
+│       │   │   │   ├── unit-modifiers.cpp
+│       │   │   │   ├── unit-msgpack.cpp
+│       │   │   │   ├── unit-noexcept.cpp
+│       │   │   │   ├── unit-no-mem-leak-on-adl-serialize.cpp
+│       │   │   │   ├── unit-ordered_json.cpp
+│       │   │   │   ├── unit-ordered_map.cpp
+│       │   │   │   ├── unit-pointer_access.cpp
+│       │   │   │   ├── unit-readme.cpp
+│       │   │   │   ├── unit-reference_access.cpp
+│       │   │   │   ├── unit-regression1.cpp
+│       │   │   │   ├── unit-regression2.cpp
+│       │   │   │   ├── unit-serialization.cpp
+│       │   │   │   ├── unit-testsuites.cpp
+│       │   │   │   ├── unit-to_chars.cpp
+│       │   │   │   ├── unit-type_traits.cpp
+│       │   │   │   ├── unit-ubjson.cpp
+│       │   │   │   ├── unit-udl.cpp
+│       │   │   │   ├── unit-udt.cpp
+│       │   │   │   ├── unit-udt_macro.cpp
+│       │   │   │   ├── unit-unicode1.cpp
+│       │   │   │   ├── unit-unicode2.cpp
+│       │   │   │   ├── unit-unicode3.cpp
+│       │   │   │   ├── unit-unicode4.cpp
+│       │   │   │   ├── unit-unicode5.cpp
+│       │   │   │   ├── unit-user_defined_input.cpp
+│       │   │   │   ├── unit-windows_h.cpp
+│       │   │   │   └── unit-wstring.cpp
+│       │   │   └── thirdparty
+│       │   │       ├── doctest
+│       │   │       │   ├── doctest_compatibility.h
+│       │   │       │   └── doctest.h
+│       │   │       ├── fifo_map
+│       │   │       │   └── fifo_map.hpp
+│       │   │       ├── Fuzzer
+│       │   │       │   ├── afl
+│       │   │       │   │   └── afl_driver.cpp
+│       │   │       │   ├── build.sh
+│       │   │       │   ├── CMakeLists.txt
+│       │   │       │   ├── cxx.dict
+│       │   │       │   ├── FuzzerCorpus.h
+│       │   │       │   ├── FuzzerCrossOver.cpp
+│       │   │       │   ├── FuzzerDefs.h
+│       │   │       │   ├── FuzzerDictionary.h
+│       │   │       │   ├── FuzzerDriver.cpp
+│       │   │       │   ├── FuzzerExtFunctions.def
+│       │   │       │   ├── FuzzerExtFunctionsDlsym.cpp
+│       │   │       │   ├── FuzzerExtFunctions.h
+│       │   │       │   ├── FuzzerExtFunctionsWeakAlias.cpp
+│       │   │       │   ├── FuzzerExtFunctionsWeak.cpp
+│       │   │       │   ├── FuzzerFlags.def
+│       │   │       │   ├── FuzzerInterface.h
+│       │   │       │   ├── FuzzerInternal.h
+│       │   │       │   ├── FuzzerIO.cpp
+│       │   │       │   ├── FuzzerIO.h
+│       │   │       │   ├── FuzzerIOPosix.cpp
+│       │   │       │   ├── FuzzerIOWindows.cpp
+│       │   │       │   ├── FuzzerLoop.cpp
+│       │   │       │   ├── FuzzerMain.cpp
+│       │   │       │   ├── FuzzerMerge.cpp
+│       │   │       │   ├── FuzzerMerge.h
+│       │   │       │   ├── FuzzerMutate.cpp
+│       │   │       │   ├── FuzzerMutate.h
+│       │   │       │   ├── FuzzerOptions.h
+│       │   │       │   ├── FuzzerRandom.h
+│       │   │       │   ├── FuzzerSHA1.cpp
+│       │   │       │   ├── FuzzerSHA1.h
+│       │   │       │   ├── FuzzerTracePC.cpp
+│       │   │       │   ├── FuzzerTracePC.h
+│       │   │       │   ├── FuzzerTraceState.cpp
+│       │   │       │   ├── FuzzerUtil.cpp
+│       │   │       │   ├── FuzzerUtilDarwin.cpp
+│       │   │       │   ├── FuzzerUtil.h
+│       │   │       │   ├── FuzzerUtilLinux.cpp
+│       │   │       │   ├── FuzzerUtilPosix.cpp
+│       │   │       │   ├── FuzzerUtilWindows.cpp
+│       │   │       │   ├── FuzzerValueBitMap.h
+│       │   │       │   ├── README.txt
+│       │   │       │   ├── standalone
+│       │   │       │   │   └── StandaloneFuzzTargetMain.c
+│       │   │       │   └── test
+│       │   │       │       ├── AbsNegAndConstant64Test.cpp
+│       │   │       │       ├── AbsNegAndConstantTest.cpp
+│       │   │       │       ├── AccumulateAllocationsTest.cpp
+│       │   │       │       ├── afl-driver-extra-stats.test
+│       │   │       │       ├── afl-driver-stderr.test
+│       │   │       │       ├── AFLDriverTest.cpp
+│       │   │       │       ├── BufferOverflowOnInput.cpp
+│       │   │       │       ├── caller-callee.test
+│       │   │       │       ├── CallerCalleeTest.cpp
+│       │   │       │       ├── CMakeLists.txt
+│       │   │       │       ├── CounterTest.cpp
+│       │   │       │       ├── coverage.test
+│       │   │       │       ├── CustomCrossOverTest.cpp
+│       │   │       │       ├── CustomMutatorTest.cpp
+│       │   │       │       ├── dict1.txt
+│       │   │       │       ├── DivTest.cpp
+│       │   │       │       ├── DSO1.cpp
+│       │   │       │       ├── DSO2.cpp
+│       │   │       │       ├── DSOTestExtra.cpp
+│       │   │       │       ├── DSOTestMain.cpp
+│       │   │       │       ├── dump_coverage.test
+│       │   │       │       ├── EmptyTest.cpp
+│       │   │       │       ├── FourIndependentBranchesTest.cpp
+│       │   │       │       ├── FullCoverageSetTest.cpp
+│       │   │       │       ├── fuzzer-customcrossover.test
+│       │   │       │       ├── fuzzer-custommutator.test
+│       │   │       │       ├── fuzzer-dict.test
+│       │   │       │       ├── fuzzer-dirs.test
+│       │   │       │       ├── fuzzer-fdmask.test
+│       │   │       │       ├── fuzzer-finalstats.test
+│       │   │       │       ├── fuzzer-flags.test
+│       │   │       │       ├── fuzzer-jobs.test
+│       │   │       │       ├── fuzzer-leak.test
+│       │   │       │       ├── fuzzer-oom.test
+│       │   │       │       ├── fuzzer-oom-with-profile.test
+│       │   │       │       ├── fuzzer-printcovpcs.test
+│       │   │       │       ├── fuzzer-runs.test
+│       │   │       │       ├── fuzzer-seed.test
+│       │   │       │       ├── fuzzer-segv.test
+│       │   │       │       ├── fuzzer-singleinputs.test
+│       │   │       │       ├── fuzzer.test
+│       │   │       │       ├── fuzzer-threaded.test
+│       │   │       │       ├── fuzzer-timeout.test
+│       │   │       │       ├── fuzzer-traces-hooks.test
+│       │   │       │       ├── fuzzer-ubsan.test
+│       │   │       │       ├── FuzzerUnittest.cpp
+│       │   │       │       ├── hi.txt
+│       │   │       │       ├── InitializeTest.cpp
+│       │   │       │       ├── LeakTest.cpp
+│       │   │       │       ├── LeakTimeoutTest.cpp
+│       │   │       │       ├── lit.cfg
+│       │   │       │       ├── lit.site.cfg.in
+│       │   │       │       ├── LoadTest.cpp
+│       │   │       │       ├── MemcmpTest.cpp
+│       │   │       │       ├── merge.test
+│       │   │       │       ├── minimize_crash.test
+│       │   │       │       ├── no-coverage
+│       │   │       │       │   └── CMakeLists.txt
+│       │   │       │       ├── NthRunCrashTest.cpp
+│       │   │       │       ├── NullDerefOnEmptyTest.cpp
+│       │   │       │       ├── NullDerefTest.cpp
+│       │   │       │       ├── OneHugeAllocTest.cpp
+│       │   │       │       ├── OutOfMemorySingleLargeMallocTest.cpp
+│       │   │       │       ├── OutOfMemoryTest.cpp
+│       │   │       │       ├── repeated-bytes.test
+│       │   │       │       ├── RepeatedBytesTest.cpp
+│       │   │       │       ├── RepeatedMemcmp.cpp
+│       │   │       │       ├── ShrinkControlFlowTest.cpp
+│       │   │       │       ├── shrink.test
+│       │   │       │       ├── ShrinkValueProfileTest.cpp
+│       │   │       │       ├── SignedIntOverflowTest.cpp
+│       │   │       │       ├── simple-cmp.test
+│       │   │       │       ├── SimpleCmpTest.cpp
+│       │   │       │       ├── SimpleDictionaryTest.cpp
+│       │   │       │       ├── SimpleHashTest.cpp
+│       │   │       │       ├── SimpleTest.cpp
+│       │   │       │       ├── SimpleThreadedTest.cpp
+│       │   │       │       ├── SingleMemcmpTest.cpp
+│       │   │       │       ├── SingleStrcmpTest.cpp
+│       │   │       │       ├── SingleStrncmpTest.cpp
+│       │   │       │       ├── SpamyTest.cpp
+│       │   │       │       ├── standalone.test
+│       │   │       │       ├── StrcmpTest.cpp
+│       │   │       │       ├── StrncmpOOBTest.cpp
+│       │   │       │       ├── StrncmpTest.cpp
+│       │   │       │       ├── StrstrTest.cpp
+│       │   │       │       ├── swap-cmp.test
+│       │   │       │       ├── SwapCmpTest.cpp
+│       │   │       │       ├── Switch2Test.cpp
+│       │   │       │       ├── SwitchTest.cpp
+│       │   │       │       ├── ThreadedLeakTest.cpp
+│       │   │       │       ├── ThreadedTest.cpp
+│       │   │       │       ├── TimeoutEmptyTest.cpp
+│       │   │       │       ├── TimeoutTest.cpp
+│       │   │       │       ├── trace-malloc.test
+│       │   │       │       ├── TraceMallocTest.cpp
+│       │   │       │       ├── ubsan
+│       │   │       │       │   └── CMakeLists.txt
+│       │   │       │       ├── ulimit.test
+│       │   │       │       ├── uninstrumented
+│       │   │       │       │   └── CMakeLists.txt
+│       │   │       │       ├── UninstrumentedTest.cpp
+│       │   │       │       ├── unit
+│       │   │       │       │   ├── lit.cfg
+│       │   │       │       │   └── lit.site.cfg.in
+│       │   │       │       ├── value-profile-cmp2.test
+│       │   │       │       ├── value-profile-cmp3.test
+│       │   │       │       ├── value-profile-cmp4.test
+│       │   │       │       ├── value-profile-cmp.test
+│       │   │       │       ├── value-profile-div.test
+│       │   │       │       ├── value-profile-load.test
+│       │   │       │       ├── value-profile-mem.test
+│       │   │       │       ├── value-profile-set.test
+│       │   │       │       ├── value-profile-strcmp.test
+│       │   │       │       ├── value-profile-strncmp.test
+│       │   │       │       └── value-profile-switch.test
+│       │   │       └── imapdl
+│       │   │           └── filterbr.py
+│       │   ├── tools
+│       │   │   ├── amalgamate
+│       │   │   │   ├── amalgamate.py
+│       │   │   │   ├── CHANGES.md
+│       │   │   │   ├── config_json_fwd.json
+│       │   │   │   ├── config_json.json
+│       │   │   │   └── README.md
+│       │   │   ├── gdb_pretty_printer
+│       │   │   │   ├── nlohmann-json.py
+│       │   │   │   └── README.md
+│       │   │   ├── generate_natvis
+│       │   │   │   ├── generate_natvis.py
+│       │   │   │   ├── nlohmann_json.natvis.j2
+│       │   │   │   └── README.md
+│       │   │   ├── macro_builder
+│       │   │   │   └── main.cpp
+│       │   │   └── serve_header
+│       │   │       ├── demo.png
+│       │   │       ├── README.md
+│       │   │       ├── requirements.txt
+│       │   │       ├── serve_header.py
+│       │   │       └── serve_header.yml.example
+│       │   ├── WORKSPACE.bazel
+│       │   └── wsjcpp.yml
+│       └── nlohmann_json-subbuild
+│           ├── CMakeCache.txt
+│           ├── CMakeFiles
+│           │   ├── 3.31.6
+│           │   │   └── CMakeSystem.cmake
+│           │   ├── cmake.check_cache
+│           │   ├── CMakeConfigureLog.yaml
+│           │   ├── CMakeDirectoryInformation.cmake
+│           │   ├── CMakeRuleHashes.txt
+│           │   ├── Makefile2
+│           │   ├── Makefile.cmake
+│           │   ├── nlohmann_json-populate-complete
+│           │   ├── nlohmann_json-populate.dir
+│           │   │   ├── build.make
+│           │   │   ├── cmake_clean.cmake
+│           │   │   ├── compiler_depend.make
+│           │   │   ├── compiler_depend.ts
+│           │   │   ├── DependInfo.cmake
+│           │   │   ├── Labels.json
+│           │   │   ├── Labels.txt
+│           │   │   └── progress.make
+│           │   ├── pkgRedirects
+│           │   ├── progress.marks
+│           │   └── TargetDirectories.txt
+│           ├── cmake_install.cmake
+│           ├── CMakeLists.txt
+│           ├── Makefile
+│           └── nlohmann_json-populate-prefix
+│               ├── src
+│               │   └── nlohmann_json-populate-stamp
+│               │       ├── nlohmann_json-populate-build
+│               │       ├── nlohmann_json-populate-configure
+│               │       ├── nlohmann_json-populate-done
+│               │       ├── nlohmann_json-populate-download
+│               │       ├── nlohmann_json-populate-gitclone-lastrun.txt
+│               │       ├── nlohmann_json-populate-gitinfo.txt
+│               │       ├── nlohmann_json-populate-install
+│               │       ├── nlohmann_json-populate-mkdir
+│               │       ├── nlohmann_json-populate-patch
+│               │       ├── nlohmann_json-populate-patch-info.txt
+│               │       ├── nlohmann_json-populate-test
+│               │       └── nlohmann_json-populate-update-info.txt
+│               └── tmp
+│                   ├── nlohmann_json-populate-cfgcmd.txt
+│                   ├── nlohmann_json-populate-gitclone.cmake
+│                   ├── nlohmann_json-populate-gitupdate.cmake
+│                   └── nlohmann_json-populate-mkdirs.cmake
+├── CMakeLists.txt
+├── imgui.ini
+├── include
+│   ├── glad
+│   │   └── glad.h
+│   └── KHR
+│       └── khrplatform.h
+├── lib
+├── LICENSE.txt
+├── raymarchtree.txt
+├── README.txt
+├── shaders
+│   ├── passthrough.vert
+│   ├── raymarch_v1.frag
+│   ├── raymarch_v2.frag
+│   └── samples
+│       ├── fractal1.frag
+│       ├── fractal2.frag
+│       ├── fractal3.frag
+│       ├── simple_red.frag
+│       ├── tester_cube.frag
+│       └── uv_pattern.frag
+└── src
+    ├── AudioSystem.cpp
+    ├── AudioSystem.h
+    ├── glad.c
+    ├── main (Copy).cpp
+    ├── main.cpp
+    ├── Renderer.cpp
+    ├── Renderer.h
+    ├── ShaderManager.cpp
+    ├── ShaderManager.h
+    ├── ShaderParser.cpp
+    └── ShaderParser.h
+
+332 directories, 1962 files

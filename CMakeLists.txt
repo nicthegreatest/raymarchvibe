@@ -13,17 +13,25 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# Miniaudio
+FetchContent_Declare(
+  miniaudio
+  GIT_REPOSITORY https://github.com/mackron/miniaudio.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(miniaudio)
+
 # ImGuiColorTextEdit
 FetchContent_Declare(
-  ImGuiColorTextEdit
+  ImGuiColorTextEdit # Package name for FetchContent
   GIT_REPOSITORY https://github.com/BalazsJako/ImGuiColorTextEdit.git
   GIT_TAG master
-  # GIT_SUBMODULES "" # Keeping this commented for now to be as minimal as possible with MakeAvailable
 )
-FetchContent_MakeAvailable(ImGuiColorTextEdit) # This should declare, populate if needed, and make target available
+FetchContent_MakeAvailable(ImGuiColorTextEdit) # This makes variables like ImGuiColorTextEdit_SOURCE_DIR available.
+                                             # If you are sure 'imguicolortextedit_SOURCE_DIR' (lowercase) works,
+                                             # it might be due to specific CMake version behavior or an alias.
+                                             # Standard FetchContent usually matches the declared case.
 
-# The add_executable line (around your line 79) that uses ${ImGuiColorTextEdit_SOURCE_DIR}
-# will fail if the _SOURCE_DIR is empty, leading to the //TextEditor.cpp error.
 option(RAYMARCHVIBE_ENABLE_SSL "Enable SSL support for httplib (requires OpenSSL)" ON)
 
 FetchContent_Declare(
@@ -35,7 +43,6 @@ FetchContent_GetProperties(httplib_fetch)
 if(NOT httplib_fetch_POPULATED)
   FetchContent_Populate(httplib_fetch)
 endif()
-include_directories(${httplib_fetch_SOURCE_DIR})
 
 FetchContent_Declare(
   glfw
@@ -57,10 +64,10 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(imgui)
 
 add_library(glad_lib STATIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/glad.c
+  src/glad.c
 )
 target_include_directories(glad_lib PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  include
 )
 
 find_package(OpenGL REQUIRED)
@@ -70,7 +77,6 @@ if(RAYMARCHVIBE_ENABLE_SSL)
   find_package(OpenSSL)
   if(OpenSSL_FOUND)
     message(STATUS "Found OpenSSL: ${OpenSSL_VERSION}")
-    include_directories(SYSTEM ${OpenSSL_INCLUDE_DIR})
   else()
     message(WARNING "OpenSSL not found, but RAYMARCHVIBE_ENABLE_SSL is ON. Shadertoy fetching might fail for HTTPS or require disabling SSL in httplib.")
   endif()
@@ -78,6 +84,13 @@ endif()
 
 add_executable(RaymarchVibe
   src/main.cpp
+  src/AudioSystem.cpp
+  src/Renderer.cpp
+  src/ShaderParser.cpp
+  src/ShaderManager.cpp
+  src/UIManager.cpp
+  src/ShadertoyIntegration.cpp
+  src/Utils.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
   ${imgui_SOURCE_DIR}/imgui.cpp
@@ -89,17 +102,23 @@ add_executable(RaymarchVibe
 )
 
 target_include_directories(RaymarchVibe PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  src # To find AudioSystem.h, Renderer.h, ShaderParser.h, ShaderManager.h from main.cpp
+  include # For your project's headers like glad's
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${httplib_fetch_SOURCE_DIR}
-  ${imguicolortextedit_SOURCE_DIR}
+  ${imguicolortextedit_SOURCE_DIR} # For TextEditor.h (using lowercase as requested)
+  ${miniaudio_SOURCE_DIR}
 )
+if(RAYMARCHVIBE_ENABLE_SSL AND OpenSSL_FOUND)
+  target_include_directories(RaymarchVibe PRIVATE ${OpenSSL_INCLUDE_DIR})
+endif()
+
 
 target_link_libraries(RaymarchVibe PRIVATE
   glad_lib
   nlohmann_json::nlohmann_json
-  glfw
+  glfw # This should link libglfw3.a
   OpenGL::GL
   Threads::Threads
 )
