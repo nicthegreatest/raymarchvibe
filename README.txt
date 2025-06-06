@@ -6,6 +6,9 @@ Updates:
 - Added basic audio reactivity function - add "uniform float iAudioAmp;" to get started
 
 
+https://github.com/user-attachments/assets/9e219c58-ecb6-424a-b796-642e404f02c6
+
+
 
 ## Vision: Shader Exploration Made Intuitive
 
