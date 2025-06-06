@@ -1,6 +1,6 @@
 # RaymarchVibe ✨
 
-![Image](https://github.com/nicthegreatest/raymarchvibe/blob/v0.1/app-screenshot.png)
+![Image](shaders/app-screenshot.png)
 
 ## Vision: Shader Exploration Made Intuitive
 
