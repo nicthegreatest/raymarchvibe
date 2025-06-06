@@ -1,5 +1,7 @@
 # RaymarchVibe ✨
 
+![Image](https://github.com/nicthegreatest/raymarchvibe/blob/v0.1/app-screenshot.png)
+
 ## Vision: Shader Exploration Made Intuitive
 
 Ever found yourself deep in GLSL shader code, wishing you could just *see* what happens when you tweak that one value? RaymarchVibe is born from that exact feeling. Sometimes, you just want to **drag a slider instead of digging through lines of code.**
