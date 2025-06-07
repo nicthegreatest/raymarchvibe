@@ -1081,7 +1081,7 @@ int main() {
     static char filePathBuffer_Load[256] = "shaders/raymarch_v1.frag";
     static char filePathBuffer_SaveAs[256] = "shaders/my_new_shader.frag";
     static char shadertoyInputBuffer[256] = "Ms2SD1"; 
-    static std::string shadertoyApiKey = "fdHjR1"; 
+    static std::string shadertoyApiKey = "REPLACE ME"; 
 
     static float objectColor[3] = {0.8f, 0.9f, 1.0f};
     static float scale = 1.0f;
