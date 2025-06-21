@@ -1,6 +1,7 @@
 RaymarchVibe ✨ BETA/EXPERIMENTAL
 
-![Uploading app-screenshot.png…]()
+![app-screenshot](https://github.com/user-attachments/assets/f05a5f99-e497-449d-8df6-46cab469311d)
+
 
 
 ## Vision: Shader Exploration Made Intuitive
