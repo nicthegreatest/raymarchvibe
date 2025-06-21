@@ -1,14 +1,6 @@
 RaymarchVibe ✨ BETA/EXPERIMENTAL
 
-Updates:
-
-- Modularization to reduce code size
-- Added basic audio reactivity function - add "uniform float iAudioAmp;" to get started
-
-
-![Image](https://github.com/user-attachments/assets/9e219c58-ecb6-424a-b796-642e404f02c6)
-![Image](https://github.com/nicthegreatest/raymarchvibe/blob/v0.1/app-screenshot.png)
-![Image](shaders/app-screenshot.png)
+![Uploading app-screenshot.png…]()
 
 
 ## Vision: Shader Exploration Made Intuitive
