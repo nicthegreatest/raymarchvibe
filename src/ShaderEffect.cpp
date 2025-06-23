@@ -785,54 +785,50 @@ void ShaderEffect::CompileAndLinkShader() {
 
     std::string finalFragmentCode = m_shaderSourceCode;
     if (m_isShadertoyMode) {
-        // Prepend Shadertoy preamble (uniforms, main wrapper)
-        // This logic is from ApplyShaderFromEditor in main.cpp
+        std::string userCode = m_shaderSourceCode; // Original user code
+        std::string finalPreamble =
+            "#version 330 core\n"
+            "out vec4 FragColor;\n"
+            "uniform vec3 iResolution;\n"
+            "uniform float iTime;\n"
+            "uniform float iTimeDelta;\n"
+            "uniform int iFrame;\n"
+            "uniform vec4 iMouse;\n";
+
+        // Check if user already declared iUserFloat1
+        if (userCode.find("iUserFloat1") == std::string::npos) {
+            finalPreamble += "uniform float iUserFloat1;\n";
+        }
+        // Check if user already declared iUserColor1
+        if (userCode.find("iUserColor1") == std::string::npos) {
+            finalPreamble += "uniform vec3 iUserColor1;\n";
+        }
+        finalPreamble += "\n";
+
+        // Process user code to remove #version and precision, similar to before
         std::string processedUserCode;
-        std::stringstream ss(m_shaderSourceCode);
+        std::stringstream ss(userCode);
         std::string line;
         bool firstActualCodeLine = true;
-
         while (std::getline(ss, line)) {
-            // Simple trim for checking #version or precision
             size_t first = line.find_first_not_of(" \t\n\r\f\v");
             std::string trimmedLine = (first == std::string::npos) ? "" : line.substr(first);
             size_t last = trimmedLine.find_last_not_of(" \t\n\r\f\v");
             trimmedLine = (last == std::string::npos) ? "" : trimmedLine.substr(0, last + 1);
 
-
             if (trimmedLine.rfind("#version", 0) == 0 || trimmedLine.rfind("precision", 0) == 0) {
-                continue; // Skip user's version/precision
+                continue;
             }
-
-            if (!trimmedLine.empty()) {
-                firstActualCodeLine = false;
-            }
-            // Add line if it's not an empty line at the very beginning before any actual code
-            if (!firstActualCodeLine || !trimmedLine.empty()) {
-                 processedUserCode += line + "\n";
-            }
+            if (!trimmedLine.empty()) firstActualCodeLine = false;
+            if (!firstActualCodeLine || !trimmedLine.empty()) processedUserCode += line + "\n";
         }
-        // Ensure final newline if code not empty (original main.cpp logic)
         if (!processedUserCode.empty() && processedUserCode.back() != '\n') {
             processedUserCode += "\n";
         }
 
-        finalFragmentCode =
-            "#version 330 core\n"
-            "out vec4 FragColor;\n"
-            "uniform vec3 iResolution; // Stores width, height, aspect_ratio (width/height)\n"
-            "uniform float iTime;\n"
-            "uniform float iTimeDelta;\n"
-            "uniform int iFrame;\n"
-            "uniform vec4 iMouse; // xy = current pixel coords, zw = click pixel coords (if button down)\n"
-            "// Shadertoy specific user uniforms (optional)\n"
-            "uniform float iUserFloat1; \n"
-            "uniform vec3 iUserColor1; \n"
-            "\n" +
-            processedUserCode +
-            // Add newline if processedUserCode is not empty and doesn't end with one
+        finalFragmentCode = finalPreamble + processedUserCode +
             (processedUserCode.empty() || processedUserCode.back() == '\n' ? "" : "\n") +
-            "\nvoid main() {\n"
+            "void main() {\n"
             "    mainImage(FragColor, gl_FragCoord.xy);\n"
             "}\n";
     }

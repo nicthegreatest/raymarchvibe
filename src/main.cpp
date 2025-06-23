@@ -112,7 +112,9 @@ void RenderTimelineWindow() {
         });
     }
 
-    float currentTimeForRuler = (float)glfwGetTime(); // This is just for the ruler's current time indicator
+    // float currentTimeForRuler = (float)glfwGetTime(); // Old: auto-plays with app time
+    static float currentTimeForRuler = 0.0f; // New: Static, starts at 0, no auto-play from glfwGetTime()
+                                             // User can drag this, or future play/pause controls would modify it.
 
     if (ImGui::SimpleTimeline("Scene", timelineItems, &currentTimeForRuler, &g_selectedTimelineItem, 4, 0.0f, 60.0f)) {
         if (g_selectedTimelineItem >= 0 && static_cast<size_t>(g_selectedTimelineItem) < g_scene.size()) {
@@ -249,7 +251,115 @@ int main() {
             }
             f5State = currentF5State_Editor;
 
-            if (ImGui::CollapsingHeader("Load/Save Actions")) { /* ... UI for load/save ... */ }
+            if (ImGui::CollapsingHeader("Load/Save Actions")) {
+                // --- Load from Shadertoy ---
+                ImGui::InputTextWithHint("##STInput", "Shadertoy ID/URL", shadertoyInputBuffer, sizeof(shadertoyInputBuffer)); ImGui::SameLine();
+                if (ImGui::Button("Fetch & Apply##STApply") && editorSE) {
+                    std::string id = ShaderParser::ExtractShaderId(shadertoyInputBuffer);
+                    if (!id.empty()) {
+                        std::string fetchErr, code = FetchShadertoyCodeOnline(id, shadertoyApiKey, fetchErr);
+                        if (!code.empty()) {
+                            editorSE->LoadShaderFromSource(code);
+                            editorSE->SetShadertoyMode(true);
+                            editorSE->Load();
+                            g_editor.SetText(editorSE->GetShaderSource());
+                            std::string stPath = "Shadertoy_" + id + ".frag";
+                            strncpy(filePathBuffer_Load, stPath.c_str(), sizeof(filePathBuffer_Load)-1); filePathBuffer_Load[sizeof(filePathBuffer_Load)-1]=0;
+                            strncpy(filePathBuffer_SaveAs, stPath.c_str(), sizeof(filePathBuffer_SaveAs)-1); filePathBuffer_SaveAs[sizeof(filePathBuffer_SaveAs)-1]=0;
+                            const std::string& log = editorSE->GetCompileErrorLog();
+                            if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos) g_editor.SetErrorMarkers(ParseGlslErrorLog(log)); else ClearErrorMarkers();
+                            g_shaderLoadError_global = "Fetched Shadertoy '" + id + "'. Status: " + log;
+                        } else g_shaderLoadError_global = "Fetch Error: " + fetchErr;
+                    } else g_shaderLoadError_global = "Invalid Shadertoy ID.";
+                }
+                // ImGui::SameLine(); // Optional: "Load to Editor" button for ST
+                // if (ImGui::Button("Load to Editor##STLoadToEditor") && editorSE) { /* ... similar logic but only editorSE->LoadShaderFromSource() and g_editor.SetText() ... */ }
+
+
+                // --- Load Sample Shader ---
+                if (ImGui::BeginCombo("##SampleCombo", shaderSamples[g_currentSampleIndex].name)) {
+                    for (size_t n = 0; n < shaderSamples.size(); n++) {
+                        const bool is_selected = (g_currentSampleIndex == n);
+                        if (ImGui::Selectable(shaderSamples[n].name, is_selected)) g_currentSampleIndex = n;
+                        if (is_selected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Load & Apply Sample##SampleApply") && editorSE && g_currentSampleIndex > 0 && g_currentSampleIndex < shaderSamples.size()) {
+                    std::string path = shaderSamples[g_currentSampleIndex].filePath;
+                    if (editorSE->LoadShaderFromFile(path)) {
+                        editorSE->Load();
+                        g_editor.SetText(editorSE->GetShaderSource());
+                        strncpy(filePathBuffer_Load, path.c_str(), sizeof(filePathBuffer_Load)-1); filePathBuffer_Load[sizeof(filePathBuffer_Load)-1]=0;
+                        strncpy(filePathBuffer_SaveAs, path.c_str(), sizeof(filePathBuffer_SaveAs)-1); filePathBuffer_SaveAs[sizeof(filePathBuffer_SaveAs)-1]=0;
+                        const std::string& log = editorSE->GetCompileErrorLog();
+                        if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos) g_editor.SetErrorMarkers(ParseGlslErrorLog(log)); else ClearErrorMarkers();
+                        g_shaderLoadError_global = "Loaded sample '" + std::string(shaderSamples[g_currentSampleIndex].name) + "'. Status: " + log;
+                    } else g_shaderLoadError_global = "Failed to load sample file " + path;
+                }
+                ImGui::Separator();
+
+                // --- Load From File ---
+                ImGui::InputText("Path##LoadFile", filePathBuffer_Load, sizeof(filePathBuffer_Load)); ImGui::SameLine();
+                if (ImGui::Button("Load & Apply##FileApply") && editorSE) {
+                    if (editorSE->LoadShaderFromFile(filePathBuffer_Load)) {
+                        editorSE->Load();
+                        g_editor.SetText(editorSE->GetShaderSource());
+                        strncpy(filePathBuffer_SaveAs, filePathBuffer_Load, sizeof(filePathBuffer_SaveAs)-1); filePathBuffer_SaveAs[sizeof(filePathBuffer_SaveAs)-1]=0;
+                        const std::string& log = editorSE->GetCompileErrorLog();
+                        if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos) g_editor.SetErrorMarkers(ParseGlslErrorLog(log)); else ClearErrorMarkers();
+                        g_shaderLoadError_global = "Loaded file '" + std::string(filePathBuffer_Load) + "'. Status: " + log;
+                    } else g_shaderLoadError_global = "Failed to load file " + std::string(filePathBuffer_Load);
+                }
+                ImGui::Separator();
+
+                // --- New Shader ---
+                if (ImGui::Button("New Native") && editorSE) {
+                    editorSE->LoadShaderFromSource(nativeShaderTemplate);
+                    editorSE->SetShadertoyMode(false);
+                    // Don't call Load() immediately, let user Apply from Editor
+                    g_editor.SetText(editorSE->GetShaderSource());
+                    strncpy(filePathBuffer_Load, "Untitled_Native.frag", sizeof(filePathBuffer_Load)-1);filePathBuffer_Load[sizeof(filePathBuffer_Load)-1]=0;
+                    strncpy(filePathBuffer_SaveAs, "Untitled_Native.frag", sizeof(filePathBuffer_SaveAs)-1);filePathBuffer_SaveAs[sizeof(filePathBuffer_SaveAs)-1]=0;
+                    ClearErrorMarkers();
+                    g_shaderLoadError_global = "Native template loaded to editor. Apply to compile.";
+                } ImGui::SameLine();
+                if (ImGui::Button("New Shadertoy") && editorSE) {
+                    editorSE->LoadShaderFromSource(shadertoyShaderTemplate);
+                    editorSE->SetShadertoyMode(true);
+                    g_editor.SetText(editorSE->GetShaderSource());
+                    strncpy(filePathBuffer_Load, "Untitled_Shadertoy.frag", sizeof(filePathBuffer_Load)-1);filePathBuffer_Load[sizeof(filePathBuffer_Load)-1]=0;
+                    strncpy(filePathBuffer_SaveAs, "Untitled_Shadertoy.frag", sizeof(filePathBuffer_SaveAs)-1);filePathBuffer_SaveAs[sizeof(filePathBuffer_SaveAs)-1]=0;
+                    ClearErrorMarkers();
+                    g_shaderLoadError_global = "Shadertoy template loaded to editor. Apply to compile.";
+                }
+                ImGui::Separator();
+
+                // --- Save Shader ---
+                ImGui::Text("Current Editing File: %s", editorSE ? editorSE->GetShaderFilePath().c_str() : "N/A");
+                if (ImGui::Button("Save Current File") && editorSE) {
+                    std::ofstream outFile(editorSE->GetShaderFilePath());
+                    if (outFile.is_open()) { outFile << g_editor.GetText(); outFile.close(); g_shaderLoadError_global = "Saved: " + editorSE->GetShaderFilePath(); }
+                    else { g_shaderLoadError_global = "ERROR saving to: " + editorSE->GetShaderFilePath(); }
+                }
+                ImGui::InputText("Save As Path", filePathBuffer_SaveAs, sizeof(filePathBuffer_SaveAs)); ImGui::SameLine();
+                if (ImGui::Button("Save As...") && editorSE) {
+                    std::string saveAsPathStr(filePathBuffer_SaveAs);
+                    if(!saveAsPathStr.empty()){
+                        std::ofstream outFile(saveAsPathStr);
+                        if (outFile.is_open()) {
+                            outFile << g_editor.GetText(); outFile.close();
+                            // Update the ShaderEffect's path and the load buffer
+                            editorSE->LoadShaderFromFile(saveAsPathStr); // This updates internal path and source
+                            // editorSE->ApplyShaderCode(g_editor.GetText()); // Re-apply if needed, or just update path
+                            strncpy(filePathBuffer_Load, saveAsPathStr.c_str(), sizeof(filePathBuffer_Load) -1); filePathBuffer_Load[sizeof(filePathBuffer_Load)-1] = 0;
+                            g_shaderLoadError_global = "Saved to: " + saveAsPathStr;
+                        } else { g_shaderLoadError_global = "ERROR saving to: " + saveAsPathStr; }
+                    } else { g_shaderLoadError_global = "Save As path empty."; }
+                }
+            } // End Load/Save Actions Collapsing Header
+
             // Editor and Apply button
             const std::string& currentEffectLog = editorSE ? editorSE->GetCompileErrorLog() : "";
             if (!g_shaderLoadError_global.empty() && (currentEffectLog.empty() || currentEffectLog.find("Successfully") != std::string::npos || currentEffectLog.find("applied successfully") != std::string::npos))
