@@ -507,7 +507,7 @@ std::string ShaderParser::UpdateConstValueInString(const std::string& sourceCode
 }
 
 
-std::string ShaderParser::ExtractShaderId(const std::string& idOrUrl) {
+std::string ShaderParser::ExtractShaderId(const std::string& idOrUrl) { // static keyword not needed in .cpp definition for static member
     std::string id = idOrUrl;
     // Try to extract from URL: https://www.shadertoy.com/view/Ms2SD1
     size_t lastSlash = id.find_last_of('/');
