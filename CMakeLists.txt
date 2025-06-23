@@ -56,6 +56,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
+# ImGui Timeline Widget
+FetchContent_Declare(
+  imgui-timeline
+  GIT_REPOSITORY https://github.com/nem0/imgui-timeline.git
+  GIT_TAG master # Or a specific commit hash for stability
+)
+FetchContent_MakeAvailable(imgui-timeline)
+
 add_library(glad_lib STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src/glad.c
 )
@@ -88,6 +96,7 @@ add_executable(RaymarchVibe
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imguicolortextedit_SOURCE_DIR}/TextEditor.cpp
+  ${imgui-timeline_SOURCE_DIR}/ImGuiTimeline.cpp # Added ImGuiTimeline.cpp
 )
 
 target_include_directories(RaymarchVibe PRIVATE
@@ -96,6 +105,7 @@ target_include_directories(RaymarchVibe PRIVATE
   ${imgui_SOURCE_DIR}/backends
   ${httplib_fetch_SOURCE_DIR}
   ${imguicolortextedit_SOURCE_DIR}
+  ${imgui-timeline_SOURCE_DIR} # Added include directory for imgui-timeline
 )
 
 target_link_libraries(RaymarchVibe PRIVATE

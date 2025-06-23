@@ -164,27 +164,110 @@ int main() {
     float lastFrameTime_main = 0.0f;
 
     // Initialize Scene
-    g_scene.push_back(std::make_unique<ShaderEffect>(filePathBuffer_Load));
+    // Effect 1
+    g_scene.push_back(std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag"));
     if (!g_scene.empty()) {
-        g_selectedEffect = g_scene.front().get();
-        if (g_selectedEffect) {
-            g_selectedEffect->Load();
-            ShaderEffect* currentSE = dynamic_cast<ShaderEffect*>(g_selectedEffect);
-            if (currentSE) {
-                g_editor.SetText(currentSE->GetShaderSource());
-                const std::string& log = currentSE->GetCompileErrorLog();
-                if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos)
-                    g_editor.SetErrorMarkers(ParseGlslErrorLog(log));
-                else ClearErrorMarkers();
-                g_shaderLoadError_global = log.find("failed") != std::string::npos || log.find("ERROR") != std::string::npos ? "Initial load failed: " + log : "Initial shader: " + log;
-            } else { g_shaderLoadError_global = "Initial effect not ShaderEffect."; g_editor.SetText("// Error.");}
-        } else { g_shaderLoadError_global = "No initial effect."; g_editor.SetText("// Error.");}
-    } else { g_shaderLoadError_global = "Scene empty."; g_editor.SetText("// Error.");}
+        g_scene.back()->name = "Raymarch V1"; // Give it a name for the timeline
+        g_scene.back()->startTime = 0.0f;
+        g_scene.back()->endTime = 10.0f;
+        // By default, select the first effect added
+        if (!g_selectedEffect) {
+            g_selectedEffect = g_scene.back().get();
+        }
+    }
+
+    // Effect 2 for testing timeline
+    g_scene.push_back(std::make_unique<ShaderEffect>("shaders/samples/uv_pattern.frag"));
+    if (g_scene.size() > 1) {
+        g_scene.back()->name = "UV Pattern";
+        g_scene.back()->startTime = 10.0f;
+        g_scene.back()->endTime = 20.0f;
+    }
+
+    // Load the initially selected effect (if any)
+    if (g_selectedEffect) {
+        g_selectedEffect->Load();
+        ShaderEffect* currentSE = dynamic_cast<ShaderEffect*>(g_selectedEffect);
+        if (currentSE) {
+            g_editor.SetText(currentSE->GetShaderSource());
+            const std::string& log = currentSE->GetCompileErrorLog();
+            if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos)
+                g_editor.SetErrorMarkers(ParseGlslErrorLog(log));
+            else ClearErrorMarkers();
+            g_shaderLoadError_global = log.find("failed") != std::string::npos || log.find("ERROR") != std::string::npos ? "Initial load failed: " + log : "Initial shader (" + g_selectedEffect->name + "): " + log;
+        } else {
+            g_shaderLoadError_global = "Initial selected effect is not a ShaderEffect.";
+            g_editor.SetText("// Error: Selected effect is not a ShaderEffect or load failed.");
+        }
+    } else if (g_scene.empty()) {
+        g_shaderLoadError_global = "Scene is empty after initialization.";
+        g_editor.SetText("// Error: Scene is empty.");
+    }
+
 
     IMGUI_CHECKVERSION(); ImGui::CreateContext(); ImGuiIO& io = ImGui::GetIO();
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true); ImGui_ImplOpenGL3_Init("#version 330");
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
+
+} // End of ParseGlslErrorLog - This seems to be a misplaced brace from previous diffs, correcting.
+
+// Forward declare the timeline window function
+void RenderTimelineWindow();
+
+
+// --- Main Application ---
+int main() {
+    if (!glfwInit()) { std::cerr << "Failed to initialize GLFW" << std::endl; return -1; }
+    // ... (rest of main)
+
+// --- Helper function for Timeline Window ---
+// (Placed before main or forward declared if after)
+#include "ImGuiTimeline.h" // Include for the timeline widget
+
+void RenderTimelineWindow() {
+    ImGui::Begin("Timeline");
+
+    // Define the timeline range and current time
+    static float timeline_start_time = 0.0f; // Represents the beginning of the visible timeline ruler
+    static float timeline_end_time = 60.0f;   // Represents the end of the visible timeline ruler
+    // This current_time_cursor should ideally be linked to the main application/playback time
+    // For now, let's use glfwGetTime() for demonstration, but it might need to be a settable global
+    // or passed in if timeline controls playback.
+    float current_time_cursor = (float)glfwGetTime();
+
+    // Draw the main timeline ruler
+    // The flags ImGuiTimelineFlags_None or specific flags like ImGuiTimelineFlags_FollowCurrentTime can be used.
+    ImGui::Timeline("Scene Timeline", &timeline_start_time, &timeline_end_time, &current_time_cursor, ImGuiTimelineFlags_None);
+
+    // Group for effects on the timeline
+    ImGui::BeginTimelineGroup("Effects");
+    for (size_t i = 0; i < g_scene.size(); ++i) {
+        if (!g_scene[i]) continue; // Should not happen with unique_ptr but good practice
+
+        // The TimelineEvent directly manipulates startTime and endTime of the Effect object
+        if (ImGui::TimelineEvent(g_scene[i]->name.c_str(), &g_scene[i]->startTime, &g_scene[i]->endTime)) {
+            // This block is entered if the event is clicked.
+            g_selectedEffect = g_scene[i].get();
+
+            // If the selected effect is a ShaderEffect, update the editor
+            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                g_editor.SetText(se->GetShaderSource());
+                // Optionally, update error markers if the source might have changed or needs re-check
+                const std::string& log = se->GetCompileErrorLog();
+                if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos) {
+                    g_editor.SetErrorMarkers(ParseGlslErrorLog(log));
+                } else {
+                    ClearErrorMarkers();
+                }
+            }
+        }
+    }
+    ImGui::EndTimelineGroup();
+
+    ImGui::End(); // End Timeline Window
+}
+
 
     float quadVertices[] = { -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 1.0f };
     GLuint quadVAO, quadVBO; 
@@ -329,6 +412,8 @@ int main() {
             if (!fullLog.empty()) ImGui::TextWrapped("%s", fullLog.c_str()); else ImGui::TextDisabled("[Log is empty]");
             if (ImGui::Button("Clear Log")) { g_shaderLoadError_global.clear(); ClearErrorMarkers(); }
             ImGui::End();
+
+            RenderTimelineWindow(); // Call the new timeline window rendering function
 
             if (g_showHelpWindow) { ImGui::Begin("Help", &g_showHelpWindow); ImGui::Text("Help content."); ImGui::End(); }
         } 
