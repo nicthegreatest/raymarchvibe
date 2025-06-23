@@ -14,7 +14,8 @@
 
 class ShaderEffect : public Effect {
 public:
-    ShaderEffect(const std::string& initialShaderPath = "", bool isShadertoy = false);
+    // Constructor now takes initial FBO dimensions
+    ShaderEffect(const std::string& initialShaderPath = "", int initialWidth = 800, int initialHeight = 600, bool isShadertoy = false);
     ~ShaderEffect() override;
 
     void Load() override; // Loads from m_shaderFilePath or m_shaderSourceCode
@@ -119,8 +120,20 @@ private:
     // To update display resolution, mouse state etc. from main loop if needed for uniforms
 public:
     void SetMouseState(float x, float y, float click_x, float click_y); // click_x/y can be z/w of iMouse
-    void SetDisplayResolution(int width, int height);
+    void SetDisplayResolution(int width, int height); // This will be used for iResolution uniform
     void SetDeltaTime(float dt) { m_deltaTime = dt; }
     void IncrementFrameCount() { m_frameCount++; }
 
+    // --- FBO specific methods ---
+    GLuint GetOutputTexture() const;
+    // Resizes the FBO and its attachments. Called on init and if window resizes.
+    void ResizeFrameBuffer(int width, int height);
+
+private:
+    // --- FBO Members ---
+    GLuint m_fboID = 0;
+    GLuint m_fboTextureID = 0;
+    GLuint m_rboID = 0; // For depth/stencil attachment
+    int m_fboWidth = 0;
+    int m_fboHeight = 0;
 };

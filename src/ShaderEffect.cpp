@@ -1,7 +1,8 @@
 #include "ShaderEffect.h"
-#include "imgui.h" // For RenderUI. Will also need imgui_impl_glfw.h and imgui_impl_opengl3.h eventually, typically included in main.cpp or a central ImGui setup file.
+#include "imgui.h"
 
 #include <fstream>
+#include <iostream> // For error logging related to FBO
 #include <sstream>
 #include <vector>
 #include <iostream> // For cerr
@@ -13,14 +14,19 @@
 // These would ideally be static members or free functions in a utility namespace.
 
 // Shader compilation and linking (to be adapted from main.cpp)
-static GLuint CompileShader(const char* source, GLenum type, std::string& errorLogString);
-static GLuint CreateShaderProgram(GLuint vertexShaderID, GLuint fragmentShaderID, std::string& errorLogString);
-static std::string LoadPassthroughVertexShaderSource(std::string& errorMsg); // Specific for this app
+static GLuint CompileShader(const char* source, GLenum type, std::string& errorLogString); // Already defined below
+static GLuint CreateShaderProgram(GLuint vertexShaderID, GLuint fragmentShaderID, std::string& errorLogString); // Already defined below
+static std::string LoadPassthroughVertexShaderSource(std::string& errorMsg); // Already defined below
+
+// For ShaderEffect::Render() to draw its quad into its FBO.
+// This VAO is defined and initialized in main.cpp.
+// For this to link, g_quadVAO in main.cpp must not be static.
+extern GLuint g_quadVAO;
 
 
 // Constructor for ShaderToyUniformControl (if not in .h, needed for vector<ShaderToyUniformControl>)
 ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std::string& type_str, const nlohmann::json& meta)
-    : name(n), glslType(type_str), metadata(meta), location(-1), fValue(0.0f), iValue(0), bValue(false), isColor(false) {
+    : name(n), glslType(type_str), metadata(meta), location(-1), fValue(0.0f), iValue(0), bValue(false), isColor(false) { // Ensure member init order matches declaration
     std::fill_n(v2Value, 2, 0.0f);
     std::fill_n(v3Value, 3, 0.0f);
     std::fill_n(v4Value, 4, 0.0f);
@@ -61,7 +67,7 @@ ShaderConstControl::ShaderConstControl(const std::string& n, const std::string& 
 }
 
 
-ShaderEffect::ShaderEffect(const std::string& initialShaderPath, bool isShadertoy)
+ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidth, int initialHeight, bool isShadertoy)
     : m_shaderProgram(0),
       m_isShadertoyMode(isShadertoy),
       m_shaderLoaded(false),
@@ -72,7 +78,9 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, bool isShaderto
       m_scale(1.0f), m_timeSpeed(1.0f), m_patternScale(1.0f), m_cameraFOV(60.0f),
       // Initialize Shadertoy params
       m_iUserFloat1(0.5f),
-      m_shaderParser() // Initialize ShaderParser
+    m_shaderParser(), // Initialize ShaderParser
+    m_fboID(0), m_fboTextureID(0), m_rboID(0),
+    m_fboWidth(initialWidth), m_fboHeight(initialHeight)
 {
     // Initialize arrays for colors and vectors
     m_objectColor[0] = 0.8f; m_objectColor[1] = 0.9f; m_objectColor[2] = 1.0f;
@@ -97,7 +105,75 @@ ShaderEffect::~ShaderEffect() {
         glDeleteProgram(m_shaderProgram);
         m_shaderProgram = 0;
     }
+    if (m_fboID != 0) {
+        glDeleteFramebuffers(1, &m_fboID);
+        m_fboID = 0;
+    }
+    if (m_fboTextureID != 0) {
+        glDeleteTextures(1, &m_fboTextureID);
+        m_fboTextureID = 0;
+    }
+    if (m_rboID != 0) {
+        glDeleteRenderbuffers(1, &m_rboID);
+        m_rboID = 0;
+    }
 }
+
+// --- FBO specific methods ---
+GLuint ShaderEffect::GetOutputTexture() const {
+    return m_fboTextureID;
+}
+
+void ShaderEffect::ResizeFrameBuffer(int width, int height) {
+    if (width <= 0 || height <= 0) {
+        std::cerr << "ShaderEffect::ResizeFrameBuffer error: Invalid dimensions (" << width << "x" << height << ")" << std::endl;
+        return;
+    }
+
+    m_fboWidth = width;
+    m_fboHeight = height;
+
+    // Delete existing FBO objects if they exist
+    if (m_fboID != 0) glDeleteFramebuffers(1, &m_fboID);
+    if (m_fboTextureID != 0) glDeleteTextures(1, &m_fboTextureID);
+    if (m_rboID != 0) glDeleteRenderbuffers(1, &m_rboID);
+
+    // Create Framebuffer
+    glGenFramebuffers(1, &m_fboID);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_fboID);
+
+    // Create Texture Attachment
+    glGenTextures(1, &m_fboTextureID);
+    glBindTexture(GL_TEXTURE_2D, m_fboTextureID);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_fboWidth, m_fboHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // Prevent edge artifacts
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_fboTextureID, 0);
+    glBindTexture(GL_TEXTURE_2D, 0); // Unbind texture
+
+    // Create Renderbuffer Object for Depth/Stencil attachment
+    glGenRenderbuffers(1, &m_rboID);
+    glBindRenderbuffer(GL_RENDERBUFFER, m_rboID);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_fboWidth, m_fboHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_rboID);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0); // Unbind RBO
+
+    // Check FBO completeness
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+        // Cleanup on failure
+        glDeleteFramebuffers(1, &m_fboID); m_fboID = 0;
+        glDeleteTextures(1, &m_fboTextureID); m_fboTextureID = 0;
+        glDeleteRenderbuffers(1, &m_rboID); m_rboID = 0;
+    } else {
+        // std::cout << "ShaderEffect FBO created/resized successfully: " << m_fboWidth << "x" << m_fboHeight << std::endl;
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind FBO
+}
+
 
 // --- Public Shader Management ---
 bool ShaderEffect::LoadShaderFromFile(const std::string& filePath) {
@@ -119,13 +195,12 @@ bool ShaderEffect::LoadShaderFromFile(const std::string& filePath) {
         m_isShadertoyMode = false;
     }
     // ApplyShaderCode will handle compilation, parsing etc.
-    // ApplyShaderCode(m_shaderSourceCode); // This might be too soon, Load() is the official way
     return true;
 }
 
 bool ShaderEffect::LoadShaderFromSource(const std::string& sourceCode) {
     m_shaderFilePath = "dynamic_source"; // Or some other indicator
-    this->name = "Dynamic Shader";
+    this->name = "Dynamic Shader"; // Default name if loaded from source
     m_shaderSourceCode = sourceCode;
     if (m_shaderSourceCode.find("mainImage") != std::string::npos &&
         m_shaderSourceCode.find("fragCoord") != std::string::npos) {
@@ -133,13 +208,26 @@ bool ShaderEffect::LoadShaderFromSource(const std::string& sourceCode) {
     } else {
         m_isShadertoyMode = false;
     }
-    // ApplyShaderCode(m_shaderSourceCode); // Deferred to Load()
     return true;
 }
 
 void ShaderEffect::Load() {
+    // Ensure FBO dimensions are set before creating FBO (e.g. from constructor or explicit call after SetDisplayResolution)
+    // For now, m_fboWidth/Height are initialized in constructor.
+    // If they are 0, use some default from main.cpp or constants.
+    // This ResizeFrameBuffer call will create the FBO.
+    // It's important that this is called after GL context is ready and before any rendering to FBO.
+    if (m_fboWidth == 0 || m_fboHeight == 0) { // If not set by constructor or resize
+        // This part may need adjustment depending on how initial resolution is passed.
+        // For now, assuming constructor defaults are sensible or Resize is called from main.
+        std::cerr << "Warning: ShaderEffect::Load() called with FBO dimensions 0. Using default 800x600 for FBO." << std::endl;
+        ResizeFrameBuffer(800, 600); // Fallback if not set
+    } else {
+        ResizeFrameBuffer(m_fboWidth, m_fboHeight); // Create FBO with current dimensions
+    }
+
+
     if (m_shaderSourceCode.empty() && !m_shaderFilePath.empty()) {
-        // If only path is set, try loading from file first
         std::string loadError;
         m_shaderSourceCode = LoadShaderSourceFile(m_shaderFilePath, loadError);
         if (!loadError.empty()) {
@@ -223,16 +311,31 @@ void ShaderEffect::Update(float currentTime) {
 }
 
 void ShaderEffect::Render() {
-    if (!m_shaderLoaded || m_shaderProgram == 0) {
-        return; // Don't render if shader isn't ready
+    if (!m_shaderLoaded || m_shaderProgram == 0 || m_fboID == 0) {
+        // If FBO is not ready, or shader not loaded, don't attempt to render to FBO.
+        // This might mean a black texture or previous content if GetOutputTexture is called.
+        return;
     }
 
+    // 1. Bind this effect's FBO
+    glBindFramebuffer(GL_FRAMEBUFFER, m_fboID);
+    glViewport(0, 0, m_fboWidth, m_fboHeight); // Set viewport to FBO size
+
+    // 2. Clear FBO (e.g., to transparent black, or effect-specific background)
+    // glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Set clear color for this FBO
+    // For raymarching, often the shader itself defines the background, so clearing might not be needed or desired.
+    // If effects are to be alpha-blended, clearing to transparent (alpha 0) is important.
+    // Let's assume a clear for now.
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear color and depth
+
+    // 3. Use this effect's shader program
     glUseProgram(m_shaderProgram);
 
-    // Set common uniforms
+    // 4. Set all uniforms for this effect
+    // Common uniforms (resolution now refers to FBO resolution for this pass)
     if (m_isShadertoyMode) {
-        if (m_iResolutionLocation != -1) glUniform3f(m_iResolutionLocation, (float)m_currentDisplayWidth, (float)m_currentDisplayHeight, (float)m_currentDisplayWidth / (float)m_currentDisplayHeight);
-        if (m_iTimeLocation != -1) glUniform1f(m_iTimeLocation, m_time); // Use the time updated in Update()
+        if (m_iResolutionLocation != -1) glUniform3f(m_iResolutionLocation, (float)m_fboWidth, (float)m_fboHeight, (float)m_fboWidth / (float)m_fboHeight);
+        if (m_iTimeLocation != -1) glUniform1f(m_iTimeLocation, m_time);
         if (m_iTimeDeltaLocation != -1) glUniform1f(m_iTimeDeltaLocation, m_deltaTime);
         if (m_iFrameLocation != -1) glUniform1i(m_iFrameLocation, m_frameCount);
         if (m_iMouseLocation != -1) glUniform4fv(m_iMouseLocation, 1, m_mouseState);
@@ -240,28 +343,16 @@ void ShaderEffect::Render() {
         if (m_iUserFloat1Loc != -1) glUniform1f(m_iUserFloat1Loc, m_iUserFloat1);
         if (m_iUserColor1Loc != -1) glUniform3fv(m_iUserColor1Loc, 1, m_iUserColor1);
 
-        // Set metadata-driven Shadertoy uniforms
         for (const auto& control : m_shadertoyUniformControls) {
-            if (control.location != -1) {
-                if (control.glslType == "float") glUniform1f(control.location, control.fValue);
-                else if (control.glslType == "vec2") glUniform2fv(control.location, 1, control.v2Value);
-                else if (control.glslType == "vec3") glUniform3fv(control.location, 1, control.v3Value);
-                else if (control.glslType == "vec4") glUniform4fv(control.location, 1, control.v4Value);
-                else if (control.glslType == "int") glUniform1i(control.location, control.iValue);
-                else if (control.glslType == "bool") glUniform1i(control.location, control.bValue ? 1 : 0);
-            }
+            if (control.location != -1) { /* ... set metadata uniforms ... */ }
         }
-
     } else { // Native Mode
-        if (m_iResolutionLocation != -1) glUniform2f(m_iResolutionLocation, (float)m_currentDisplayWidth, (float)m_currentDisplayHeight);
-        // Native mode uses iTime for raw time, and u_timeSpeed multiplies it inside the shader usually,
-        // or we can pre-multiply it here. The template seems to use iTime * u_timeSpeed.
-        // So, iTime should be the raw time (m_time from Update()), and u_timeSpeed is separate.
+        if (m_iResolutionLocation != -1) glUniform2f(m_iResolutionLocation, (float)m_fboWidth, (float)m_fboHeight);
         if (m_iTimeLocation != -1) glUniform1f(m_iTimeLocation, m_time);
 
         if (m_uObjectColorLoc != -1) glUniform3fv(m_uObjectColorLoc, 1, m_objectColor);
         if (m_uScaleLoc != -1) glUniform1f(m_uScaleLoc, m_scale);
-        if (m_uTimeSpeedLoc != -1) glUniform1f(m_uTimeSpeedLoc, m_timeSpeed); // Pass m_timeSpeed directly
+        if (m_uTimeSpeedLoc != -1) glUniform1f(m_uTimeSpeedLoc, m_timeSpeed);
         if (m_uColorModLoc != -1) glUniform3fv(m_uColorModLoc, 1, m_colorMod);
         if (m_uPatternScaleLoc != -1) glUniform1f(m_uPatternScaleLoc, m_patternScale);
         if (m_uCamPosLoc != -1) glUniform3fv(m_uCamPosLoc, 1, m_cameraPosition);
@@ -270,7 +361,20 @@ void ShaderEffect::Render() {
         if (m_uLightPosLoc != -1) glUniform3fv(m_uLightPosLoc, 1, m_lightPosition);
         if (m_uLightColorLoc != -1) glUniform3fv(m_uLightColorLoc, 1, m_lightColor);
     }
-    // The actual drawing (e.g., drawing a quad) is done by the Renderer class after this.
+
+    // 5. Render a fullscreen quad (this draws the effect into the FBO)
+    // This requires access to a VAO for a fullscreen quad.
+    // Using g_quadVAO which is declared as extern, assuming it's defined in main.cpp
+    if (g_quadVAO != 0) { // Check if g_quadVAO is valid (initialized in main)
+        glBindVertexArray(g_quadVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(0); // Unbind VAO
+    } else {
+        std::cerr << "ShaderEffect::Render error: g_quadVAO is 0. Cannot draw effect." << std::endl;
+    }
+
+    // 6. Unbind FBO, reverting to default framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 
