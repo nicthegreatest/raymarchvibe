@@ -27,8 +27,9 @@ using json = nlohmann::json;
 
 #include "Effect.h"
 #include "ShaderEffect.h"
-#include "Renderer.h" // Include the new Renderer header
-#include "ImGuiTimeline.h"
+#include "Renderer.h"
+#include "ImGuiSimpleTimeline.h" // Use the custom simple timeline
+// #include "imnodes.h" // Temporarily commented out for timeline test
 
 
 // Window dimensions
@@ -40,19 +41,19 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window); 
 void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-void RenderTimelineWindow(); // Forward declaration
+void RenderTimelineWindow();
+void RenderNodeEditorWindow();
 
 // Scene Management
 static std::vector<std::unique_ptr<Effect>> g_scene;
 static Effect* g_selectedEffect = nullptr;
+static int g_selectedTimelineItem = -1; // For ImGuiSimpleTimeline
 
 // Input State
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
 // Renderer instance
 Renderer g_renderer;
-// Global Quad VAO for effects to use when rendering to their FBOs
-// ShaderEffect.cpp will declare this as extern.
 GLuint g_quadVAO = 0;
 GLuint g_quadVBO = 0;
 
@@ -84,37 +85,55 @@ static int g_storedWindowX=100, g_storedWindowY=100, g_storedWindowWidth=SCR_WID
 
 struct ShaderSample { const char* name; const char* filePath; };
 static const std::vector<ShaderSample> shaderSamples = {
-    {"--- Select ---", ""}, {"Raymarch v1", "shaders/raymarch_v1.frag"}, {"UV Pattern", "shaders/samples/uv_pattern.frag"}, /* more */
+    {"--- Select ---", ""}, {"Plasma", "shaders/raymarch_v1.frag"}, {"UV Pattern", "shaders/samples/uv_pattern.frag"}, {"Passthrough", "shaders/passthrough.frag"}
 };
 static size_t g_currentSampleIndex = 0;
 
-const char* nativeShaderTemplate = "// Native Template\nvoid main(){FragColor=vec4(0.1,0.1,0.1,1.0);}";
-const char* shadertoyShaderTemplate = "// Shadertoy Template\nvoid mainImage(out vec4 C,in vec2 U){C=vec4(U.x/iResolution.x,U.y/iResolution.y,0.5+0.5*sin(iTime),1);}" ;
-
-std::string FetchShadertoyCodeOnline(const std::string& id, const std::string& key, std::string& err) { /* Shortened for brevity */ return "";}
+const char* nativeShaderTemplate = "// Native Template\n#version 330 core\nout vec4 FragColor; uniform vec2 iResolution; uniform float iTime; uniform vec3 u_objectColor; void main(){FragColor=vec4(u_objectColor,1.0);}";
+const char* shadertoyShaderTemplate = "// Shadertoy Template\nvoid mainImage(out vec4 C,in vec2 U){vec2 R=iResolution.xy;C=vec4(U/R,0.5+0.5*sin(iTime),1);}" ;
+std::string FetchShadertoyCodeOnline(const std::string& id, const std::string& key, std::string& err) { /* Placeholder */ err="Network disabled"; return "";}
 
 
 void RenderTimelineWindow() {
     ImGui::Begin("Timeline");
-    static float timeline_start = 0.0f, timeline_end = 60.0f;
-    float current_time_cursor = (float)glfwGetTime();
-    ImGui::Timeline("Scene Timeline", &timeline_start, &timeline_end, &current_time_cursor, ImGuiTimelineFlags_None);
-    ImGui::BeginTimelineGroup("Effects");
+
+    std::vector<ImGui::TimelineItem> timelineItems;
+    std::vector<int> tracks;
+    tracks.resize(g_scene.size());
+
     for (size_t i = 0; i < g_scene.size(); ++i) {
-        if (!g_scene[i]) continue;
-        if (ImGui::TimelineEvent(g_scene[i]->name.c_str(), &g_scene[i]->startTime, &g_scene[i]->endTime)) {
-            g_selectedEffect = g_scene[i].get();
-            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+        if(!g_scene[i]) continue;
+        tracks[i] = i % 4; // Simple track assignment
+        timelineItems.push_back({
+            g_scene[i]->name,
+            &g_scene[i]->startTime,
+            &g_scene[i]->endTime,
+            &tracks[i]
+        });
+    }
+
+    float currentTimeForRuler = (float)glfwGetTime(); // This is just for the ruler's current time indicator
+
+    if (ImGui::SimpleTimeline("Scene", timelineItems, &currentTimeForRuler, &g_selectedTimelineItem, 4, 0.0f, 60.0f)) {
+        if (g_selectedTimelineItem >= 0 && static_cast<size_t>(g_selectedTimelineItem) < g_scene.size()) {
+            g_selectedEffect = g_scene[g_selectedTimelineItem].get();
+            if(auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
                 g_editor.SetText(se->GetShaderSource());
-                const std::string& log = se->GetCompileErrorLog(); // Refresh error markers if any
+                 const std::string& log = se->GetCompileErrorLog();
                 if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos)
                     g_editor.SetErrorMarkers(ParseGlslErrorLog(log)); else ClearErrorMarkers();
             }
         }
     }
-    ImGui::EndTimelineGroup();
     ImGui::End();
 }
+
+// Node Editor stubs from previous phase, will be filled if plan continues to Phase 5
+// static Effect* FindEffectById(int nodeId) { /* ... */ return nullptr;}
+// static int GetNodeIdFromPinAttr(int attr_id) { /* ... */ return 0;}
+// static int GetPinIndexFromPinAttr(int attr_id) { /* ... */ return 0;}
+// static bool IsOutputPin(int attr_id) { /* ... */ return false;}
+// void RenderNodeEditorWindow() { ImGui::Begin("Node Editor (Placeholder)"); ImGui::Text("Node editor UI will be here."); ImGui::End(); } // Temporarily commented out
 
 
 int main() {
@@ -124,7 +143,7 @@ int main() {
     #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     #endif
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "RaymarchVibe - Phase 4", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "RaymarchVibe", NULL, NULL); // Title updated
     if (!window) { std::cerr << "Window creation failed." << std::endl; glfwTerminate(); return -1; }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -132,71 +151,55 @@ int main() {
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) { std::cerr << "GLAD Init failed." << std::endl; glfwTerminate(); return -1; }
 
-    if (!g_renderer.Init()) { // Initialize Renderer (loads compositing shader, creates its own quad)
-        std::cerr << "Failed to initialize Renderer." << std::endl;
-        glfwTerminate(); return -1;
-    }
+    if (!g_renderer.Init()) { std::cerr << "Renderer Init failed." << std::endl; glfwTerminate(); return -1; }
 
-    // Setup global quad VAO for effects (ShaderEffect will use this via extern)
-    float quadVertices[] = { -1.0f,  1.0f, -1.0f, -1.0f, 1.0f, -1.0f, -1.0f,  1.0f, 1.0f, -1.0f, 1.0f,  1.0f };
+    float quadVerts[] = { -1.f,1.f, -1.f,-1.f, 1.f,-1.f, -1.f,1.f, 1.f,-1.f, 1.f,1.f };
     glGenVertexArrays(1, &g_quadVAO); glGenBuffers(1, &g_quadVBO);
     glBindVertexArray(g_quadVAO); glBindBuffer(GL_ARRAY_BUFFER, g_quadVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVerts), quadVerts, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0); glBindVertexArray(0);
 
-
     static char filePathBuffer_Load[256] = "shaders/raymarch_v1.frag";
     static char filePathBuffer_SaveAs[256] = "shaders/my_new_shader.frag";
-    // ... other static UI buffers ...
+    static char shadertoyInputBuffer[256] = "Ms2SD1";
+    static std::string shadertoyApiKey = "REPLACE_ME";
 
     float deltaTime = 0.0f, lastFrameTime_main = 0.0f;
 
     // Initialize Scene
-    // Effect 1
-    auto effect1 = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
-    effect1->name = "Plasma";
-    effect1->startTime = 0.0f;
-    effect1->endTime = 20.0f;
+    auto effect1 = std::make_unique<ShaderEffect>(filePathBuffer_Load, SCR_WIDTH, SCR_HEIGHT);
+    effect1->name = "Plasma"; effect1->startTime = 0.0f; effect1->endTime = 10.0f;
     g_scene.push_back(std::move(effect1));
 
-    if (!g_selectedEffect && !g_scene.empty()) {
-        g_selectedEffect = g_scene.front().get();
-    }
-
-    // Effect 2
     auto effect2 = std::make_unique<ShaderEffect>("shaders/samples/uv_pattern.frag", SCR_WIDTH, SCR_HEIGHT);
-    effect2->name = "UV Grid";
-    effect2->startTime = 5.0f;
-    effect2->endTime = 25.0f;
+    effect2->name = "UV Pattern"; effect2->startTime = 8.0f; effect2->endTime = 18.0f;
     g_scene.push_back(std::move(effect2));
 
-    // Load all effects in the scene initially.
-    // In a more complex setup, effects might be loaded on demand or when they become active.
-    for (const auto& effect_ptr : g_scene) {
-        effect_ptr->Load(); // This will also create their FBOs with initial SCR_WIDTH, SCR_HEIGHT
-    }
+    auto effect3 = std::make_unique<ShaderEffect>("shaders/passthrough.frag", SCR_WIDTH, SCR_HEIGHT);
+    effect3->name = "Passthrough"; effect3->startTime = 5.0f; effect3->endTime = 15.0f;
+    // To test input: effect3->SetInputEffect(0, g_scene[0].get()); // Plasma feeds Passthrough
+    g_scene.push_back(std::move(effect3));
 
-    // If g_selectedEffect was set, populate editor
+
+    if (!g_scene.empty()) g_selectedEffect = g_scene.front().get();
+
+    for (const auto& effect_ptr : g_scene) effect_ptr->Load();
+
     if (g_selectedEffect) {
         ShaderEffect* se = dynamic_cast<ShaderEffect*>(g_selectedEffect);
-        if (se) {
-            g_editor.SetText(se->GetShaderSource());
-            const std::string& log = se->GetCompileErrorLog();
-            if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos)
-                g_editor.SetErrorMarkers(ParseGlslErrorLog(log));
-            else ClearErrorMarkers();
-            g_shaderLoadError_global = log.find("failed") != std::string::npos || log.find("ERROR") != std::string::npos ? "Initial load failed for " + se->name + ": " + log : "Initial shader (" + se->name + "): " + log;
-        }
+        if (se) { g_editor.SetText(se->GetShaderSource()); /* set markers, global error log */ }
     }
 
-    IMGUI_CHECKVERSION(); ImGui::CreateContext(); ImGuiIO& io = ImGui::GetIO();
+    IMGUI_CHECKVERSION(); ImGui::CreateContext(); // imnodes::CreateContext(); // Temporarily commented out
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true); ImGui_ImplOpenGL3_Init("#version 330");
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
 
     lastFrameTime_main = (float)glfwGetTime();
+    int f5State = GLFW_RELEASE; // Moved F5 state here as it's used in editor UI logic
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -204,73 +207,77 @@ int main() {
         deltaTime = currentTime - lastFrameTime_main;
         lastFrameTime_main = currentTime;
 
-        // Keybinds for GUI, Fullscreen (no changes needed here from previous structure)
-        // ...
-
         processInput(window);
 
-        // --- RENDER-TO-FBO PASS ---
         for (const auto& effect_ptr : g_scene) {
             if (currentTime >= effect_ptr->startTime && currentTime < effect_ptr->endTime) {
-                // Update effect state (mouse, resolution for uniforms if needed by effect logic)
                 ShaderEffect* se = dynamic_cast<ShaderEffect*>(effect_ptr.get());
-                if(se){ // If it's a ShaderEffect, it might need these updates
-                    int fbo_w, fbo_h; // ShaderEffect should know its own FBO dimensions
-                                      // For now, assume g_selectedEffect's updates are sufficient if it's this effect
-                                      // Or each effect gets its own specific update from main
-                    if(effect_ptr.get() == g_selectedEffect && se){
+                if(se){
+                    if(effect_ptr.get() == g_selectedEffect){ // Only update selected effect fully for now
                         int current_display_w, current_display_h;
-                        glfwGetFramebufferSize(window, &current_display_w, &current_display_h); // For iResolution if needed by selected
-                        se->SetDisplayResolution(current_display_w, current_display_h); // For uniforms like iResolution
+                        glfwGetFramebufferSize(window, &current_display_w, &current_display_h);
+                        se->SetDisplayResolution(current_display_w, current_display_h);
                         se->SetMouseState(g_mouseState[0],g_mouseState[1],g_mouseState[2],g_mouseState[3]);
-                        se->SetDeltaTime(deltaTime);
-                        se->IncrementFrameCount();
-                    } else if (se) { // Non-selected but active ShaderEffect
-                        // Minimal update: time, frame count
-                        se->SetDeltaTime(deltaTime); // If it uses iTimeDelta
-                        se->IncrementFrameCount();   // If it uses iFrame
                     }
+                    se->SetDeltaTime(deltaTime); se->IncrementFrameCount();
                 }
-                effect_ptr->Update(currentTime); // General effect update
-                effect_ptr->Render();            // Renders to its own FBO
+                effect_ptr->Update(currentTime);
+                effect_ptr->Render();
             }
         }
 
         ImGui_ImplOpenGL3_NewFrame(); ImGui_ImplGlfw_NewFrame(); ImGui::NewFrame();
 
         if (g_showGui) {
-            // Window Snapping, Effect Properties, Shader Editor, Console, Timeline, Help window logic
-            // (This part is complex and involves many ImGui calls, assuming structure from previous main.cpp,
-            // with "Effect Properties" calling g_selectedEffect->RenderUI(), and Shader Editor calls
-            // targeting methods of g_selectedEffect (cast to ShaderEffect*).
-            // Timeline window is rendered by RenderTimelineWindow().
-            // For brevity, I'm not reproducing all ImGui calls here, but they follow the established pattern.
-            ImGui::Begin("Effect Properties"); /* ... calls g_selectedEffect->RenderUI() ... */ ImGui::End();
-            ImGui::Begin("Shader Editor"); /* ... editor and buttons interacting with g_selectedEffect ... */ ImGui::End();
-            ImGui::Begin("Console"); /* ... log display ... */ ImGui::End();
+            ImGui::Begin("Effect Properties");
+            if(ImGui::Button("Help")) g_showHelpWindow = true; ImGui::SameLine();
+            if(ImGui::Button("Snap Win")) g_snapWindowsNextFrame = true;
+            ImGui::Separator();
+            if(g_selectedEffect) g_selectedEffect->RenderUI(); else ImGui::Text("No effect selected.");
+            ImGui::Separator(); ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+            ImGui::End();
+
+            ImGui::Begin("Shader Editor");
+            ShaderEffect* editorSE = dynamic_cast<ShaderEffect*>(g_selectedEffect);
+            // F5 keybind logic
+            int currentF5State_Editor = glfwGetKey(window, GLFW_KEY_F5);
+            if (currentF5State_Editor == GLFW_PRESS && f5State == GLFW_RELEASE && !io.WantTextInput && editorSE) {
+                editorSE->ApplyShaderCode(g_editor.GetText());
+                const std::string& log = editorSE->GetCompileErrorLog();
+                if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos) g_editor.SetErrorMarkers(ParseGlslErrorLog(log)); else ClearErrorMarkers();
+                g_shaderLoadError_global = "Applied (F5). Status: " + log;
+            }
+            f5State = currentF5State_Editor;
+
+            if (ImGui::CollapsingHeader("Load/Save Actions")) { /* ... UI for load/save ... */ }
+            // Editor and Apply button
+            const std::string& currentEffectLog = editorSE ? editorSE->GetCompileErrorLog() : "";
+            if (!g_shaderLoadError_global.empty() && (currentEffectLog.empty() || currentEffectLog.find("Successfully") != std::string::npos || currentEffectLog.find("applied successfully") != std::string::npos))
+                 ImGui::TextColored(ImVec4(1.f,1.f,0.f,1.f), "Status: %s", g_shaderLoadError_global.c_str());
+            else if (!currentEffectLog.empty())
+                 ImGui::TextColored(ImVec4(1.f,1.f,0.f,1.f), "Effect Status: %s", currentEffectLog.c_str());
+            ImGui::Separator();
+            g_editor.Render("ShaderSourceEditor", ImVec2(-1, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing()*1.2f));
+            if (ImGui::Button("Apply from Editor") && editorSE) { /* Apply logic */ }
+            ImGui::End();
+
+            ImGui::Begin("Console"); /* ... Console UI ... */ ImGui::End();
             RenderTimelineWindow();
-            if(g_showHelpWindow) { /* ... help window ... */ }
+            // RenderNodeEditorWindow(); // Temporarily commented out
+            if(g_showHelpWindow) { ImGui::Begin("Help", &g_showHelpWindow); /* ... */ ImGui::End(); }
         }
 
-        // --- COMPOSITING PASS ---
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0); // Ensure we're rendering to the screen
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT); // No depth clear needed for final composite usually
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f); glClear(GL_COLOR_BUFFER_BIT);
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         for (const auto& effect_ptr : g_scene) {
             if (currentTime >= effect_ptr->startTime && currentTime < effect_ptr->endTime) {
                 if (auto* se = dynamic_cast<ShaderEffect*>(effect_ptr.get())) {
-                    if (se->GetOutputTexture() != 0) { // Ensure texture is valid
-                        g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
-                    }
+                    if (se->GetOutputTexture() != 0) g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
                 }
-                // Later, other effect types might also have GetOutputTexture() or a similar mechanism
             }
         }
         glDisable(GL_BLEND);
@@ -280,57 +287,29 @@ int main() {
         glfwSwapBuffers(window);
     } 
 
-    ImGui_ImplOpenGL3_Shutdown(); ImGui_ImplGlfw_Shutdown(); ImGui::DestroyContext();
-    // g_scene unique_ptrs handle deleting Effects, which clean up their FBOs
-    // Renderer g_renderer cleans up its shader/VAO in its destructor (if global) or when it goes out of scope
+    ImGui_ImplOpenGL3_Shutdown(); ImGui_ImplGlfw_Shutdown();
+    // imnodes::DestroyContext(); // Temporarily commented out
+    ImGui::DestroyContext();
     if (g_quadVAO != 0) glDeleteVertexArrays(1, &g_quadVAO);
     if (g_quadVBO != 0) glDeleteBuffers(1, &g_quadVBO);
     glfwTerminate(); return 0;
 } 
 
 void framebuffer_size_callback(GLFWwindow* w, int width, int height) {
-    (void)w;
-    if (width > 0 && height > 0) { // Ensure valid dimensions
-        glViewport(0,0,width,height);
-        // Resize FBOs for all ShaderEffects in the scene
-        for (const auto& effect_ptr : g_scene) {
-            if (auto* se = dynamic_cast<ShaderEffect*>(effect_ptr.get())) {
-                se->ResizeFrameBuffer(width, height);
-            }
-        }
-        // The iResolution uniform for ShaderEffects is based on their FBO dimensions,
-        // which are updated by ResizeFrameBuffer.
-        // If an effect needs to know the final screen resolution for other purposes,
-        // that would require a separate mechanism (e.g., another method on Effect).
-    }
+    (void)w; if (width>0 && height>0) { glViewport(0,0,width,height); for(const auto& e:g_scene) if(auto* se=dynamic_cast<ShaderEffect*>(e.get())) se->ResizeFrameBuffer(width,height); }
 }
 void processInput(GLFWwindow *w) { if (glfwGetKey(w, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(w, true); }
 
 void mouse_cursor_position_callback(GLFWwindow* w, double x, double y) {
     ImGuiIO& io = ImGui::GetIO();
     ShaderEffect* se = g_selectedEffect ? dynamic_cast<ShaderEffect*>(g_selectedEffect) : nullptr;
-    bool effectNeedsMouse = se ? se->IsShadertoyMode() : false;
-
-    if (!io.WantCaptureMouse || effectNeedsMouse) {
-        int winH; glfwGetWindowSize(w, NULL, &winH);
-        g_mouseState[0]=(float)x; g_mouseState[1]=(float)winH-(float)y;
-        // Mouse state is passed to selected effect during its update phase if it's a ShaderEffect
-    }
+    bool stMode = se ? se->IsShadertoyMode() : false;
+    if (!io.WantCaptureMouse || stMode) { int H; glfwGetWindowSize(w,NULL,&H); g_mouseState[0]=(float)x; g_mouseState[1]=(float)H-(float)y; }
 }
 void mouse_button_callback(GLFWwindow* w, int btn, int act, int mod) {
     (void)mod; ImGuiIO& io = ImGui::GetIO();
     ShaderEffect* se = g_selectedEffect ? dynamic_cast<ShaderEffect*>(g_selectedEffect) : nullptr;
-    bool effectNeedsMouse = se ? se->IsShadertoyMode() : false;
-
-    if (!io.WantCaptureMouse || effectNeedsMouse) {
-        if (btn == GLFW_MOUSE_BUTTON_LEFT) {
-            if (act == GLFW_PRESS) { g_mouseState[2]=g_mouseState[0]; g_mouseState[3]=g_mouseState[1]; }
-            else if (act == GLFW_RELEASE) { g_mouseState[2]=-std::abs(g_mouseState[2]); g_mouseState[3]=-std::abs(g_mouseState[3]); }
-        }
-    }
-    // Mouse state is passed to selected effect during its update phase
-    if (glfwGetMouseButton(w, GLFW_MOUSE_BUTTON_LEFT)==GLFW_RELEASE) {
-        if(g_mouseState[2]>0.f) g_mouseState[2]=-g_mouseState[2];
-        if(g_mouseState[3]>0.f) g_mouseState[3]=-g_mouseState[3];
-    }
+    bool stMode = se ? se->IsShadertoyMode() : false;
+    if (!io.WantCaptureMouse || stMode) { if(btn==GLFW_MOUSE_BUTTON_LEFT){if(act==GLFW_PRESS){g_mouseState[2]=g_mouseState[0];g_mouseState[3]=g_mouseState[1];}else if(act==GLFW_RELEASE){g_mouseState[2]=-std::abs(g_mouseState[2]);g_mouseState[3]=-std::abs(g_mouseState[3]);}}}
+    if(glfwGetMouseButton(w,GLFW_MOUSE_BUTTON_LEFT)==GLFW_RELEASE){if(g_mouseState[2]>0.f)g_mouseState[2]=-g_mouseState[2]; if(g_mouseState[3]>0.f)g_mouseState[3]=-g_mouseState[3];}
 }
