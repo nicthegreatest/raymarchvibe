@@ -54,23 +54,17 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
   GIT_TAG v1.90.8
 )
-FetchContent_MakeAvailable(imgui)
+FetchContent_MakeAvailable(imgui) # This was correct, ensure it stays
 
-# ImGui Timeline Widget
-FetchContent_Declare(
-  imgui-timeline
-  GIT_REPOSITORY https://github.com/nem0/imgui-timeline.git
-  GIT_TAG v1.0.0 # Using latest release tag for stability
-)
-FetchContent_MakeAvailable(imgui-timeline)
+# ImGuizmo and imgui-timeline related lines are now fully removed.
 
-# ImGui Node Editor Library
-FetchContent_Declare(
-  imnodes
-  GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
-  GIT_TAG v0.5.1 # Use a specific tag for stability
-)
-FetchContent_MakeAvailable(imnodes)
+# ImGui Node Editor Library (Temporarily Commented Out for Timeline Test)
+# FetchContent_Declare(
+#   imnodes
+#   GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
+#   GIT_TAG v0.5.1
+# )
+# FetchContent_MakeAvailable(imnodes)
 
 add_library(glad_lib STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src/glad.c
@@ -105,8 +99,8 @@ add_executable(RaymarchVibe
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imguicolortextedit_SOURCE_DIR}/TextEditor.cpp
-  ${imgui-timeline_SOURCE_DIR}/ImGuiTimeline.cpp
-  ${imnodes_SOURCE_DIR}/imnodes.cpp # Added imnodes.cpp
+  # Removed ImGuizmo.cpp and ImGuiTimeline.cpp
+  # ${imnodes_SOURCE_DIR}/imnodes.cpp # Temporarily commented out for timeline test
 )
 
 target_include_directories(RaymarchVibe PRIVATE
@@ -115,8 +109,8 @@ target_include_directories(RaymarchVibe PRIVATE
   ${imgui_SOURCE_DIR}/backends
   ${httplib_fetch_SOURCE_DIR}
   ${imguicolortextedit_SOURCE_DIR}
-  ${imgui-timeline_SOURCE_DIR}
-  ${imnodes_SOURCE_DIR} # Added include directory for imnodes
+  # Removed ImGuizmo_SOURCE_DIR and imgui-timeline_SOURCE_DIR
+  # ${imnodes_SOURCE_DIR} # Temporarily commented out for timeline test
 )
 
 target_link_libraries(RaymarchVibe PRIVATE

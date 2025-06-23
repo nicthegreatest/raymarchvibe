@@ -883,7 +883,9 @@ void ShaderEffect::FetchUniformLocations() {
             control.location = glGetUniformLocation(m_shaderProgram, control.name.c_str());
             // if (control.location == -1) warnings_collector += "ST_Metadata_Warn: Uniform '" + control.name + "' not found.\n";
         }
-        m_uObjectColorLoc = m_uScaleLoc = /* ... other native locs ... */ = -1;
+        // Clear native locations
+        m_uObjectColorLoc = -1; m_uScaleLoc = -1; m_uTimeSpeedLoc = -1; m_uColorModLoc = -1; m_uPatternScaleLoc = -1;
+        m_uCamPosLoc = -1; m_uCamTargetLoc = -1; m_uCamFOVLoc = -1; m_uLightPosLoc = -1; m_uLightColorLoc = -1;
 
     } else { // Native Mode
         m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution");
