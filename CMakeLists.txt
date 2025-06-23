@@ -78,6 +78,8 @@ endif()
 
 add_executable(RaymarchVibe
   src/main.cpp
+  src/ShaderEffect.cpp
+  src/ShaderParser.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
   ${imgui_SOURCE_DIR}/imgui.cpp
