@@ -24,7 +24,7 @@ public:
     // TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log); // TextEditor dependency
 
     // Utility to extract Shadertoy ID from URL or string
-    std::string ExtractShaderId(const std::string& idOrUrl);
+    static std::string ExtractShaderId(const std::string& idOrUrl);
 
     // Functions to modify shader code strings (for defines, consts)
     // These might be better as static utility functions or part of ShaderEffect if it directly manipulates its source string.
