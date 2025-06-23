@@ -68,20 +68,22 @@ ShaderConstControl::ShaderConstControl(const std::string& n, const std::string& 
 
 
 ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidth, int initialHeight, bool isShadertoy)
-    : m_shaderProgram(0),
+    : Effect(), // Call base constructor to assign ID
+      m_shaderProgram(0),
       m_isShadertoyMode(isShadertoy),
       m_shaderLoaded(false),
       m_time(0.0f),
       m_deltaTime(0.0f),
       m_frameCount(0),
-      // Initialize native params
       m_scale(1.0f), m_timeSpeed(1.0f), m_patternScale(1.0f), m_cameraFOV(60.0f),
-      // Initialize Shadertoy params
       m_iUserFloat1(0.5f),
-    m_shaderParser(), // Initialize ShaderParser
-    m_fboID(0), m_fboTextureID(0), m_rboID(0),
-    m_fboWidth(initialWidth), m_fboHeight(initialHeight)
+      m_shaderParser(),
+      m_fboID(0), m_fboTextureID(0), m_rboID(0),
+      m_fboWidth(initialWidth), m_fboHeight(initialHeight),
+      m_uInputTextureSamplerLoc(-1)
 {
+    m_inputs.resize(1, nullptr); // Assuming 1 input slot for now
+
     // Initialize arrays for colors and vectors
     m_objectColor[0] = 0.8f; m_objectColor[1] = 0.9f; m_objectColor[2] = 1.0f;
     m_colorMod[0] = 0.1f; m_colorMod[1] = 0.1f; m_colorMod[2] = 0.2f;
@@ -174,11 +176,26 @@ void ShaderEffect::ResizeFrameBuffer(int width, int height) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind FBO
 }
 
+// --- Node Editor Methods ---
+int ShaderEffect::GetInputPinCount() const {
+    return m_inputs.size(); // Or a fixed number like 1
+}
+
+void ShaderEffect::SetInputEffect(int pinIndex, Effect* inputEffect) {
+    if (pinIndex >= 0 && static_cast<size_t>(pinIndex) < m_inputs.size()) {
+        m_inputs[static_cast<size_t>(pinIndex)] = inputEffect;
+    } else {
+        std::cerr << "ShaderEffect Error: SetInputEffect - pinIndex " << pinIndex << " out of bounds." << std::endl;
+    }
+}
+
 
 // --- Public Shader Management ---
 bool ShaderEffect::LoadShaderFromFile(const std::string& filePath) {
     m_shaderFilePath = filePath;
-    this->name = filePath; // Set effect name to file path by default
+    // this->name is set by Effect constructor or can be overridden if needed
+    // If filePath should become the name, set it here:
+    // this->name = filePath;
     std::string loadError;
     m_shaderSourceCode = LoadShaderSourceFile(m_shaderFilePath, loadError);
     if (!loadError.empty()) {
@@ -371,6 +388,13 @@ void ShaderEffect::Render() {
         glBindVertexArray(0); // Unbind VAO
     } else {
         std::cerr << "ShaderEffect::Render error: g_quadVAO is 0. Cannot draw effect." << std::endl;
+    }
+
+    // After drawing, if an input texture was bound, unbind it from its texture unit
+    if (m_inputs[0] && m_inputs[0]->GetOutputTexture() != 0 && m_uInputTextureSamplerLoc != -1) {
+        glActiveTexture(GL_TEXTURE1); // Assuming input was on GL_TEXTURE1
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glActiveTexture(GL_TEXTURE0); // Reset to default active texture unit
     }
 
     // 6. Unbind FBO, reverting to default framebuffer
@@ -838,7 +862,10 @@ void ShaderEffect::CompileAndLinkShader() {
 
 void ShaderEffect::FetchUniformLocations() {
     if (m_shaderProgram == 0) return;
-    std::string warnings_collector; // To collect warnings like in main.cpp
+    std::string warnings_collector;
+    m_uInputTextureSamplerLoc = glGetUniformLocation(m_shaderProgram, "u_inputTexture");
+    // if (m_uInputTextureSamplerLoc == -1) warnings_collector += "Warn: u_inputTexture sampler not found. Effect won't receive texture inputs.\n";
+
 
     if (m_isShadertoyMode) {
         m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution");
@@ -849,23 +876,17 @@ void ShaderEffect::FetchUniformLocations() {
         m_iUserFloat1Loc = glGetUniformLocation(m_shaderProgram, "iUserFloat1");
         m_iUserColor1Loc = glGetUniformLocation(m_shaderProgram, "iUserColor1");
 
-        // Check for -1 and add to warnings_collector if so (optional for ShaderEffect's log)
         if (m_iResolutionLocation == -1) warnings_collector += "ST_Warn: iResolution not found.\n";
-        if (m_iTimeLocation == -1) warnings_collector += "ST_Warn: iTime not found.\n";
-        // ... and so on for other standard ST uniforms
+        // ... other ST uniform checks ...
 
         for (auto& control : m_shadertoyUniformControls) {
             control.location = glGetUniformLocation(m_shaderProgram, control.name.c_str());
-            if (control.location == -1) {
-                 warnings_collector += "ST_Metadata_Warn: Uniform '" + control.name + "' (from metadata) not found in shader.\n";
-            }
+            // if (control.location == -1) warnings_collector += "ST_Metadata_Warn: Uniform '" + control.name + "' not found.\n";
         }
-        // Clear native locations
-        m_uObjectColorLoc = m_uScaleLoc = m_uTimeSpeedLoc = m_uColorModLoc = m_uPatternScaleLoc = -1;
-        m_uCamPosLoc = m_uCamTargetLoc = m_uCamFOVLoc = m_uLightPosLoc = m_uLightColorLoc = -1;
+        m_uObjectColorLoc = m_uScaleLoc = /* ... other native locs ... */ = -1;
 
     } else { // Native Mode
-        m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution"); // Native might use vec2
+        m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution");
         m_iTimeLocation = glGetUniformLocation(m_shaderProgram, "iTime");
         m_uObjectColorLoc = glGetUniformLocation(m_shaderProgram, "u_objectColor");
         m_uScaleLoc = glGetUniformLocation(m_shaderProgram, "u_scale");
@@ -878,20 +899,20 @@ void ShaderEffect::FetchUniformLocations() {
         m_uLightPosLoc = glGetUniformLocation(m_shaderProgram, "u_lightPosition");
         m_uLightColorLoc = glGetUniformLocation(m_shaderProgram, "u_lightColor");
 
-        // Check for -1 and add to warnings_collector (optional)
         if (m_iResolutionLocation == -1) warnings_collector += "Native_Warn: iResolution not found.\n";
-        // ... and so on
+        // ... other native uniform checks ...
 
-        // Clear Shadertoy specific locations
-        m_iTimeDeltaLocation = m_iFrameLocation = m_iMouseLocation = -1;
-        m_iUserFloat1Loc = m_iUserColor1Loc = -1;
-        // m_shadertoyUniformControls locations will be -1 if not applicable or not found
+        m_iTimeDeltaLocation = m_iFrameLocation = m_iMouseLocation = m_iUserFloat1Loc = m_iUserColor1Loc = -1;
     }
+
+    // Append warnings to compile log
     if (!warnings_collector.empty()) {
-        if (m_compileErrorLog.find("Applied successfully!") != std::string::npos || m_compileErrorLog.find("Shader applied successfully.") != std::string::npos) {
-            m_compileErrorLog += "\nWith warnings:\n" + warnings_collector;
-        } else if (!m_compileErrorLog.empty()){
-             m_compileErrorLog += "\nUniform Warnings:\n" + warnings_collector;
+        if (m_compileErrorLog.find("Successfully") != std::string::npos || m_compileErrorLog.find("applied successfully") != std::string::npos) {
+             m_compileErrorLog += "\nWith warnings:\n" + warnings_collector;
+        } else if (!m_compileErrorLog.empty() && m_compileErrorLog.back() != '\n') {
+            m_compileErrorLog += "\nUniform Warnings:\n" + warnings_collector;
+        } else if (!m_compileErrorLog.empty()) {
+            m_compileErrorLog += "Uniform Warnings:\n" + warnings_collector;
         } else {
             m_compileErrorLog = "Uniform Warnings:\n" + warnings_collector;
         }

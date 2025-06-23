@@ -125,11 +125,21 @@ public:
     void IncrementFrameCount() { m_frameCount++; }
 
     // --- FBO specific methods ---
-    GLuint GetOutputTexture() const;
+    GLuint GetOutputTexture() const override; // Override from Effect base
     // Resizes the FBO and its attachments. Called on init and if window resizes.
     void ResizeFrameBuffer(int width, int height);
 
+    // --- Node Editor specific methods ---
+    int GetInputPinCount() const override;
+    // int GetOutputPinCount() const override; // Already defaults to 1 in Effect.h, can override if different
+    void SetInputEffect(int pinIndex, Effect* inputEffect) override;
+
+
 private:
+    // --- Node Editor Inputs ---
+    std::vector<Effect*> m_inputs; // Stores pointers to input effects
+    GLint m_uInputTextureSamplerLoc = -1; // Uniform location for the input texture sampler
+
     // --- FBO Members ---
     GLuint m_fboID = 0;
     GLuint m_fboTextureID = 0;
