@@ -18,12 +18,6 @@ static GLuint CompileShader(const char* source, GLenum type, std::string& errorL
 static GLuint CreateShaderProgram(GLuint vertexShaderID, GLuint fragmentShaderID, std::string& errorLogString); // Already defined below
 static std::string LoadPassthroughVertexShaderSource(std::string& errorMsg); // Already defined below
 
-// For ShaderEffect::Render() to draw its quad into its FBO.
-// This VAO is defined and initialized in main.cpp.
-// For this to link, g_quadVAO in main.cpp must not be static.
-extern GLuint g_quadVAO;
-
-
 // Constructor for ShaderToyUniformControl (if not in .h, needed for vector<ShaderToyUniformControl>)
 ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std::string& type_str, const nlohmann::json& meta)
     : name(n), glslType(type_str), metadata(meta), location(-1), fValue(0.0f), iValue(0), bValue(false), isColor(false) { // Ensure member init order matches declaration
@@ -392,29 +386,18 @@ void ShaderEffect::Render() {
     }
 
     // 5. Render a fullscreen quad (this draws the effect into the FBO)
-    // This requires access to a VAO for a fullscreen quad.
-    // Using g_quadVAO which is declared as extern, assuming it's defined in main.cpp
-    if (g_quadVAO != 0) { // Check if g_quadVAO is valid (initialized in main)
-        glBindVertexArray(g_quadVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        glBindVertexArray(0); // Unbind VAO
-    } else {
-        std::cerr << "ShaderEffect::Render error: g_quadVAO is 0. Cannot draw effect." << std::endl;
-    }
+    //    DRAWING IS NOW HANDLED BY RENDERER
+    //    The Renderer::RenderQuad() will be called after this function in main.cpp
 
-    // After drawing, if an input texture was bound, unbind it from its texture unit
-    // and reset active texture unit to GL_TEXTURE0 (ImGui and other things might expect this).
-    if (!m_inputs.empty() && m_inputs[0] != nullptr && m_inputs[0]->GetOutputTexture() != 0 && m_iChannel0SamplerLoc != -1) {
-        glActiveTexture(GL_TEXTURE0); // Or the unit iChannel0 was bound to
-        glBindTexture(GL_TEXTURE_2D, 0); // Unbind
-    }
-    // It's generally good practice to reset to GL_TEXTURE0 if other parts of the codebase
-    // (like ImGui) assume GL_TEXTURE0 is the active unit without explicitly setting it.
-    glActiveTexture(GL_TEXTURE0);
-
+    // After setting uniforms, the necessary texture unit (e.g., GL_TEXTURE0 for iChannel0)
+    // might still be active and a texture might be bound to it.
+    // This is generally fine, as the next effect will set its own textures,
+    // or the compositing pass will.
+    // The problem description's version of ShaderEffect::Render does not unbind iChannel0 here.
 
     // 6. Unbind FBO, reverting to default framebuffer
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //    THIS IS NOW HANDLED IN MAIN.CPP AFTER THE RENDER LOOP
+    // glBindFramebuffer(GL_FRAMEBUFFER, 0); // Removed as per instructions
 }
 
 
