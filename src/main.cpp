@@ -494,11 +494,12 @@ int main() {
                 se->SetAudioAmplitude(audioAmp);
             }
             effect_ptr->Update(currentTime);
+
+            // 2. Render the effect. This single call now does everything.
             effect_ptr->Render();
 
-            // 2. Now that the correct FBO and shader are active, tell the renderer to draw the quad.
-            //    This executes the draw call, rendering the effect into its FBO.
-            g_renderer.RenderQuad();
+            // The draw call below is no longer needed here.
+            // g_renderer.RenderQuad(); // <-- REMOVE THIS LINE
         }
 
         // After the loop, unbind the FBO to ensure subsequent rendering (like ImGui) targets the main window

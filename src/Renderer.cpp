@@ -4,6 +4,10 @@
 #include <sstream>
 #include <iostream> // For error logging
 
+// Define the static member variables
+GLuint Renderer::s_quadVAO = 0;
+GLuint Renderer::s_quadVBO = 0;
+
 // Helper function to load shader source from file
 static std::string LoadShaderSource(const char* filePath, std::string& errorMsg) {
     errorMsg.clear();
@@ -101,10 +105,10 @@ void Renderer::setupQuad() {
          1.0f,  1.0f,  1.0f, 1.0f
     };
 
-    glGenVertexArrays(1, &m_quadVAO);
-    glGenBuffers(1, &m_quadVBO);
-    glBindVertexArray(m_quadVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+    glGenVertexArrays(1, &s_quadVAO);
+    glGenBuffers(1, &s_quadVBO);
+    glBindVertexArray(s_quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, s_quadVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
     // Position attribute
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
@@ -130,7 +134,7 @@ bool Renderer::Init() {
 }
 
 void Renderer::RenderFullscreenTexture(GLuint textureID) {
-    if (m_compositingProgram == 0 || m_quadVAO == 0) {
+    if (m_compositingProgram == 0 || s_quadVAO == 0) { // Check static VAO
         std::cerr << "Renderer::RenderFullscreenTexture - Renderer not initialized or error." << std::endl;
         return;
     }
@@ -142,14 +146,15 @@ void Renderer::RenderFullscreenTexture(GLuint textureID) {
     glBindTexture(GL_TEXTURE_2D, textureID);
     glUniform1i(glGetUniformLocation(m_compositingProgram, "screenTexture"), 0);
 
-    glBindVertexArray(m_quadVAO);
+    glBindVertexArray(s_quadVAO); // Bind static VAO
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0); // Unbind texture
 }
 
+// Change RenderQuad to be a static method and use the static VAO
 void Renderer::RenderQuad() {
-    glBindVertexArray(m_quadVAO);
+    glBindVertexArray(s_quadVAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
 }
