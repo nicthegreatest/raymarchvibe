@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <glad/glad.h> // For GLuint in GetOutputTexture
+#include <nlohmann/json.hpp> // Added for nlohmann::json serialization
 
 // Forward declaration for ImGui (if RenderUI directly uses ImGui types)
 // For now, assuming RenderUI doesn't need specific ImGui types in its signature.
