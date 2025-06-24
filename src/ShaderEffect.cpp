@@ -74,7 +74,8 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
       m_shaderParser(),
       m_fboID(0), m_fboTextureID(0), m_rboID(0),
       m_fboWidth(initialWidth), m_fboHeight(initialHeight),
-      m_iChannel0SamplerLoc(-1) // Updated member name
+      m_iChannel0SamplerLoc(-1), // Updated member name
+      m_audioAmp(0.0f), m_iAudioAmpLoc(-1)
 {
     m_inputs.resize(1, nullptr); // Assuming 1 input slot for now
 
@@ -384,6 +385,11 @@ void ShaderEffect::Render() {
         if (m_uLightPosLoc != -1) glUniform3fv(m_uLightPosLoc, 1, m_lightPosition);
         if (m_uLightColorLoc != -1) glUniform3fv(m_uLightColorLoc, 1, m_lightColor);
     }
+    
+    // Set iAudioAmp if location is valid (common for both modes)
+    if (m_iAudioAmpLoc != -1) {
+        glUniform1f(m_iAudioAmpLoc, m_audioAmp);
+    }
 
     // 5. Render a fullscreen quad (this draws the effect into the FBO)
     //    DRAWING IS NOW HANDLED BY RENDERER
@@ -400,6 +406,9 @@ void ShaderEffect::Render() {
     // glBindFramebuffer(GL_FRAMEBUFFER, 0); // Removed as per instructions
 }
 
+void ShaderEffect::SetAudioAmplitude(float amp) {
+    m_audioAmp = amp;
+}
 
 // --- State Setters (called by main loop or UIManager) ---
 void ShaderEffect::SetMouseState(float x, float y, float click_x, float click_y) {
@@ -783,7 +792,11 @@ void ShaderEffect::CompileAndLinkShader() {
     }
 
     std::string finalFragmentCode = m_shaderSourceCode;
-    if (m_isShadertoyMode) {
+    // Check if the source already contains a main function
+    bool hasMainFunction = m_shaderSourceCode.find("void main()") != std::string::npos || 
+                           m_shaderSourceCode.find("void main(void)") != std::string::npos;
+
+    if (m_isShadertoyMode && !hasMainFunction) { // <-- ADDED !hasMainFunction CHECK
         std::string userCode = m_shaderSourceCode; // Original user code
         std::string finalPreamble =
             "#version 330 core\n"
@@ -905,6 +918,10 @@ void ShaderEffect::FetchUniformLocations() {
 
         m_iTimeDeltaLocation = m_iFrameLocation = m_iMouseLocation = m_iUserFloat1Loc = m_iUserColor1Loc = -1;
     }
+    
+    // Common uniform for both modes, if present
+    m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
+    // if (m_iAudioAmpLoc == -1) warnings_collector += "Warn: iAudioAmp uniform not found.\n"; // Optional warning
 
     // Append warnings to compile log
     if (!warnings_collector.empty()) {
