@@ -80,7 +80,7 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
       m_shaderParser(),
       m_fboID(0), m_fboTextureID(0), m_rboID(0),
       m_fboWidth(initialWidth), m_fboHeight(initialHeight),
-      m_uInputTextureSamplerLoc(-1)
+      m_iChannel0SamplerLoc(-1) // Updated member name
 {
     m_inputs.resize(1, nullptr); // Assuming 1 input slot for now
 
@@ -348,7 +348,19 @@ void ShaderEffect::Render() {
     // 3. Use this effect's shader program
     glUseProgram(m_shaderProgram);
 
-    // 4. Set all uniforms for this effect
+    // --- Bind Input Texture (iChannel0) ---
+    if (!m_inputs.empty() && m_inputs[0] != nullptr && m_iChannel0SamplerLoc != -1) {
+        Effect* inputEffect = m_inputs[0];
+        GLuint inputTextureID = inputEffect->GetOutputTexture();
+        if (inputTextureID != 0) {
+            glActiveTexture(GL_TEXTURE0); // Activate texture unit 0 for iChannel0
+            glBindTexture(GL_TEXTURE_2D, inputTextureID);
+            glUniform1i(m_iChannel0SamplerLoc, 0); // Tell sampler iChannel0 to use texture unit 0
+        }
+    }
+    // ------------------------------------
+
+    // 4. Set all other uniforms for this effect
     // Common uniforms (resolution now refers to FBO resolution for this pass)
     if (m_isShadertoyMode) {
         if (m_iResolutionLocation != -1) glUniform3f(m_iResolutionLocation, (float)m_fboWidth, (float)m_fboHeight, (float)m_fboWidth / (float)m_fboHeight);
@@ -391,11 +403,15 @@ void ShaderEffect::Render() {
     }
 
     // After drawing, if an input texture was bound, unbind it from its texture unit
-    if (m_inputs[0] && m_inputs[0]->GetOutputTexture() != 0 && m_uInputTextureSamplerLoc != -1) {
-        glActiveTexture(GL_TEXTURE1); // Assuming input was on GL_TEXTURE1
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glActiveTexture(GL_TEXTURE0); // Reset to default active texture unit
+    // and reset active texture unit to GL_TEXTURE0 (ImGui and other things might expect this).
+    if (!m_inputs.empty() && m_inputs[0] != nullptr && m_inputs[0]->GetOutputTexture() != 0 && m_iChannel0SamplerLoc != -1) {
+        glActiveTexture(GL_TEXTURE0); // Or the unit iChannel0 was bound to
+        glBindTexture(GL_TEXTURE_2D, 0); // Unbind
     }
+    // It's generally good practice to reset to GL_TEXTURE0 if other parts of the codebase
+    // (like ImGui) assume GL_TEXTURE0 is the active unit without explicitly setting it.
+    glActiveTexture(GL_TEXTURE0);
+
 
     // 6. Unbind FBO, reverting to default framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -859,8 +875,12 @@ void ShaderEffect::CompileAndLinkShader() {
 void ShaderEffect::FetchUniformLocations() {
     if (m_shaderProgram == 0) return;
     std::string warnings_collector;
-    m_uInputTextureSamplerLoc = glGetUniformLocation(m_shaderProgram, "u_inputTexture");
-    // if (m_uInputTextureSamplerLoc == -1) warnings_collector += "Warn: u_inputTexture sampler not found. Effect won't receive texture inputs.\n";
+    m_iChannel0SamplerLoc = glGetUniformLocation(m_shaderProgram, "iChannel0"); // Use "iChannel0"
+    if (m_iChannel0SamplerLoc == -1) {
+        // It's common for shaders not to use iChannel0, so this might be more of a debug log than a warning.
+        // std::cout << "Debug: Uniform 'iChannel0' not found in shader for effect: " << name << std::endl;
+        // warnings_collector += "Info: Uniform 'iChannel0' not found.\n"; // Or make it less alarming
+    }
 
 
     if (m_isShadertoyMode) {
