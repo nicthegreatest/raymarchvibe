@@ -432,21 +432,30 @@ int main() {
     g_audioSystem.Init();
     
     // --- Scene Setup ---
-    auto plasmaEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
-    plasmaEffect->name = "Plasma";
-    plasmaEffect->startTime = 0.0f;
-    plasmaEffect->endTime = 10.0f;
-    g_scene.push_back(std::move(plasmaEffect));
+    auto plasmaEffect_unique = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
+    ShaderEffect* plasmaEffect_raw = plasmaEffect_unique.get(); // Get raw pointer
+    plasmaEffect_raw->name = "Plasma";
+    plasmaEffect_raw->startTime = 0.0f;
+    plasmaEffect_raw->endTime = 10.0f;
+    g_scene.push_back(std::move(plasmaEffect_unique));
     
-    auto passthroughEffect = std::make_unique<ShaderEffect>("shaders/passthrough.frag", SCR_WIDTH, SCR_HEIGHT);
-    passthroughEffect->name = "Passthrough (Final Output)";
-    passthroughEffect->startTime = 0.0f;
-    passthroughEffect->endTime = 10.0f;
-    g_scene.push_back(std::move(passthroughEffect));
+    auto passthroughEffect_unique = std::make_unique<ShaderEffect>("shaders/passthrough.frag", SCR_WIDTH, SCR_HEIGHT);
+    ShaderEffect* passthroughEffect_raw = passthroughEffect_unique.get(); // Get raw pointer
+    passthroughEffect_raw->name = "Passthrough (Final Output)";
+    passthroughEffect_raw->startTime = 0.0f;
+    passthroughEffect_raw->endTime = 10.0f;
+    g_scene.push_back(std::move(passthroughEffect_unique));
     
     for (const auto& effect : g_scene) {
         effect->Load();
     }
+
+    // ---- ADD THIS LINE HERE ----
+    // Link the plasma effect's output to the passthrough effect's input (channel 0)
+    if (passthroughEffect_raw && plasmaEffect_raw) { // Check pointers
+        passthroughEffect_raw->SetInputEffect(0, plasmaEffect_raw);
+    }
+    // ----------------------------
     
     if (!g_scene.empty()) {
         g_selectedEffect = g_scene[0].get();
