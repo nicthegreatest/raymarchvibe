@@ -65,8 +65,8 @@ static int g_selectedTimelineItem = -1;
 // Core Systems
 static Renderer g_renderer;
 static TextEditor g_editor;
-static GLuint g_quadVAO = 0; // Shared VAO for fullscreen quad rendering
-static GLuint g_quadVBO = 0;
+// static GLuint g_quadVAO = 0; // Shared VAO for fullscreen quad rendering - REMOVED
+// static GLuint g_quadVBO = 0; // REMOVED
 
 // UI State
 static bool g_showGui = true;
@@ -301,18 +301,7 @@ int main() {
         return -1;
     }
     
-    g_renderer.Init();
-
-    // Init shared quad
-    float quadVertices[] = { -1.f, 1.f, -1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f };
-    glGenVertexArrays(1, &g_quadVAO);
-    glGenBuffers(1, &g_quadVBO);
-    glBindVertexArray(g_quadVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, g_quadVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glBindVertexArray(0);
+    g_renderer.Init(); // This now also sets up the quad VAO internally
 
     // --- ImGui & ImNodes Setup ---
     IMGUI_CHECKVERSION();
@@ -375,9 +364,15 @@ int main() {
                 se->SetDeltaTime(deltaTime);
                 se->IncrementFrameCount();
             }
-            effect_ptr->Update(currentTime);
-            effect_ptr->Render();
+            effect_ptr->Update(currentTime); // Update time, etc.
+            effect_ptr->Render();            // Prepare effect's FBO, shader, uniforms
+
+            // Now that the effect's FBO and shader are set up, draw the quad
+            g_renderer.RenderQuad();
         }
+        // After all effects have rendered to their FBOs, unbind to draw to screen or for ImGui
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -422,8 +417,10 @@ int main() {
 
     // --- Cleanup ---
     g_scene.clear();
-    if (g_quadVAO != 0) glDeleteVertexArrays(1, &g_quadVAO);
-    if (g_quadVBO != 0) glDeleteBuffers(1, &g_quadVBO);
+    // g_quadVAO and g_quadVBO cleanup removed as they are no longer global.
+    // Renderer's destructor would handle its own VAO/VBO if it had one,
+    // but we removed the explicit destructor. OpenGL resources are typically
+    // cleaned up when context is destroyed, or manually in a Renderer::Shutdown().
     
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
