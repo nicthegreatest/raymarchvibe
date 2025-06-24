@@ -423,7 +423,9 @@ int main() {
     ImGui::CreateContext();
     ImNodes::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
+
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // <-- ENABLED FOR DOCKSPACE
+
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -479,31 +481,56 @@ int main() {
             }
         }
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
+        float audioAmp = g_audioSystem.GetCurrentAmplitude(); // Keep this
 
+        // --- RENDER-TO-FBO PASS ---
         float audioAmp = g_audioSystem.GetCurrentAmplitude();
-
         for (Effect* effect_ptr : renderQueue) {
+            // 1. Prepare the effect's shader and uniforms. This binds the FBO and shader program.
+            //    (Update audio amplitude if it's a ShaderEffect)
             if(auto* se = dynamic_cast<ShaderEffect*>(effect_ptr)) {
-                se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT);
+                se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT); // Should this be FBO width/height? Assuming main screen for now.
                 se->SetMouseState(g_mouseState[0], g_mouseState[1], g_mouseState[2], g_mouseState[3]);
                 se->SetDeltaTime(deltaTime);
                 se->IncrementFrameCount();
+                se->SetAudioAmplitude(audioAmp);
                 se->SetAudioAmplitude(audioAmp); // Set audio amplitude
-            }
-            effect_ptr->Update(currentTime); // Update time, etc.
-            effect_ptr->Render();            // Prepare effect's FBO, shader, uniforms
 
-            // Now that the effect's FBO and shader are set up, draw the quad
+            }
+            effect_ptr->Update(currentTime);
+            effect_ptr->Render();
+
+            // 2. Now that the correct FBO and shader are active, tell the renderer to draw the quad.
+            //    This executes the draw call, rendering the effect into its FBO.
             g_renderer.RenderQuad();
         }
-        // After all effects have rendered to their FBOs, unbind to draw to screen or for ImGui
+
+        // After the loop, unbind the FBO to ensure subsequent rendering (like ImGui) targets the main window
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
+        // Dockspace creation commented out due to compilation errors, likely ImGui version/config without docking.
+        // // Create the main dockspace
+        // ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+        // const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        // ImGui::SetNextWindowPos(viewport->WorkPos);
+        // ImGui::SetNextWindowSize(viewport->WorkSize);
+        // ImGui::SetNextWindowViewport(viewport->ID);
+        // ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        // ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        // window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+        // window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+        // ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        // ImGui::Begin("MainDockspace", nullptr, window_flags);
+        // ImGui::PopStyleVar(3);
+        // ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+        // ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+        
+        if (g_showGui) {
+            RenderMenuBar(); // MenuBar would normally be part of the DockSpace window itself
         // Create the main dockspace
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
         const ImGuiViewport* viewport = ImGui::GetMainViewport();

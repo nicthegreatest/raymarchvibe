@@ -322,58 +322,54 @@ void ShaderEffect::Update(float currentTime) {
     // For now, assume SetMouseState, SetDisplayResolution, SetDeltaTime, IncrementFrameCount are called externally.
 }
 
+// In ShaderEffect.cpp
+
 void ShaderEffect::Render() {
     if (!m_shaderLoaded || m_shaderProgram == 0 || m_fboID == 0) {
-        // If FBO is not ready, or shader not loaded, don't attempt to render to FBO.
-        // This might mean a black texture or previous content if GetOutputTexture is called.
-        return;
+        return; // Don't render if not ready
     }
 
-    // 1. Bind this effect's FBO
+    // 1. Bind this effect's FBO as the render target
     glBindFramebuffer(GL_FRAMEBUFFER, m_fboID);
-    glViewport(0, 0, m_fboWidth, m_fboHeight); // Set viewport to FBO size
+    glViewport(0, 0, m_fboWidth, m_fboHeight);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the FBO
 
-    // 2. Clear FBO (e.g., to transparent black, or effect-specific background)
-    // glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Set clear color for this FBO
-    // For raymarching, often the shader itself defines the background, so clearing might not be needed or desired.
-    // If effects are to be alpha-blended, clearing to transparent (alpha 0) is important.
-    // Let's assume a clear for now.
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear color and depth
-
-    // 3. Use this effect's shader program
+    // 2. Use this effect's shader program
     glUseProgram(m_shaderProgram);
 
-    // --- Bind Input Texture (iChannel0) ---
-    if (!m_inputs.empty() && m_inputs[0] != nullptr && m_iChannel0SamplerLoc != -1) {
-        Effect* inputEffect = m_inputs[0];
-        GLuint inputTextureID = inputEffect->GetOutputTexture();
-        if (inputTextureID != 0) {
-            glActiveTexture(GL_TEXTURE0); // Activate texture unit 0 for iChannel0
-            glBindTexture(GL_TEXTURE_2D, inputTextureID);
-            glUniform1i(m_iChannel0SamplerLoc, 0); // Tell sampler iChannel0 to use texture unit 0
+    // 3. Bind the input texture from a previous node (if connected)
+    if (!m_inputs.empty() && m_inputs[0] != nullptr) {
+        if (auto* inputSE = dynamic_cast<ShaderEffect*>(m_inputs[0])) {
+            GLuint inputTextureID = inputSE->GetOutputTexture();
+            if (inputTextureID != 0 && m_iChannel0SamplerLoc != -1) {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, inputTextureID);
+                glUniform1i(m_iChannel0SamplerLoc, 0);
+            }
         }
     }
-    // ------------------------------------
 
-    // 4. Set all other uniforms for this effect
-    // Common uniforms (resolution now refers to FBO resolution for this pass)
+    // 4. Set all other uniforms (iTime, iResolution, custom params, etc.)
+    // ... (This part of your code is correct and stays the same)
     if (m_isShadertoyMode) {
         if (m_iResolutionLocation != -1) glUniform3f(m_iResolutionLocation, (float)m_fboWidth, (float)m_fboHeight, (float)m_fboWidth / (float)m_fboHeight);
         if (m_iTimeLocation != -1) glUniform1f(m_iTimeLocation, m_time);
+        // ... set all other shadertoy uniforms ...
+        // (Copied from existing logic for completeness, assuming they are correct)
         if (m_iTimeDeltaLocation != -1) glUniform1f(m_iTimeDeltaLocation, m_deltaTime);
         if (m_iFrameLocation != -1) glUniform1i(m_iFrameLocation, m_frameCount);
         if (m_iMouseLocation != -1) glUniform4fv(m_iMouseLocation, 1, m_mouseState);
-
         if (m_iUserFloat1Loc != -1) glUniform1f(m_iUserFloat1Loc, m_iUserFloat1);
         if (m_iUserColor1Loc != -1) glUniform3fv(m_iUserColor1Loc, 1, m_iUserColor1);
-
         for (const auto& control : m_shadertoyUniformControls) {
-            if (control.location != -1) { /* ... set metadata uniforms ... */ }
+             if (control.location != -1) { /* ... set metadata uniforms ... */ } // Placeholder for brevity
         }
+
     } else { // Native Mode
         if (m_iResolutionLocation != -1) glUniform2f(m_iResolutionLocation, (float)m_fboWidth, (float)m_fboHeight);
         if (m_iTimeLocation != -1) glUniform1f(m_iTimeLocation, m_time);
-
+        // ... set all other native uniforms ...
+        // (Copied from existing logic for completeness, assuming they are correct)
         if (m_uObjectColorLoc != -1) glUniform3fv(m_uObjectColorLoc, 1, m_objectColor);
         if (m_uScaleLoc != -1) glUniform1f(m_uScaleLoc, m_scale);
         if (m_uTimeSpeedLoc != -1) glUniform1f(m_uTimeSpeedLoc, m_timeSpeed);
@@ -385,25 +381,13 @@ void ShaderEffect::Render() {
         if (m_uLightPosLoc != -1) glUniform3fv(m_uLightPosLoc, 1, m_lightPosition);
         if (m_uLightColorLoc != -1) glUniform3fv(m_uLightColorLoc, 1, m_lightColor);
     }
-    
-    // Set iAudioAmp if location is valid (common for both modes)
+  
     if (m_iAudioAmpLoc != -1) {
         glUniform1f(m_iAudioAmpLoc, m_audioAmp);
     }
 
-    // 5. Render a fullscreen quad (this draws the effect into the FBO)
-    //    DRAWING IS NOW HANDLED BY RENDERER
-    //    The Renderer::RenderQuad() will be called after this function in main.cpp
-
-    // After setting uniforms, the necessary texture unit (e.g., GL_TEXTURE0 for iChannel0)
-    // might still be active and a texture might be bound to it.
-    // This is generally fine, as the next effect will set its own textures,
-    // or the compositing pass will.
-    // The problem description's version of ShaderEffect::Render does not unbind iChannel0 here.
-
-    // 6. Unbind FBO, reverting to default framebuffer
-    //    THIS IS NOW HANDLED IN MAIN.CPP AFTER THE RENDER LOOP
-    // glBindFramebuffer(GL_FRAMEBUFFER, 0); // Removed as per instructions
+    // NOTE: We no longer call any drawing functions here.
+    // The main loop will do that in the next step.
 }
 
 void ShaderEffect::SetAudioAmplitude(float amp) {
@@ -793,7 +777,10 @@ void ShaderEffect::CompileAndLinkShader() {
 
     std::string finalFragmentCode = m_shaderSourceCode;
     // Check if the source already contains a main function
+    bool hasMainFunction = m_shaderSourceCode.find("void main()") != std::string::npos ||
+
     bool hasMainFunction = m_shaderSourceCode.find("void main()") != std::string::npos || 
+
                            m_shaderSourceCode.find("void main(void)") != std::string::npos;
 
     if (m_isShadertoyMode && !hasMainFunction) { // <-- ADDED !hasMainFunction CHECK
@@ -919,6 +906,10 @@ void ShaderEffect::FetchUniformLocations() {
         m_iTimeDeltaLocation = m_iFrameLocation = m_iMouseLocation = m_iUserFloat1Loc = m_iUserColor1Loc = -1;
     }
     
+    // Common uniform for both modes, if present
+    m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
+    // if (m_iAudioAmpLoc == -1) warnings_collector += "Warn: iAudioAmp uniform not found.\n"; // Optional warning
+
     // Common uniform for both modes, if present
     m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
     // if (m_iAudioAmpLoc == -1) warnings_collector += "Warn: iAudioAmp uniform not found.\n"; // Optional warning
