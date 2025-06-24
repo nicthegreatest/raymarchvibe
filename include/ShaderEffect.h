@@ -133,12 +133,13 @@ public:
     int GetInputPinCount() const override;
     // int GetOutputPinCount() const override; // Already defaults to 1 in Effect.h, can override if different
     void SetInputEffect(int pinIndex, Effect* inputEffect) override;
+    const std::vector<Effect*>& GetInputs() const { return m_inputs; }
 
 
 private:
     // --- Node Editor Inputs ---
     std::vector<Effect*> m_inputs; // Stores pointers to input effects
-    GLint m_uInputTextureSamplerLoc = -1; // Uniform location for the input texture sampler
+    GLint m_iChannel0SamplerLoc = -1; // Uniform location for iChannel0 input texture sampler
 
     // --- FBO Members ---
     GLuint m_fboID = 0;
