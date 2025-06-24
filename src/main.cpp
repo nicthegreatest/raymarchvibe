@@ -119,31 +119,31 @@ static Effect* FindEffectById(int effect_id) { // Was part of user's RenderNodeE
 
 void RenderNodeEditorWindow() {
     ImGui::Begin("Node Editor");
-    imnodes::BeginNodeEditor();
+    ImNodes::BeginNodeEditor();
 
     // 1. Draw all the nodes
     for (const auto& effect_ptr : g_scene) {
         if (!effect_ptr) continue;
 
-        imnodes::BeginNode(effect_ptr->id);
+        ImNodes::BeginNode(effect_ptr->id);
 
-        imnodes::BeginNodeTitleBar();
+        ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(effect_ptr->name.c_str());
-        imnodes::EndNodeTitleBar();
+        ImNodes::EndNodeTitleBar();
 
         if (effect_ptr->GetOutputPinCount() > 0) {
-            imnodes::BeginOutputAttribute(effect_ptr->id * 10); // Output pin 0: ID is effect_id * 10
+            ImNodes::BeginOutputAttribute(effect_ptr->id * 10); // Output pin 0: ID is effect_id * 10
             ImGui::Text("out");
-            imnodes::EndOutputAttribute();
+            ImNodes::EndOutputAttribute();
         }
 
         for (int i = 0; i < effect_ptr->GetInputPinCount(); ++i) {
-            imnodes::BeginInputAttribute(effect_ptr->id * 10 + 1 + i); // Input pins: ID is effect_id * 10 + 1 + index
+            ImNodes::BeginInputAttribute(effect_ptr->id * 10 + 1 + i); // Input pins: ID is effect_id * 10 + 1 + index
             ImGui::Text("in %d", i);
-            imnodes::EndInputAttribute();
+            ImNodes::EndInputAttribute();
         }
         // Optional: effect_ptr->RenderUI();
-        imnodes::EndNode();
+        ImNodes::EndNode();
     }
 
     // 2. Draw all existing links
@@ -155,17 +155,17 @@ void RenderNodeEditorWindow() {
                 if (inputs[i]) {
                     int start_pin_id = inputs[i]->id * 10 + 0; // Output pin 0 of the source effect
                     int end_pin_id = se->id * 10 + 1 + i;   // Input pin i of the current effect
-                    imnodes::Link(link_id_counter++, start_pin_id, end_pin_id);
+                    ImNodes::Link(link_id_counter++, start_pin_id, end_pin_id);
                 }
             }
         }
     }
 
-    imnodes::EndNodeEditor();
+    ImNodes::EndNodeEditor();
 
     // 3. Handle new link creation
     int start_attr, end_attr;
-    if (imnodes::IsLinkCreated(&start_attr, &end_attr)) {
+    if (ImNodes::IsLinkCreated(&start_attr, &end_attr)) {
         int start_node_id = start_attr / 10;
         int end_node_id = end_attr / 10;
 
@@ -194,7 +194,7 @@ void RenderNodeEditorWindow() {
     }
     // Link destruction handling (simplified as per plan)
     int link_id_destroyed;
-    if (imnodes::IsLinkDestroyed(&link_id_destroyed)) {
+    if (ImNodes::IsLinkDestroyed(&link_id_destroyed)) {
         // For robust removal, we'd need to map link_id_destroyed back to the specific
         // (target_effect, input_pin_index) and call SetInputEffect(pin, nullptr).
         // This requires storing link IDs or iterating.
@@ -286,7 +286,7 @@ int main() {
     for (const auto& effect_ptr : g_scene) effect_ptr->Load();
     if (g_selectedEffect) if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) g_editor.SetText(se->GetShaderSource());
 
-    IMGUI_CHECKVERSION(); ImGui::CreateContext(); imnodes::CreateContext(); // Re-enabled
+    IMGUI_CHECKVERSION(); ImGui::CreateContext(); ImNodes::CreateContext(); // Re-enabled
     ImGuiIO& io = ImGui::GetIO(); ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true); ImGui_ImplOpenGL3_Init("#version 330");
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
@@ -350,7 +350,7 @@ int main() {
     } 
 
     ImGui_ImplOpenGL3_Shutdown(); ImGui_ImplGlfw_Shutdown();
-    imnodes::DestroyContext(); // Re-enabled
+    ImNodes::DestroyContext(); // Re-enabled
     ImGui::DestroyContext();
     if (g_quadVAO != 0) glDeleteVertexArrays(1, &g_quadVAO);
     if (g_quadVBO != 0) glDeleteBuffers(1, &g_quadVBO);
