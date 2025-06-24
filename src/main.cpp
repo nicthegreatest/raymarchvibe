@@ -423,7 +423,9 @@ int main() {
     ImGui::CreateContext();
     ImNodes::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // <-- DISABLED FOR COMPATIBILITY (as per original file and compiler errors)
+
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // <-- ENABLED FOR DOCKSPACE
+
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -479,10 +481,10 @@ int main() {
             }
         }
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
-
         float audioAmp = g_audioSystem.GetCurrentAmplitude(); // Keep this
 
         // --- RENDER-TO-FBO PASS ---
+        float audioAmp = g_audioSystem.GetCurrentAmplitude();
         for (Effect* effect_ptr : renderQueue) {
             // 1. Prepare the effect's shader and uniforms. This binds the FBO and shader program.
             //    (Update audio amplitude if it's a ShaderEffect)
@@ -492,6 +494,8 @@ int main() {
                 se->SetDeltaTime(deltaTime);
                 se->IncrementFrameCount();
                 se->SetAudioAmplitude(audioAmp);
+                se->SetAudioAmplitude(audioAmp); // Set audio amplitude
+
             }
             effect_ptr->Update(currentTime);
             effect_ptr->Render();
@@ -508,7 +512,6 @@ int main() {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
         // Dockspace creation commented out due to compilation errors, likely ImGui version/config without docking.
         // // Create the main dockspace
         // ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
@@ -528,6 +531,24 @@ int main() {
         
         if (g_showGui) {
             RenderMenuBar(); // MenuBar would normally be part of the DockSpace window itself
+        // Create the main dockspace
+        ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+        window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::Begin("MainDockspace", nullptr, window_flags);
+        ImGui::PopStyleVar(3);
+        ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+        ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+        
+        if (g_showGui) {
+            RenderMenuBar(); // MenuBar should be part of the DockSpace window itself
             RenderShaderEditorWindow();
             RenderEffectPropertiesWindow();
             RenderTimelineWindow();
