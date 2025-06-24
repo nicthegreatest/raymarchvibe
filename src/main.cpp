@@ -54,6 +54,20 @@ std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects);
 TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log);
 void ClearErrorMarkers();
 
+// --- Placeholder Audio System ---
+// This is a dummy implementation. Replace with actual AudioSystem.
+class AudioSystem {
+public:
+    AudioSystem() {}
+    void Init() { /* In a real system: initialize audio input/processing */ }
+    float GetCurrentAmplitude() {
+        // Placeholder: return a value that changes over time, e.g., a sine wave
+        // This is just for testing the uniform.
+        return 0.5f + 0.5f * sin((float)glfwGetTime() * 2.0f);
+    }
+    void Shutdown() { /* In a real system: release audio resources */ }
+};
+// -------------------------------
 
 // --- Global State ---
 
@@ -76,21 +90,6 @@ static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
 
 // Input State
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-
-// --- Placeholder Audio System ---
-// This is a dummy implementation. Replace with actual AudioSystem.
-class AudioSystem {
-public:
-    AudioSystem() {}
-    void Init() { /* In a real system: initialize audio input/processing */ }
-    float GetCurrentAmplitude() {
-        // Placeholder: return a value that changes over time, e.g., a sine wave
-        // This is just for testing the uniform.
-        return 0.5f + 0.5f * sin((float)glfwGetTime() * 2.0f);
-    }
-    void Shutdown() { /* In a real system: release audio resources */ }
-};
-// -------------------------------
 
 // Timeline State
 static bool g_timeline_paused = false;
