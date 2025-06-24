@@ -3,6 +3,7 @@
 #include "Effect.h"
 #include "ShaderParameterControls.h"
 #include "ShaderParser.h" // Will own an instance of this
+#include <nlohmann/json.hpp> // For serialization
 #include <string>
 #include <vector>
 #include <map>
@@ -28,10 +29,18 @@ public:
     bool LoadShaderFromSource(const std::string& sourceCode);
     void ApplyShaderCode(const std::string& newShaderCode); // Compiles, links, gets uniforms, parses controls
     const std::string& GetShaderSource() const { return m_shaderSourceCode; }
-    const std::string& GetShaderFilePath() const { return m_shaderFilePath; }
+    // const std::string& GetShaderFilePath() const { return m_shaderFilePath; } // Replaced by virtual GetSourceFilePath
     const std::string& GetCompileErrorLog() const { return m_compileErrorLog; }
     bool IsShadertoyMode() const { return m_isShadertoyMode; }
     void SetShadertoyMode(bool mode);
+
+    // --- Effect base overrides ---
+    void SetSourceFilePath(const std::string& path) override;
+    const std::string& GetSourceFilePath() const override;
+    // SetEffectName and GetEffectName use base implementation for now
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& data) override;
+    void ResetParameters() override;
 
     // Potentially manage TextEditor error markers if needed directly
     // TextEditor::ErrorMarkers GetErrorMarkers() const;

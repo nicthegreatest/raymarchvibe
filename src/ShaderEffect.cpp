@@ -205,7 +205,8 @@ bool ShaderEffect::LoadShaderFromFile(const std::string& filePath) {
     m_shaderFilePath = filePath;
     // this->name is set by Effect constructor or can be overridden if needed
     // If filePath should become the name, set it here:
-    // this->name = filePath;
+    // this->name = filePath; // This is now handled by main.cpp after dialog
+    m_shaderFilePath = filePath; // Ensure m_shaderFilePath is set
     std::string loadError;
     m_shaderSourceCode = LoadShaderSourceFile(m_shaderFilePath, loadError);
     if (!loadError.empty()) {
@@ -947,5 +948,254 @@ void ShaderEffect::ParseShaderControls() {
         m_shaderParser.ScanAndPrepareUniformControls(m_shaderSourceCode, m_shadertoyUniformControls);
     } else {
         m_shadertoyUniformControls.clear(); // Not applicable in native mode
+    }
+}
+
+// --- Effect base overrides ---
+void ShaderEffect::SetSourceFilePath(const std::string& path) {
+    m_shaderFilePath = path;
+}
+
+const std::string& ShaderEffect::GetSourceFilePath() const {
+    return m_shaderFilePath;
+}
+
+// --- Serialization ---
+nlohmann::json ShaderEffect::Serialize() const {
+    nlohmann::json j;
+    j["type"] = "ShaderEffect"; // Important for deserialization factory
+    j["name"] = name;
+    j["startTime"] = startTime;
+    j["endTime"] = endTime;
+    j["sourceFilePath"] = m_shaderFilePath;
+    // If m_shaderFilePath is empty or special (e.g., "dynamic_source", "shadertoy://..."),
+    // then m_shaderSourceCode should be saved. Otherwise, it can be reloaded from path.
+    if (m_shaderFilePath.empty() || m_shaderFilePath == "dynamic_source" || m_shaderFilePath.rfind("shadertoy://", 0) == 0) {
+        j["sourceCode"] = m_shaderSourceCode;
+    }
+    j["isShadertoyMode"] = m_isShadertoyMode;
+
+    // Native parameters
+    j["nativeParams"]["objectColor"] = {m_objectColor[0], m_objectColor[1], m_objectColor[2]};
+    j["nativeParams"]["scale"] = m_scale;
+    j["nativeParams"]["timeSpeed"] = m_timeSpeed;
+    j["nativeParams"]["colorMod"] = {m_colorMod[0], m_colorMod[1], m_colorMod[2]};
+    j["nativeParams"]["patternScale"] = m_patternScale;
+    j["nativeParams"]["cameraPosition"] = {m_cameraPosition[0], m_cameraPosition[1], m_cameraPosition[2]};
+    j["nativeParams"]["cameraTarget"] = {m_cameraTarget[0], m_cameraTarget[1], m_cameraTarget[2]};
+    j["nativeParams"]["cameraFOV"] = m_cameraFOV;
+    j["nativeParams"]["lightPosition"] = {m_lightPosition[0], m_lightPosition[1], m_lightPosition[2]};
+    j["nativeParams"]["lightColor"] = {m_lightColor[0], m_lightColor[1], m_lightColor[2]};
+
+    // Shadertoy specific user parameters (distinct from metadata-driven ones)
+    j["shadertoyUserParams"]["iUserFloat1"] = m_iUserFloat1;
+    j["shadertoyUserParams"]["iUserColor1"] = {m_iUserColor1[0], m_iUserColor1[1], m_iUserColor1[2]};
+
+    // Parsed Define Controls
+    nlohmann::json defineControlsJson = nlohmann::json::array();
+    for (const auto& dc : m_defineControls) {
+        nlohmann::json d;
+        d["name"] = dc.name;
+        d["isEnabled"] = dc.isEnabled;
+        d["floatValue"] = dc.floatValue;
+        // originalValueString is not strictly needed for restore if we re-parse and then apply these values
+        defineControlsJson.push_back(d);
+    }
+    j["defineControls"] = defineControlsJson;
+
+    // Parsed Shadertoy Uniform Controls (Metadata-driven)
+    nlohmann::json stUniformControlsJson = nlohmann::json::array();
+    for (const auto& stc : m_shadertoyUniformControls) {
+        nlohmann::json s;
+        s["name"] = stc.name;
+        s["glslType"] = stc.glslType;
+        s["fValue"] = stc.fValue;
+        s["iValue"] = stc.iValue;
+        s["bValue"] = stc.bValue;
+        s["v2Value"] = {stc.v2Value[0], stc.v2Value[1]};
+        s["v3Value"] = {stc.v3Value[0], stc.v3Value[1], stc.v3Value[2]};
+        s["v4Value"] = {stc.v4Value[0], stc.v4Value[1], stc.v4Value[2], stc.v4Value[3]};
+        // metadata is not saved, parsed from source on load
+        stUniformControlsJson.push_back(s);
+    }
+    j["shadertoyUniformControls"] = stUniformControlsJson;
+
+    // Parsed Const Controls
+    nlohmann::json constControlsJson = nlohmann::json::array();
+    for (const auto& cc : m_constControls) {
+        nlohmann::json c;
+        c["name"] = cc.name;
+        c["glslType"] = cc.glslType;
+        c["fValue"] = cc.fValue;
+        c["iValue"] = cc.iValue;
+        c["v2Value"] = {cc.v2Value[0], cc.v2Value[1]};
+        c["v3Value"] = {cc.v3Value[0], cc.v3Value[1], cc.v3Value[2]};
+        c["v4Value"] = {cc.v4Value[0], cc.v4Value[1], cc.v4Value[2], cc.v4Value[3]};
+        // originalValueString and lineNumber not saved, re-parsed from source
+        constControlsJson.push_back(c);
+    }
+    j["constControls"] = constControlsJson;
+
+    return j;
+}
+
+void ShaderEffect::Deserialize(const nlohmann::json& data) {
+    name = data.value("name", "Untitled Deserialized Effect");
+    startTime = data.value("startTime", 0.0f);
+    endTime = data.value("endTime", 10.0f);
+    m_shaderFilePath = data.value("sourceFilePath", "");
+    if (data.contains("sourceCode")) { // If source code was saved directly
+        m_shaderSourceCode = data.at("sourceCode").get<std::string>();
+    } else if (!m_shaderFilePath.empty()) {
+        // Source will be loaded from m_shaderFilePath when Load() is called
+        m_shaderSourceCode = ""; // Clear any old source
+    }
+    m_isShadertoyMode = data.value("isShadertoyMode", false);
+
+    if (data.contains("nativeParams")) {
+        const auto& np = data["nativeParams"];
+        if (np.contains("objectColor") && np["objectColor"].is_array() && np["objectColor"].size() == 3) {
+            for(int i=0; i<3; ++i) m_objectColor[i] = np["objectColor"][i].get<float>();
+        }
+        m_scale = np.value("scale", 1.0f);
+        m_timeSpeed = np.value("timeSpeed", 1.0f);
+        if (np.contains("colorMod") && np["colorMod"].is_array() && np["colorMod"].size() == 3) {
+            for(int i=0; i<3; ++i) m_colorMod[i] = np["colorMod"][i].get<float>();
+        }
+        m_patternScale = np.value("patternScale", 1.0f);
+        if (np.contains("cameraPosition") && np["cameraPosition"].is_array() && np["cameraPosition"].size() == 3) {
+            for(int i=0; i<3; ++i) m_cameraPosition[i] = np["cameraPosition"][i].get<float>();
+        }
+        if (np.contains("cameraTarget") && np["cameraTarget"].is_array() && np["cameraTarget"].size() == 3) {
+            for(int i=0; i<3; ++i) m_cameraTarget[i] = np["cameraTarget"][i].get<float>();
+        }
+        m_cameraFOV = np.value("cameraFOV", 60.0f);
+        if (np.contains("lightPosition") && np["lightPosition"].is_array() && np["lightPosition"].size() == 3) {
+            for(int i=0; i<3; ++i) m_lightPosition[i] = np["lightPosition"][i].get<float>();
+        }
+        if (np.contains("lightColor") && np["lightColor"].is_array() && np["lightColor"].size() == 3) {
+            for(int i=0; i<3; ++i) m_lightColor[i] = np["lightColor"][i].get<float>();
+        }
+    }
+
+    if (data.contains("shadertoyUserParams")) {
+        const auto& stup = data["shadertoyUserParams"];
+        m_iUserFloat1 = stup.value("iUserFloat1", 0.5f);
+        if (stup.contains("iUserColor1") && stup["iUserColor1"].is_array() && stup["iUserColor1"].size() == 3) {
+            for(int i=0; i<3; ++i) m_iUserColor1[i] = stup["iUserColor1"][i].get<float>();
+        }
+    }
+
+    // For defineControls, shadertoyUniformControls, constControls:
+    // The strategy is to load these values. When ApplyShaderCode is called (via Load()),
+    // the ShaderParser will re-parse the source. We then need a way for these
+    // loaded values to take precedence or be correctly integrated.
+    // For now, we store them. The ShaderParser might need to be made aware of these
+    // "override" values after parsing.
+    // A simpler approach for now: these values are restored, and if ApplyShaderCode is called
+    // with the *original* source, these values will be used for uniforms, but defines/consts
+    // in the source itself won't be modified by this Deserialize step.
+    // The UI interaction (RenderDefineControlsUI, RenderConstControlsUI) already modifies the source string.
+    // So for scene load, we load the source, then apply these values to the member variables.
+
+    if (data.contains("defineControls")) {
+        m_defineControls.clear(); // Or update existing if names match? For simplicity, clear and repopulate.
+        for (const auto& dJson : data["defineControls"]) {
+            ShaderDefineControl dc;
+            dc.name = dJson.value("name", "");
+            dc.isEnabled = dJson.value("isEnabled", false);
+            dc.floatValue = dJson.value("floatValue", 0.0f);
+            // originalValueString and hasValue would be re-determined by parser
+            m_defineControls.push_back(dc);
+        }
+    }
+    if (data.contains("shadertoyUniformControls")) {
+        m_shadertoyUniformControls.clear();
+        for (const auto& sJson : data["shadertoyUniformControls"]) {
+            ShaderToyUniformControl stc(sJson.value("name",""), sJson.value("glslType","float"), {}); // dummy metadata
+            stc.fValue = sJson.value("fValue", 0.0f);
+            stc.iValue = sJson.value("iValue", 0);
+            stc.bValue = sJson.value("bValue", false);
+            if (sJson.contains("v2Value") && sJson["v2Value"].is_array() && sJson["v2Value"].size() == 2) {
+                for(int i=0; i<2; ++i) stc.v2Value[i] = sJson["v2Value"][i].get<float>();
+            }
+            // ... similar for v3Value, v4Value
+             if (sJson.contains("v3Value") && sJson["v3Value"].is_array() && sJson["v3Value"].size() == 3) {
+                for(int i=0; i<3; ++i) stc.v3Value[i] = sJson["v3Value"][i].get<float>();
+            }
+            if (sJson.contains("v4Value") && sJson["v4Value"].is_array() && sJson["v4Value"].size() == 4) {
+                for(int i=0; i<4; ++i) stc.v4Value[i] = sJson["v4Value"][i].get<float>();
+            }
+            m_shadertoyUniformControls.push_back(stc);
+        }
+    }
+    if (data.contains("constControls")) {
+        m_constControls.clear();
+        for (const auto& cJson : data["constControls"]) {
+            ShaderConstControl cc(cJson.value("name",""), cJson.value("glslType","float"), 0, ""); // dummy line/val
+            cc.fValue = cJson.value("fValue", 0.0f);
+            cc.iValue = cJson.value("iValue", 0);
+             if (cJson.contains("v2Value") && cJson["v2Value"].is_array() && cJson["v2Value"].size() == 2) {
+                for(int i=0; i<2; ++i) cc.v2Value[i] = cJson["v2Value"][i].get<float>();
+            }
+            if (cJson.contains("v3Value") && cJson["v3Value"].is_array() && cJson["v3Value"].size() == 3) {
+                for(int i=0; i<3; ++i) cc.v3Value[i] = cJson["v3Value"][i].get<float>();
+            }
+            if (cJson.contains("v4Value") && cJson["v4Value"].is_array() && cJson["v4Value"].size() == 4) {
+                for(int i=0; i<4; ++i) cc.v4Value[i] = cJson["v4Value"][i].get<float>();
+            }
+            m_constControls.push_back(cc);
+        }
+    }
+    // After deserializing, the main loop should call Load() on this effect.
+    // Load() will use m_shaderSourceCode (if populated) or load from m_shaderFilePath,
+    // then call ApplyShaderCode(), which recompiles and re-runs ParseShaderControls().
+    // The values restored here for m_defineControls, m_shadertoyUniformControls, m_constControls
+    // will need to be applied *after* parsing in ApplyShaderCode or FetchUniformLocations
+    // to ensure they override the parsed defaults. This needs refinement in those methods.
+    // For now, this Deserialize just loads the values into the member variables.
+}
+
+void ShaderEffect::ResetParameters() {
+    // Reset Native Mode Uniform Values to their defaults (as in constructor or typical initial values)
+    m_objectColor[0] = 0.8f; m_objectColor[1] = 0.9f; m_objectColor[2] = 1.0f;
+    m_scale = 1.0f;
+    m_timeSpeed = 1.0f; // Multiplier for iTime in native mode
+    m_colorMod[0] = 0.1f; m_colorMod[1] = 0.1f; m_colorMod[2] = 0.2f;
+    m_patternScale = 1.0f;
+    m_cameraPosition[0] = 0.0f; m_cameraPosition[1] = 1.0f; m_cameraPosition[2] = -3.0f;
+    m_cameraTarget[0] = 0.0f; m_cameraTarget[1] = 0.0f; m_cameraTarget[2] = 0.0f;
+    m_cameraFOV = 60.0f;
+    m_lightPosition[0] = 2.0f; m_lightPosition[1] = 3.0f; m_lightPosition[2] = -2.0f;
+    m_lightColor[0] = 1.0f; m_lightColor[1] = 1.0f; m_lightColor[2] = 0.9f;
+
+    // Reset Shadertoy Predefined Uniform Values
+    m_iUserFloat1 = 0.5f;
+    m_iUserColor1[0] = 0.2f; m_iUserColor1[1] = 0.5f; m_iUserColor1[2] = 0.8f;
+
+    // m_audioAmp is driven externally, so not reset here.
+
+    // The crucial step: re-apply the original shader code.
+    // This will re-compile the shader and, importantly, re-run ParseShaderControls().
+    // ParseShaderControls() re-initializes m_defineControls, m_shadertoyUniformControls,
+    // and m_constControls from the shader source text, effectively resetting them.
+    if (!m_shaderSourceCode.empty()) {
+        ApplyShaderCode(m_shaderSourceCode);
+    } else if (!m_shaderFilePath.empty()) {
+        // If source code is somehow empty but path exists, try to reload from file
+        std::string loadError;
+        std::string tempSource = LoadShaderSourceFile(m_shaderFilePath, loadError);
+        if (loadError.empty()) {
+            m_shaderSourceCode = tempSource; // Cache it again
+            ApplyShaderCode(m_shaderSourceCode);
+        } else {
+            m_compileErrorLog = "ResetParameters: Failed to reload shader from file for reset: " + loadError;
+            m_shaderLoaded = false;
+        }
+    } else {
+        // No source code and no file path, cannot reset shader-derived controls.
+        // Parameters above are reset, but shader itself cannot be processed.
+        m_compileErrorLog = "ResetParameters: No shader source or file path available to reset shader.";
+        m_shaderLoaded = false; // Mark as not loaded if we can't process the shader
     }
 }
