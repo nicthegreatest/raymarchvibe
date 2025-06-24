@@ -1,5 +1,5 @@
 // RaymarchVibe - Real-time Shader Exploration
-// main.cpp - FINAL VERSION
+// main.cpp - FINAL, CORRECTED VERSION (with Docking disabled for compatibility)
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -94,10 +94,7 @@ static Effect* FindEffectById(int effect_id) {
 void RenderMenuBar() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            // Add File->New, Save, etc. logic here later if needed
             if (ImGui::MenuItem("Exit")) {
-                // In a real app, you'd set a flag to show a confirm popup
-                // For now, this is fine.
                 glfwSetWindowShouldClose(glfwGetCurrentContext(), true);
             }
             ImGui::EndMenu();
@@ -154,8 +151,8 @@ void RenderTimelineWindow() {
     tracks.resize(g_scene.size());
 
     for (size_t i = 0; i < g_scene.size(); ++i) {
-        if (!g_scene[i]) continue;
-        tracks[i] = i % 4; // Simple track assignment, can be improved later
+        if (!g_scene[i]) { continue; }
+        tracks[i] = i % 4;
         timelineItems.push_back({
             g_scene[i]->name,
             &g_scene[i]->startTime,
@@ -213,7 +210,7 @@ void RenderNodeEditorWindow() {
     }
 
     // 2. Draw all existing links
-    int link_id_counter = 1; // Link IDs must be unique
+    int link_id_counter = 1;
     for (const auto& effect_ptr : g_scene) {
         if (auto* se = dynamic_cast<ShaderEffect*>(effect_ptr.get())) {
             const auto& inputs = se->GetInputs();
@@ -322,7 +319,7 @@ int main() {
     ImGui::CreateContext();
     ImNodes::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // <-- DISABLED FOR COMPATIBILITY
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -363,7 +360,6 @@ int main() {
 
         processInput(window);
         
-        // --- Get Active Effects and Sort for Rendering ---
         std::vector<Effect*> activeEffects;
         for(const auto& effect_ptr : g_scene){
             if(effect_ptr && currentTime >= effect_ptr->startTime && currentTime < effect_ptr->endTime){
@@ -372,10 +368,9 @@ int main() {
         }
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
 
-        // --- Update and Render to FBOs ---
         for (Effect* effect_ptr : renderQueue) {
             if(auto* se = dynamic_cast<ShaderEffect*>(effect_ptr)) {
-                se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT); // This should be dynamic from window size
+                se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT);
                 se->SetMouseState(g_mouseState[0], g_mouseState[1], g_mouseState[2], g_mouseState[3]);
                 se->SetDeltaTime(deltaTime);
                 se->IncrementFrameCount();
@@ -384,13 +379,10 @@ int main() {
             effect_ptr->Render();
         }
 
-        // --- UI Rendering ---
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         
-        ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
-
         if (g_showGui) {
             RenderMenuBar();
             RenderShaderEditorWindow();
@@ -401,7 +393,6 @@ int main() {
             if (g_showHelpWindow) { RenderHelpWindow(); }
         }
 
-        // --- Compositing Pass to Screen ---
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
@@ -412,7 +403,6 @@ int main() {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         
-        // Render the output of the *last* effect in the render queue, assuming it's the final output
         if (!renderQueue.empty()) {
              Effect* finalEffect = renderQueue.back();
              if (auto* se = dynamic_cast<ShaderEffect*>(finalEffect)) {
@@ -423,7 +413,6 @@ int main() {
         }
         glDisable(GL_BLEND);
 
-        // --- Render ImGui ---
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -479,7 +468,7 @@ void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos
         int height;
         glfwGetWindowSize(window, NULL, &height);
         g_mouseState[0] = (float)xpos;
-        g_mouseState[1] = (float)height - (float)ypos; // Invert Y for OpenGL
+        g_mouseState[1] = (float)height - (float)ypos;
     }
 }
 
@@ -503,8 +492,8 @@ TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log) {
     TextEditor::ErrorMarkers markers;
     std::stringstream ss(log);
     std::string line;
-    std::regex r(R"((\d+):(\d+)\s*:\s*(.*))"); // Catches NVIDIA style 0:LINE:
-    std::regex r2(R"(ERROR:\s*(\d+):(\d+)\s*:)"); // Catches AMD/Intel style ERROR:LINE:COL:
+    std::regex r(R"((\d+):(\d+)\s*:\s*(.*))");
+    std::regex r2(R"(ERROR:\s*(\d+):(\d+)\s*:)");
     std::smatch m;
     auto trim_local = [](const std::string& s){ auto f=s.find_first_not_of(" \t\r\n"); return (f==std::string::npos)?"":s.substr(f, s.find_last_not_of(" \t\r\n")-f+1);};
     while(std::getline(ss, line)) {
