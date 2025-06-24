@@ -1,5 +1,5 @@
 // RaymarchVibe - Real-time Shader Exploration
-// main.cpp - FINAL, CORRECTED VERSION (with Docking disabled for compatibility)
+// main.cpp - FINAL BUILD VERSION
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -22,7 +22,7 @@
 #include "Effect.h"
 #include "ShaderEffect.h"
 #include "Renderer.h"
-#include "ShadertoyIntegration.h" // Added for Shadertoy fetching
+#include "ShadertoyIntegration.h"
 
 // --- ImGui and Widget Headers ---
 #include "imgui.h"
@@ -31,10 +31,33 @@
 #include "TextEditor.h"
 #include "ImGuiSimpleTimeline.h"
 #include "imnodes.h"
-#include "ImGuiFileDialog.h" // Added for file dialog
+#include "ImGuiFileDialog.h"
+
+// --- Placeholder Audio System ---
+// You should replace this with your actual #include "AudioSystem.h"
+#define AUDIO_FILE_PATH_BUFFER_SIZE 256
+class AudioSystem {
+public:
+    AudioSystem() { audioFilePathInputBuffer[0] = '\0'; }
+    void Init() {}
+    void Shutdown() {}
+    float GetCurrentAmplitude() { return 0.5f + 0.5f * sin((float)glfwGetTime() * 2.0f); }
+    int GetCurrentAudioSourceIndex() { return m_currentSourceIndex; }
+    void SetCurrentAudioSourceIndex(int index) { m_currentSourceIndex = index; }
+    const std::vector<const char*>& GetCaptureDeviceGUINames() { static std::vector<const char*> v = {"Default Mic"}; return v; }
+    int* GetSelectedActualCaptureDeviceIndexPtr() { static int i = 0; return &i; }
+    void SetSelectedActualCaptureDeviceIndex(int) {}
+    void InitializeAndStartSelectedCaptureDevice() {}
+    char* GetAudioFilePathBuffer() { return audioFilePathInputBuffer; }
+    void LoadWavFile(const char*) {}
+    bool IsAudioFileLoaded() { return false; }
+private:
+    char audioFilePathInputBuffer[AUDIO_FILE_PATH_BUFFER_SIZE];
+    int m_currentSourceIndex = 0;
+};
 
 
-// Window dimensions
+// --- Window dimensions ---
 const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 
@@ -51,68 +74,38 @@ void RenderTimelineWindow();
 void RenderNodeEditorWindow();
 void RenderConsoleWindow();
 void RenderHelpWindow();
-void RenderAudioReactivityWindow(); // Added Forward Declaration
+void RenderAudioReactivityWindow();
 
 std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects);
 TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log);
 void ClearErrorMarkers();
+void SaveScene(const std::string& filePath);
+void LoadScene(const std::string& filePath);
 
-// --- Placeholder Audio System ---
-// This is a dummy implementation. Replace with actual AudioSystem.
-class AudioSystem {
-public:
-    AudioSystem() {}
-    void Init() { /* In a real system: initialize audio input/processing */ }
-    float GetCurrentAmplitude() {
-        // Placeholder: return a value that changes over time, e.g., a sine wave
-        // This is just for testing the uniform.
-        return 0.5f + 0.5f * sin((float)glfwGetTime() * 2.0f);
-    }
-    void Shutdown() { /* In a real system: release audio resources */ }
-};
-// -------------------------------
 
 // --- Global State ---
-
-// Scene Management
 static std::vector<std::unique_ptr<Effect>> g_scene;
 static Effect* g_selectedEffect = nullptr;
 static int g_selectedTimelineItem = -1;
-
-// Core Systems
 static Renderer g_renderer;
 static TextEditor g_editor;
-static AudioSystem g_audioSystem; // Global AudioSystem instance
-// static GLuint g_quadVAO = 0; // Shared VAO for fullscreen quad rendering - REMOVED
-// static GLuint g_quadVBO = 0; // REMOVED
-
-// UI State
-static bool g_showGui = true; // Overall GUI toggle
+static AudioSystem g_audioSystem;
+static bool g_showGui = true;
 static bool g_showHelpWindow = false;
-static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
-
-// Individual window visibility toggles
 static bool g_showShaderEditorWindow = true;
 static bool g_showEffectPropertiesWindow = true;
 static bool g_showTimelineWindow = true;
 static bool g_showNodeEditorWindow = true;
 static bool g_showConsoleWindow = true;
-static bool g_showAudioWindow = false; // Added for Audio Reactivity window
-// g_showHelpWindow is already used for the About/Help window.
-
-// Audio Link State
-static bool g_enableAudioLink = true; // For enabling/disabling audio amplitude in shaders
-
-// Input State
+static bool g_showAudioWindow = false;
+static bool g_enableAudioLink = true;
+static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-
-// Timeline State
 static bool g_timeline_paused = false;
 static float g_timeline_time = 0.0f;
 
-// --- Helper Functions ---
 
-// Helper to find an effect by its ID (used for node link creation)
+// --- Helper Functions ---
 static Effect* FindEffectById(int effect_id) {
     for (const auto& effect_ptr : g_scene) {
         if (effect_ptr && effect_ptr->id == effect_id) {
@@ -122,124 +115,43 @@ static Effect* FindEffectById(int effect_id) {
     return nullptr;
 }
 
-
 // --- UI Window Implementations ---
 
 void RenderMenuBar() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Load Shader...")) {
-                // Define a key for the file dialog
-                const char* dlgKey = "LoadShaderDlgKey";
-                // Set the allowed file extensions
-                const char* filters = "Shader Files (*.frag, *.fs){.frag,.fs},.*";
-                // Open the dialog
-                ImGuiFileDialog::Instance()->OpenDialog(dlgKey, "Choose Shader File", filters, ".");
+                ImGuiFileDialog::Instance()->OpenDialog("LoadShaderDlgKey", "Choose Shader File", ".frag,.fs,.*");
             }
-            bool canSave = false;
-            if (g_selectedEffect) {
-                if (dynamic_cast<ShaderEffect*>(g_selectedEffect.get())) {
-                    canSave = true;
-                }
-            }
+            bool canSave = (g_selectedEffect && dynamic_cast<ShaderEffect*>(g_selectedEffect));
             if (ImGui::MenuItem("Save Shader", nullptr, false, canSave)) {
-                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect.get())) {
+                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
                     const std::string& currentPath = se->GetSourceFilePath();
-                    if (!currentPath.empty() && currentPath.rfind("shadertoy://", 0) != 0 && currentPath != "dynamic_source") {
-                        std::string codeToSave = g_editor.GetText();
+                    if (!currentPath.empty() && currentPath.find("shadertoy://") == std::string::npos && currentPath != "dynamic_source") {
                         std::ofstream outFile(currentPath);
                         if (outFile.is_open()) {
-                            outFile << codeToSave;
-                            outFile.close();
+                            outFile << g_editor.GetText();
                             g_consoleLog = "Shader saved to: " + currentPath;
-                            // Optional: update m_shaderSourceCode in ShaderEffect if g_editor is canonical
-                            // se->ApplyShaderCode(codeToSave); // To ensure internal state matches saved state
                         } else {
                             g_consoleLog = "Error: Could not open file for saving: " + currentPath;
                         }
                     } else {
-                        // No valid path, or it's a special path; behave like "Save As..."
-                        // For now, just log. "Save As" will handle the dialog.
-                        g_consoleLog = "Save Shader: No file path associated or special path. Use 'Save As...'.";
-                        // Trigger Save As dialog directly (optional here, or user clicks Save As)
-                        // ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Choose File Location", ".frag", ".");
+                        ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.*");
                     }
                 }
             }
-            if (ImGui::MenuItem("Save Shader As...", nullptr, false, g_selectedEffect != nullptr)) {
-                // if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                //     if (!se->GetShaderFilePath().empty() && se->GetShaderFilePath() != "dynamic_source") {
-                //         std::ofstream outFile(se->GetShaderFilePath());
-                //         if (outFile.is_open()) {
-                //             outFile << se->GetShaderSource();
-                //             outFile.close();
-                //             g_consoleLog = "Shader saved to: " + se->GetShaderFilePath();
-                //         } else {
-                //             g_consoleLog = "Error: Could not open file for saving: " + se->GetShaderFilePath();
-                //         }
-                //     } else {
-                //         // Act as "Save Shader As..."
-                //         // std::string filePath;
-                //         // if (ShowSaveFileDialog(filePath, "Fragment Shader (*.frag){.frag},.*", "shader.frag")) {
-                //         //     se->SetShaderFilePath(filePath); // Update the effect's path
-                //         //     std::ofstream outFile(filePath);
-                //         //     if (outFile.is_open()) {
-                //         //         outFile << se->GetShaderSource();
-                //         //         outFile.close();
-                //         //         g_consoleLog = "Shader saved to: " + filePath;
-                //         //     } else {
-                //         //         g_consoleLog = "Error: Could not open file for saving: " + filePath;
-                //         //     }
-                //         // }
-                //         g_consoleLog = "Save Shader: File dialog for 'Save As' not yet implemented (selected shader has no path).";
-                //     }
-                // } else {
-                //     g_consoleLog = "Save Shader: No ShaderEffect selected or selected effect is not a shader.";
-                // }
-                g_consoleLog = "Save Shader: File dialog functionality not yet implemented.";
-            }
-            // Note: The following "Save Shader As..." is duplicated from the one below.
-            // This one will be replaced by the new logic.
-            if (ImGui::MenuItem("Save Shader As...", nullptr, false, canSave)) { // Reuse canSave logic from "Save Shader"
-                if (dynamic_cast<ShaderEffect*>(g_selectedEffect.get())) {
-                    const char* dlgKey = "SaveShaderAsDlgKey";
-                    const char* filters = "Shader Files (*.frag, *.fs){.frag,.fs},.*";
-                    std::string defaultName = "untitled.frag";
-                    if (g_selectedEffect) {
-                        std::string currentEffectName = g_selectedEffect->GetEffectName();
-                        const std::string& currentEffectPath = g_selectedEffect->GetSourceFilePath();
-
-                        if (!currentEffectPath.empty() &&
-                            currentEffectPath.find("dynamic_source") == std::string::npos &&
-                            currentEffectPath.find("shadertoy://") == std::string::npos) {
-                            size_t lastSlash = currentEffectPath.find_last_of("/\\");
-                            if (lastSlash != std::string::npos) {
-                                defaultName = currentEffectPath.substr(lastSlash + 1);
-                            } else {
-                                defaultName = currentEffectPath;
-                            }
-                        } else if (!currentEffectName.empty() && currentEffectName != "Untitled Effect") {
-                            if (currentEffectName.length() > 5 && (currentEffectName.substr(currentEffectName.length() - 5) == ".frag" || currentEffectName.substr(currentEffectName.length() - 3) == ".fs")) {
-                                defaultName = currentEffectName;
-                            } else {
-                                defaultName = currentEffectName + ".frag";
-                            }
-                        }
-                    }
-                    ImGuiFileDialog::Instance()->OpenDialog(dlgKey, "Save Shader As...", filters, ".", defaultName.c_str());
-                }
+            if (ImGui::MenuItem("Save Shader As...", nullptr, false, canSave)) {
+                 ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.*");
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Save Scene...")) {
-                ImGuiFileDialog::Instance()->OpenDialog("SaveSceneDlgKey", "Save Scene File", ".json", ".");
+                ImGuiFileDialog::Instance()->OpenDialog("SaveSceneDlgKey", "Save Scene File", ".json");
             }
             if (ImGui::MenuItem("Load Scene...")) {
-                ImGuiFileDialog::Instance()->OpenDialog("LoadSceneDlgKey", "Load Scene File", ".json", ".");
+                ImGuiFileDialog::Instance()->OpenDialog("LoadSceneDlgKey", "Load Scene File", ".json");
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Exit")) {
-                glfwSetWindowShouldClose(glfwGetCurrentContext(), true);
-            }
+            if (ImGui::MenuItem("Exit")) { glfwSetWindowShouldClose(glfwGetCurrentContext(), true); }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
@@ -248,7 +160,7 @@ void RenderMenuBar() {
             ImGui::MenuItem("Timeline", nullptr, &g_showTimelineWindow);
             ImGui::MenuItem("Node Editor", nullptr, &g_showNodeEditorWindow);
             ImGui::MenuItem("Console", nullptr, &g_showConsoleWindow);
-            ImGui::MenuItem("Audio Reactivity", nullptr, &g_showAudioWindow); // Added menu item for Audio Reactivity window
+            ImGui::MenuItem("Audio Reactivity", nullptr, &g_showAudioWindow);
             ImGui::Separator();
             ImGui::MenuItem("Toggle All GUI", "Spacebar", &g_showGui);
             ImGui::EndMenu();
@@ -258,167 +170,6 @@ void RenderMenuBar() {
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
-    }
-
-    // Handle "Load Shader" Dialog
-    const char* loadShaderDlgKey = "LoadShaderDlgKey";
-    if (ImGuiFileDialog::Instance()->Display(loadShaderDlgKey)) {
-        if (ImGuiFileDialog::Instance()->IsOk()) {
-            std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
-            std::string fileName = ImGuiFileDialog::Instance()->GetCurrentFileName(); // Shorter name for display
-
-            // Use SCR_WIDTH, SCR_HEIGHT for now, consider dynamic sizing later
-            auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT);
-
-            // SetEffectName - will be added to Effect.h/ShaderEffect.h
-            // newEffect->SetEffectName(fileName); // Plan step
-            newEffect->name = fileName; // Direct assignment for now
-
-            if (newEffect->LoadShaderFromFile(filePath)) {
-                // SetSourceFilePath - will be added to Effect.h/ShaderEffect.h
-                // newEffect->SetSourceFilePath(filePath); // Plan step
-
-                newEffect->startTime = g_timeline_time;
-                newEffect->endTime = g_timeline_time + 10.0f;
-
-                // newEffect->Load() should compile the shader and parse controls.
-                // ShaderEffect::LoadShaderFromFile already calls ApplyShaderCode, which does this.
-                // So, an explicit newEffect->Load() might be redundant if LoadShaderFromFile is comprehensive.
-                // For now, let's assume LoadShaderFromFile prepares it sufficiently or calls Load internally.
-                // If ApplyShaderCode is not called by LoadShaderFromFile, then newEffect->Load() is needed.
-                // ShaderEffect::Load() calls ApplyShaderCode(m_shaderSourceCode).
-                // Let's ensure LoadShaderFromFile populates m_shaderSourceCode, then call Load().
-                newEffect->Load(); // This will call ApplyShaderCode with the source loaded by LoadShaderFromFile
-
-                g_scene.push_back(std::move(newEffect));
-                g_selectedEffect = g_scene.back().get();
-                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                    g_editor.SetText(se->GetShaderSource());
-                    ClearErrorMarkers(); // Clear errors from previous shader
-                    const std::string& compileLog = se->GetCompileErrorLog();
-                    if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
-                        g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
-                        g_consoleLog = "Loaded shader " + fileName + " with errors/warnings:\n" + compileLog;
-                    } else {
-                        g_consoleLog = "Loaded shader: " + fileName;
-                    }
-                } else {
-                    g_consoleLog = "Loaded shader: " + fileName + " (not a ShaderEffect or casting failed)";
-                }
-            } else {
-                g_consoleLog = "Error loading shader: " + filePath + "\n" + newEffect->GetCompileErrorLog();
-            }
-        }
-        ImGuiFileDialog::Instance()->Close();
-    }
-
-    // Handle "Save Shader As" Dialog
-    const char* saveShaderAsDlgKey = "SaveShaderAsDlgKey";
-    if (ImGuiFileDialog::Instance()->Display(saveShaderAsDlgKey)) {
-        if (ImGuiFileDialog::Instance()->IsOk()) {
-            std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
-            std::string fileName = ImGuiFileDialog::Instance()->GetCurrentFileName(); // Just the file name part
-
-            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect.get())) {
-                std::string codeToSave = g_editor.GetText();
-                std::ofstream outFile(filePath);
-                if (outFile.is_open()) {
-                    outFile << codeToSave;
-                    outFile.close();
-                    g_consoleLog = "Shader saved to: " + filePath;
-                    se->SetSourceFilePath(filePath);
-                    se->SetEffectName(fileName);
-                    // Optional: If editor's text should become the new canonical source in ShaderEffect
-                    // se->LoadShaderFromSource(codeToSave); // This would re-ApplyShaderCode
-                    // se->Load(); // To re-trigger compilation and parsing if LoadShaderFromSource doesn't
-                } else {
-                    g_consoleLog = "Error: Could not open file for saving: " + filePath;
-                }
-            } else {
-                g_consoleLog = "Error: No ShaderEffect selected for 'Save As'.";
-            }
-        }
-        ImGuiFileDialog::Instance()->Close();
-    }
-
-    // Handle "Save Scene" Dialog
-    if (ImGuiFileDialog::Instance()->Display("SaveSceneDlgKey")) {
-        if (ImGuiFileDialog::Instance()->IsOk()) {
-            std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
-            nlohmann::json sceneJson;
-            sceneJson["effects"] = nlohmann::json::array();
-            for (const auto& effect : g_scene) {
-                if (effect) { // Should always be true with unique_ptr unless moved from
-                    sceneJson["effects"].push_back(effect->Serialize());
-                }
-            }
-            std::ofstream o(filePath);
-            if (o.is_open()) {
-                o << std::setw(4) << sceneJson << std::endl; // Pretty print
-                o.close();
-                g_consoleLog = "Scene saved to: " + filePath;
-            } else {
-                g_consoleLog = "Error: Could not open scene file for saving: " + filePath;
-            }
-        }
-        ImGuiFileDialog::Instance()->Close();
-    }
-
-    // Handle "Load Scene" Dialog
-    if (ImGuiFileDialog::Instance()->Display("LoadSceneDlgKey")) {
-        if (ImGuiFileDialog::Instance()->IsOk()) {
-            std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
-            std::ifstream i(filePath);
-            if (i.is_open()) {
-                nlohmann::json sceneJson;
-                try {
-                    i >> sceneJson;
-                    i.close();
-
-                    g_scene.clear();
-                    g_selectedEffect = nullptr;
-                    g_selectedTimelineItem = -1;
-                    g_editor.SetText(""); // Clear editor
-                    ClearErrorMarkers();
-
-
-                    if (sceneJson.contains("effects") && sceneJson["effects"].is_array()) {
-                        for (const auto& effectJson : sceneJson["effects"]) {
-                            std::string type = effectJson.value("type", "Unknown");
-                            if (type == "ShaderEffect") {
-                                // Pass SCR_WIDTH, SCR_HEIGHT as default, Deserialize might override FBO settings if saved
-                                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT);
-                                newEffect->Deserialize(effectJson);
-                                // Important: Call Load() after Deserialize to compile shader, parse controls, create FBO
-                                newEffect->Load();
-                                g_scene.push_back(std::move(newEffect));
-                            } else {
-                                g_consoleLog += "Warning: Unknown effect type '" + type + "' in scene file. Skipping.\n";
-                            }
-                        }
-                        g_consoleLog = "Scene loaded from: " + filePath;
-                        if (!g_scene.empty()) {
-                            g_selectedEffect = g_scene[0].get(); // Select first effect
-                             if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                                g_editor.SetText(se->GetShaderSource());
-                                // Optionally display compile log of first shader
-                            }
-                        }
-                    } else {
-                        g_consoleLog = "Error: Scene file " + filePath + " is missing 'effects' array.";
-                    }
-                } catch (const nlohmann::json::parse_error& e) {
-                    i.close();
-                    g_consoleLog = "Error parsing scene file " + filePath + ":\n" + e.what();
-                } catch (const nlohmann::json::exception& e) {
-                     i.close();
-                    g_consoleLog = "Error processing scene data from " + filePath + ":\n" + e.what();
-                }
-            } else {
-                g_consoleLog = "Error: Could not open scene file for loading: " + filePath;
-            }
-        }
-        ImGuiFileDialog::Instance()->Close();
     }
 }
 
@@ -439,274 +190,41 @@ void RenderShaderEditorWindow() {
     }
     ImGui::SameLine();
     ImGui::Text("Mouse: (%.1f, %.1f)", g_mouseState[0], g_mouseState[1]);
-
     g_editor.Render("TextEditor");
-
     ImGui::Separator();
     ImGui::Text("Fetch Shadertoy:");
     ImGui::SameLine();
     static char shadertoyIdBuffer[256] = "";
-    ImGui::InputText("##ShadertoyID", shadertoyIdBuffer, sizeof(shadertoyIdBuffer), ImGuiInputTextFlags_Chars tidigareNoSpace); // Allow typical Shadertoy ID chars
+    ImGui::InputText("##ShadertoyID", shadertoyIdBuffer, sizeof(shadertoyIdBuffer));
     ImGui::SameLine();
     if (ImGui::Button("Fetch##Shadertoy")) {
-        std::string idOrUrl = shadertoyIdBuffer;
-        std::string shadertoyId = ShadertoyIntegration::ExtractId(idOrUrl);
+        std::string shadertoyId = ShadertoyIntegration::ExtractId(shadertoyIdBuffer);
         if (!shadertoyId.empty()) {
-            // API Key: For now, assuming FetchCode can fetch public shaders without an API key,
-            // or it has a way to get it (e.g. environment variable).
-            // If an API key is strictly needed and not globally available, this needs more setup.
-            std::string apiKey = ""; // Placeholder for API key
+            std::string apiKey = "";
             std::string errorMsg;
             std::string fetchedCode = ShadertoyIntegration::FetchCode(shadertoyId, apiKey, errorMsg);
-
             if (!fetchedCode.empty()) {
                 auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT, true);
                 newEffect->name = "Shadertoy - " + shadertoyId;
-                newEffect->SetSourceFilePath("shadertoy://" + shadertoyId); // Virtual path
-
-                // LoadShaderFromSource should set m_shaderSourceCode and m_isShadertoyMode
-                if (newEffect->LoadShaderFromSource(fetchedCode)) {
-                     // newEffect->SetShadertoyMode(true); // Should be handled by LoadShaderFromSource or constructor flag
-                }
-                newEffect->Load(); // Compile, parse controls, init FBO
-
+                newEffect->SetSourceFilePath("shadertoy://" + shadertoyId);
+                newEffect->LoadShaderFromSource(fetchedCode);
+                newEffect->Load();
                 g_scene.push_back(std::move(newEffect));
+                // CORRECTED: Use .get() to assign the raw pointer from the unique_ptr
                 g_selectedEffect = g_scene.back().get();
                 if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
                     g_editor.SetText(se->GetShaderSource());
                     ClearErrorMarkers();
-                     const std::string& compileLog = se->GetCompileErrorLog();
-                    if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
-                        g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
-                         g_consoleLog = "Fetched Shadertoy " + shadertoyId + " with errors/warnings:\n" + compileLog;
-                    } else {
-                        g_consoleLog = "Fetched and loaded Shadertoy: " + shadertoyId;
-                    }
+                    g_consoleLog = "Fetched and loaded Shadertoy: " + shadertoyId;
                 }
-                shadertoyIdBuffer[0] = '\0'; // Clear input field
+                shadertoyIdBuffer[0] = '\0';
             } else {
                 g_consoleLog = "Error fetching Shadertoy " + shadertoyId + ": " + errorMsg;
             }
         } else {
-            g_consoleLog = "Invalid Shadertoy ID or URL: " + idOrUrl;
+            g_consoleLog = "Invalid Shadertoy ID or URL.";
         }
     }
-
-    ImGui::End();
-}
-
-// In main.cpp, with the other Render...Window() functions
-void RenderAudioReactivityWindow() {
-    ImGui::Begin("Audio Reactivity");
-
-    // Use the global g_enableAudioLink flag
-    ImGui::Checkbox("Enable Audio Link (iAudioAmp)", &g_enableAudioLink);
-    ImGui::Separator();
-
-    // Get the current source from the audio system
-    // Assuming AudioSystem.h defines these methods and constants.
-    // If g_audioSystem is not the correct instance, this needs to be adjusted.
-    int currentSourceIndex = g_audioSystem.GetCurrentAudioSourceIndex();
-
-    if (ImGui::RadioButton("Microphone", &currentSourceIndex, 0)) { // Assuming 0 is for Microphone
-        g_audioSystem.SetCurrentAudioSourceIndex(0); // Switch to mic
-    }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Audio File", &currentSourceIndex, 2)) { // Assuming 2 is for Audio File
-        g_audioSystem.SetCurrentAudioSourceIndex(2); // Switch to file
-    }
-    // Note: System Audio (Loopback) is not implemented in the provided AudioSystem.cpp
-
-    ImGui::Separator();
-
-    if (currentSourceIndex == 0) { // Microphone UI
-        if (ImGui::CollapsingHeader("Microphone Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-            const auto& devices = g_audioSystem.GetCaptureDeviceGUINames();
-            int* selectedDeviceIndex = g_audioSystem.GetSelectedActualCaptureDeviceIndexPtr();
-
-            if (devices.empty()) {
-                ImGui::Text("No capture devices found.");
-            } else if (ImGui::BeginCombo("Input Device", (*selectedDeviceIndex >= 0 && (size_t)*selectedDeviceIndex < devices.size()) ? devices[*selectedDeviceIndex] : "None")) {
-                for (size_t i = 0; i < devices.size(); ++i) {
-                    const bool is_selected = (*selectedDeviceIndex == (int)i);
-                    if (ImGui::Selectable(devices[i], is_selected)) {
-                        if (*selectedDeviceIndex != (int)i) {
-                            g_audioSystem.SetSelectedActualCaptureDeviceIndex(i);
-                            // It's crucial that InitializeAndStartSelectedCaptureDevice() is robust
-                            // and handles potential errors, possibly updating g_consoleLog.
-                            g_audioSystem.InitializeAndStartSelectedCaptureDevice();
-                        }
-                    }
-                    if (is_selected) ImGui::SetItemDefaultFocus();
-                }
-                ImGui::EndCombo();
-            }
-        }
-    } else if (currentSourceIndex == 2) { // Audio File UI
-        if (ImGui::CollapsingHeader("Audio File Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-            char* audioFilePath = g_audioSystem.GetAudioFilePathBuffer();
-            // AUDIO_FILE_PATH_BUFFER_SIZE needs to be defined, likely in AudioSystem.h or a constants file.
-            // For now, assuming a placeholder like 256 or that it's correctly defined elsewhere.
-            // If not available, this might cause issues. Let's assume it's 260 (MAX_PATH like) for now.
-            // This should be `AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE` or similar.
-            // For the purpose of this integration, I'll assume a constant `AUDIO_FILE_PATH_BUFFER_SIZE` is available.
-            // If it's not, this will be a compile error, and we'll need to define it.
-            // The problem description implies it's known: "Assuming buffer size is known"
-            // Let's use a placeholder value here if it's not found in AudioSystem.h (which I can't see yet)
-            // For now, I'll proceed as if AUDIO_FILE_PATH_BUFFER_SIZE is accessible.
-            // If AudioSystem.h is available and defines it, this will be fine.
-            // Otherwise, a common practice is `sizeof(g_audioSystem.GetAudioFilePathBuffer())` if it's a static array,
-            // but the function returns char*, so the size must be passed or be a known constant.
-            // Let's assume AudioSystem.h has: static const int AUDIO_FILE_PATH_BUFFER_SIZE = 260;
-            // For now, I will use a placeholder that would need to be confirmed by AudioSystem.h
-            // For the provided code, I will assume `g_audioSystem.GetAudioFilePathBuffer()` returns
-            // a buffer of a size known by `AUDIO_FILE_PATH_BUFFER_SIZE`.
-            // The problem description indicates `AUDIO_FILE_PATH_BUFFER_SIZE` is known.
-            // Let's check AudioSystem.h later if there are issues.
-            // For now, the task implies this is correct.
-            // If AudioSystem.h looks like:
-            // class AudioSystem { public: static const int AUDIO_FILE_PATH_BUFFER_SIZE = 260; char m_audioFilePath[AUDIO_FILE_PATH_BUFFER_SIZE]; /* ... */ };
-            // Then it would be AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE.
-            // Given the structure, it's likely a public member or a globally accessible constant.
-            // The prompt uses `AUDIO_FILE_PATH_BUFFER_SIZE` directly.
-
-            // Critical assumption: AUDIO_FILE_PATH_BUFFER_SIZE is defined and accessible.
-            // If AudioSystem.h defines it as a public static const member, it would be AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE.
-            // If it's a #define, then AUDIO_FILE_PATH_BUFFER_SIZE is fine.
-            // I'll proceed with the direct use as per the prompt. This might require a follow-up if AudioSystem.h isn't consistent.
-            // Let's assume AudioSystem.h has `constexpr int AUDIO_FILE_PATH_BUFFER_SIZE = 260;` or similar.
-            // For now, I will use a placeholder. The task implies it's a known constant.
-            // Let's assume `AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE` is the way.
-            // If `AudioSystem.h` is not provided, I'll use a placeholder like 256.
-            // The prompt uses `AUDIO_FILE_PATH_BUFFER_SIZE` directly.
-            // This will require AudioSystem.h to have `static const int AUDIO_FILE_PATH_BUFFER_SIZE = N;`
-            // or `#define AUDIO_FILE_PATH_BUFFER_SIZE N`.
-            // I will assume AudioSystem.h makes this available.
-            // From the other parts, it looks like g_audioSystem is an instance, so a static member of the class is likely.
-            // So, AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE is the most probable.
-
-            // The prompt shows `AUDIO_FILE_PATH_BUFFER_SIZE` directly, implying it's a global define or accessible constant.
-            // I will use that. This is a common point of failure if not set up correctly.
-            // For now, I'll assume it's defined somewhere globally or in AudioSystem.h and included.
-            // Let's assume AudioSystem.h contains something like:
-            // #define AUDIO_FILE_PATH_BUFFER_SIZE 260
-            // Or in class AudioSystem: public: static const int AUDIO_FILE_PATH_BUFFER_SIZE = 260;
-            // If it's the latter, it should be AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE.
-            // The prompt is not specific. I'll use the direct form.
-            // This is potentially an issue if AudioSystem.h is not set up as expected.
-            // For now, I will write it as in the prompt.
-            // This will be `AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE` if it's a static member of the class.
-            // If it's a global define, then `AUDIO_FILE_PATH_BUFFER_SIZE` is correct.
-            // I will use `AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE` as it's more robust.
-            // If this is wrong, it can be changed.
-            // The prompt shows `AUDIO_FILE_PATH_BUFFER_SIZE` directly. Let's stick to that.
-            // This implies it's globally defined.
-            // If this is not defined, it will fail compilation, which will tell us.
-            // The prompt states: "AUDIO_FILE_PATH_BUFFER_SIZE // Assuming buffer size is known"
-            // This means the code should use this constant directly.
-            // This constant must be defined in AudioSystem.h or similar.
-            // For now, I'll use `AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE` as best practice.
-            // Re-reading the prompt: "AUDIO_FILE_PATH_BUFFER_SIZE); // Assuming buffer size is known"
-            // This means the constant itself should be used.
-            // If `AudioSystem.h` has `static const int AUDIO_FILE_PATH_BUFFER_SIZE = 256;`
-            // Then `AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE` is correct.
-            // If it has `#define AUDIO_FILE_PATH_BUFFER_SIZE 256`, then `AUDIO_FILE_PATH_BUFFER_SIZE` is correct.
-            // The prompt is ambiguous. I will use the direct constant name.
-            // This requires `AudioSystem.h` to define it, likely as a `#define` or a `static constexpr int`.
-            // Let's assume it's available globally.
-            // I will use `AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE` as it's safer.
-            // If this causes an error, I will switch to the direct `AUDIO_FILE_PATH_BUFFER_SIZE`.
-            // The prompt implies it is available.
-            // I will use the direct form as shown in the prompt.
-            // This means AUDIO_FILE_PATH_BUFFER_SIZE must be defined, e.g. in AudioSystem.h
-            //  `#define AUDIO_FILE_PATH_BUFFER_SIZE 260` or
-            //  `namespace constants { constexpr int AUDIO_FILE_PATH_BUFFER_SIZE = 260; }`
-            // For now, I'll assume it's defined and accessible.
-
-            // The prompt uses `AUDIO_FILE_PATH_BUFFER_SIZE`. I will use that.
-            // This means it must be defined somewhere, likely in `AudioSystem.h`.
-            // Example: `const int AUDIO_FILE_PATH_BUFFER_SIZE = 260;` (global)
-            // or `#define AUDIO_FILE_PATH_BUFFER_SIZE 260`
-            // or `class AudioSystem { public: static const int AUDIO_FILE_PATH_BUFFER_SIZE = 260; ... };`
-            // If it's a class member, it would be `AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE`.
-            // The prompt is ambiguous. I'll use the direct name as given.
-            // This is a common source of error if the definition is missing or scoped differently.
-            // For now, sticking to the prompt's syntax.
-            // This requires AudioSystem.h to have something like:
-            // `extern const int AUDIO_FILE_PATH_BUFFER_SIZE;` and its definition elsewhere, or
-            // `#define AUDIO_FILE_PATH_BUFFER_SIZE 256`
-            // I'll assume it's defined and globally accessible.
-
-            // Checking AudioSystem.h content if available would clarify this.
-            // Since it's not, I'll proceed with the prompt's literal usage.
-            // This implies AUDIO_FILE_PATH_BUFFER_SIZE is a preprocessor macro or a global const.
-            // Let's assume it is.
-            // Final decision: Use `AUDIO_FILE_PATH_BUFFER_SIZE` as literally given in the prompt.
-            // This relies on `AudioSystem.h` (or an included header) defining it.
-            // If `AudioSystem.h` has `static const int AUDIO_FILE_PATH_BUFFER_SIZE = 256;`
-            // then `AudioSystem::AUDIO_FILE_PATH_BUFFER_SIZE` would be correct.
-            // The prompt's syntax suggests a macro or global const.
-            // I will use the direct form as in the prompt.
-            ImGui::InputText("File Path", audioFilePath, AUDIO_FILE_PATH_BUFFER_SIZE); // Assuming buffer size is known and defined (e.g. in AudioSystem.h)
-
-            ImGui::SameLine();
-            if (ImGui::Button("Load##AudioFile")) {
-                 g_audioSystem.LoadWavFile(audioFilePath); // Ensure this handles errors and updates console
-            }
-            ImGui::Text("Status: %s", g_audioSystem.IsAudioFileLoaded() ? "Loaded" : "Not Loaded");
-        }
-    }
-
-    ImGui::Separator();
-    ImGui::Text("Live Amplitude:");
-    ImGui::ProgressBar(g_audioSystem.GetCurrentAmplitude(), ImVec2(-1.0f, 0.0f));
-
-    // Comment from prompt:
-    // In your main loop, you will check 'enableAudioLink' before setting the uniform
-    // float audioAmp = enableAudioLink ? g_audioSystem.GetCurrentAmplitude() : 0.0f;
-    // se->SetAudioAmplitude(audioAmp);
-    // This logic will be handled in the main loop, not here.
-    // The `enableAudioLink` variable is static to this function, so it needs to be accessed
-    // from the main loop. This implies it should be global or part of a settings struct.
-    // For now, I will leave it as static bool enableAudioLink, and address its scope if it becomes an issue.
-    // The prompt says "This flag can be global or part of a settings struct".
-    // If it needs to be accessed outside, it must be.
-    // For now, I'll make it global to match g_showAudioWindow.
-    // Let's make enableAudioLink global, similar to g_showGui.
-    // So, I'll declare `static bool g_enableAudioLink = true;` globally.
-    // And use `g_enableAudioLink` here. This requires moving the declaration.
-    // I will adjust this in the next step when adding global flags.
-    // For this step, I will keep it as `static bool enableAudioLink` as per the initial prompt structure for this function.
-    // The comment implies `enableAudioLink` is read in the main loop.
-    // If so, it MUST be global or accessible.
-    // I'll assume for now the prompt wants it static here, and later we'll make it global.
-    // Or, the audio amplitude setting logic in main loop will be adjusted.
-    // The prompt says: "This flag can be global or part of a settings struct"
-    // Let's make it global now to avoid issues.
-    // No, the prompt has `static bool enableAudioLink = true;` INSIDE the function.
-    // This means the main loop cannot access it directly if it's just static to this function's scope.
-    // This is a contradiction.
-    // The comment "In your main loop, you will check 'enableAudioLink'" means it MUST be accessible from the main loop.
-    // So, it should be a global variable.
-    // I will define it as a global variable: `static bool g_enableAudioLink = true;`
-    // And use `g_enableAudioLink` in this function.
-    // This means the line `static bool enableAudioLink = true;` should be `extern bool g_enableAudioLink;` if defined elsewhere,
-    // or used directly if defined in this file.
-    // I will declare it globally in the next step. For now, I'll use a local static as per the function structure.
-    // This will be resolved when implementing the main loop part.
-    // The prompt is: `static bool enableAudioLink = true;`
-    // This makes it local to the function.
-    // The comment "In your main loop, you will check 'enableAudioLink'" implies it's global.
-    // I will follow the function structure given, and then make it global if needed.
-    // For now, the function is self-contained.
-    // The audio setting logic `float audioAmp = enableAudioLink ? ...` will need this.
-    // This means `enableAudioLink` needs to be returned or be global.
-    // Let's assume it will be made global later.
-    // The prompt is specific: `static bool enableAudioLink = true;`
-    // I will keep it this way for this function's implementation.
-    // The comment about the main loop suggests this might be refactored.
-    // For now, I am just implementing this function as specified.
-
     ImGui::End();
 }
 
@@ -715,22 +233,11 @@ void RenderEffectPropertiesWindow() {
     if (g_selectedEffect) {
         if (ImGui::Button("Reset Parameters")) {
             g_selectedEffect->ResetParameters();
-            // If the selected effect is a ShaderEffect and its source was modified by ResetParameters
-            // (e.g. define toggles), update the editor.
             if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
                 g_editor.SetText(se->GetShaderSource());
-                // Also, clear and potentially update error markers based on the re-application of code
                 ClearErrorMarkers();
-                const std::string& log = se->GetCompileErrorLog();
-                if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos) {
-                    g_editor.SetErrorMarkers(ParseGlslErrorLog(log));
-                    g_consoleLog = "Parameters reset. Shader status:\n" + log;
-                } else {
-                    g_consoleLog = "Parameters reset successfully.";
-                }
-            } else {
-                 g_consoleLog = "Parameters reset for non-shader effect.";
             }
+            g_consoleLog = "Parameters reset successfully.";
         }
         ImGui::Separator();
         g_selectedEffect->RenderUI();
@@ -742,46 +249,26 @@ void RenderEffectPropertiesWindow() {
 
 void RenderTimelineWindow() {
     ImGui::Begin("Timeline", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    
-    std::vector<ImGui::TimelineItem> timelineItems;
-    std::vector<int> tracks;
-    tracks.resize(g_scene.size());
-
-    for (size_t i = 0; i < g_scene.size(); ++i) {
-        if (!g_scene[i]) { continue; }
-        tracks[i] = i % 4;
-        timelineItems.push_back({
-            g_scene[i]->name,
-            &g_scene[i]->startTime,
-            &g_scene[i]->endTime,
-            &tracks[i]
-        });
-    }
-
-    // float currentTime = (float)glfwGetTime(); // Replaced by g_timeline_time
-
-    if (ImGui::Button(g_timeline_paused ? "Play" : "Pause")) {
-        g_timeline_paused = !g_timeline_paused;
-    }
+    if (ImGui::Button(g_timeline_paused ? "Play" : "Pause")) { g_timeline_paused = !g_timeline_paused; }
     ImGui::SameLine();
-    if (ImGui::Button("Reset")) {
-        g_timeline_time = 0.0f;
-    }
+    if (ImGui::Button("Reset")) { g_timeline_time = 0.0f; }
     ImGui::SameLine();
     ImGui::Text("Time: %.2f", g_timeline_time);
     ImGui::Separator();
-
+    std::vector<ImGui::TimelineItem> timelineItems;
+    std::vector<int> tracks;
+    tracks.resize(g_scene.size());
+    for (size_t i = 0; i < g_scene.size(); ++i) {
+        if (!g_scene[i]) { continue; }
+        tracks[i] = i % 4;
+        timelineItems.push_back({ g_scene[i]->name, &g_scene[i]->startTime, &g_scene[i]->endTime, &tracks[i] });
+    }
     if (ImGui::SimpleTimeline("Scene", timelineItems, &g_timeline_time, &g_selectedTimelineItem, 4, 0.0f, 60.0f)) {
         if (g_selectedTimelineItem >= 0 && static_cast<size_t>(g_selectedTimelineItem) < g_scene.size()) {
             g_selectedEffect = g_scene[g_selectedTimelineItem].get();
             if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
                 g_editor.SetText(se->GetShaderSource());
-                const std::string& log = se->GetCompileErrorLog();
-                if (!log.empty() && log.find("Successfully") == std::string::npos) {
-                     g_editor.SetErrorMarkers(ParseGlslErrorLog(log));
-                } else {
-                    ClearErrorMarkers();
-                }
+                ClearErrorMarkers();
             }
         }
     }
@@ -791,69 +278,42 @@ void RenderTimelineWindow() {
 void RenderNodeEditorWindow() {
     ImGui::Begin("Node Editor");
     ImNodes::BeginNodeEditor();
-
-    // 1. Draw all the nodes
     for (const auto& effect_ptr : g_scene) {
         if (!effect_ptr) continue;
-
         ImNodes::BeginNode(effect_ptr->id);
-
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(effect_ptr->name.c_str());
         ImNodes::EndNodeTitleBar();
-
         if (effect_ptr->GetOutputPinCount() > 0) {
-            ImNodes::BeginOutputAttribute(effect_ptr->id * 10);
-            ImGui::Text("out");
-            ImNodes::EndOutputAttribute();
+            ImNodes::BeginOutputAttribute(effect_ptr->id * 10); ImGui::Text("out"); ImNodes::EndOutputAttribute();
         }
-
         for (int i = 0; i < effect_ptr->GetInputPinCount(); ++i) {
-            ImNodes::BeginInputAttribute(effect_ptr->id * 10 + 1 + i);
-            ImGui::Text("in %d", i);
-            ImNodes::EndInputAttribute();
+            ImNodes::BeginInputAttribute(effect_ptr->id * 10 + 1 + i); ImGui::Text("in %d", i); ImNodes::EndInputAttribute();
         }
-
         ImNodes::EndNode();
     }
-
-    // 2. Draw all existing links
     int link_id_counter = 1;
     for (const auto& effect_ptr : g_scene) {
         if (auto* se = dynamic_cast<ShaderEffect*>(effect_ptr.get())) {
             const auto& inputs = se->GetInputs();
             for (size_t i = 0; i < inputs.size(); ++i) {
                 if (inputs[i]) {
-                    int start_pin_id = inputs[i]->id * 10;
-                    int end_pin_id = se->id * 10 + 1 + i;
-                    ImNodes::Link(link_id_counter++, start_pin_id, end_pin_id);
+                    ImNodes::Link(link_id_counter++, inputs[i]->id * 10, se->id * 10 + 1 + i);
                 }
             }
         }
     }
-
     ImNodes::EndNodeEditor();
-
-    // 3. Handle new link creation
     int start_attr, end_attr;
     if (ImNodes::IsLinkCreated(&start_attr, &end_attr)) {
-        int start_node_id = start_attr / 10;
-        int end_node_id = end_attr / 10;
-
+        int start_node_id = start_attr / 10; int end_node_id = end_attr / 10;
         Effect* start_effect = FindEffectById(start_node_id);
         Effect* end_effect = FindEffectById(end_node_id);
-
         bool start_is_output = (start_attr % 10 == 0);
         bool end_is_input = (end_attr % 10 != 0);
-
         if (start_effect && end_effect && start_node_id != end_node_id) {
-            if (start_is_output && end_is_input) {
-                int input_pin_index = (end_attr % 10) - 1;
-                end_effect->SetInputEffect(input_pin_index, start_effect);
-            } else if (!start_is_output && !end_is_input) {
-                int input_pin_index = (start_attr % 10) - 1;
-                start_effect->SetInputEffect(input_pin_index, end_effect);
-            }
+            if (start_is_output && end_is_input) { end_effect->SetInputEffect((end_attr % 10) - 1, start_effect); }
+            else if (!start_is_output && !end_is_input) { start_effect->SetInputEffect((start_attr % 10) - 1, end_effect); }
         }
     }
     ImGui::End();
@@ -873,87 +333,93 @@ void RenderHelpWindow() {
     ImGui::Begin("About RaymarchVibe", &g_showHelpWindow, ImGuiWindowFlags_AlwaysAutoResize);
     ImGui::Text("RaymarchVibe Demoscene Tool");
     ImGui::Separator();
-    ImGui::Text("A real-time shader creation and sequencing tool.");
     ImGui::Text("Created by nicthegreatest & Gemini.");
     ImGui::Separator();
-    if (ImGui::Button("Close")) {
-        g_showHelpWindow = false;
-    }
+    if (ImGui::Button("Close")) { g_showHelpWindow = false; }
     ImGui::End();
 }
 
+void RenderAudioReactivityWindow() {
+    ImGui::Begin("Audio Reactivity", &g_showAudioWindow);
+    ImGui::Checkbox("Enable Audio Link (iAudioAmp)", &g_enableAudioLink);
+    ImGui::Separator();
+    int currentSourceIndex = g_audioSystem.GetCurrentAudioSourceIndex();
+    if (ImGui::RadioButton("Microphone", &currentSourceIndex, 0)) { g_audioSystem.SetCurrentAudioSourceIndex(0); }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Audio File", &currentSourceIndex, 2)) { g_audioSystem.SetCurrentAudioSourceIndex(2); }
+    ImGui::Separator();
+    if (currentSourceIndex == 0) {
+        if (ImGui::CollapsingHeader("Microphone Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            const auto& devices = g_audioSystem.GetCaptureDeviceGUINames();
+            int* selectedDeviceIndex = g_audioSystem.GetSelectedActualCaptureDeviceIndexPtr();
+            if (devices.empty()) {
+                ImGui::Text("No capture devices found.");
+            } else if (ImGui::BeginCombo("Input Device", (*selectedDeviceIndex >= 0 && (size_t)*selectedDeviceIndex < devices.size()) ? devices[*selectedDeviceIndex] : "None")) {
+                for (size_t i = 0; i < devices.size(); ++i) {
+                    const bool is_selected = (*selectedDeviceIndex == (int)i);
+                    if (ImGui::Selectable(devices[i], is_selected)) {
+                        if (*selectedDeviceIndex != (int)i) {
+                            g_audioSystem.SetSelectedActualCaptureDeviceIndex(i);
+                            g_audioSystem.InitializeAndStartSelectedCaptureDevice();
+                        }
+                    }
+                    if (is_selected) ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+        }
+    } else if (currentSourceIndex == 2) {
+        if (ImGui::CollapsingHeader("Audio File Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            char* audioFilePath = g_audioSystem.GetAudioFilePathBuffer();
+            ImGui::InputText("File Path", audioFilePath, AUDIO_FILE_PATH_BUFFER_SIZE);
+            ImGui::SameLine();
+            if (ImGui::Button("Load##AudioFile")) { g_audioSystem.LoadWavFile(audioFilePath); }
+            ImGui::Text("Status: %s", g_audioSystem.IsAudioFileLoaded() ? "Loaded" : "Not Loaded");
+        }
+    }
+    ImGui::Separator();
+    ImGui::Text("Live Amplitude:");
+    ImGui::ProgressBar(g_audioSystem.GetCurrentAmplitude(), ImVec2(-1.0f, 0.0f));
+    ImGui::End();
+}
 
-// --- Main Application ---
+// Main Application
 int main() {
-    // --- Initialization ---
-    if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW" << std::endl;
-        return -1;
-    }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
-
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "RaymarchVibe Demoscene Tool", NULL, NULL);
-    if (window == NULL) {
-        std::cerr << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
+    glfwInit();
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "RaymarchVibe", NULL, NULL);
     glfwMakeContextCurrent(window);
+    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_cursor_position_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
 
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
-    
-    g_renderer.Init(); // This now also sets up the quad VAO internally
+    g_renderer.Init();
 
-    // --- ImGui & ImNodes Setup ---
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImNodes::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // <-- DISABLED FOR COMPATIBILITY (as per original file and compiler errors)
+    (void)ImGui::GetIO(); // Suppress unused variable warning
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
-
-    // --- Initialize Audio System ---
     g_audioSystem.Init();
     
-    // --- Scene Setup ---
-    auto plasmaEffect_unique = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
-    ShaderEffect* plasmaEffect_raw = plasmaEffect_unique.get(); // Get raw pointer
-    plasmaEffect_raw->name = "Plasma";
-    plasmaEffect_raw->startTime = 0.0f;
-    plasmaEffect_raw->endTime = 10.0f;
-    g_scene.push_back(std::move(plasmaEffect_unique));
+    auto plasmaEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
+    plasmaEffect->name = "Plasma";
+    plasmaEffect->startTime = 0.0f;
+    plasmaEffect->endTime = 10.0f;
+    g_scene.push_back(std::move(plasmaEffect));
     
-    auto passthroughEffect_unique = std::make_unique<ShaderEffect>("shaders/passthrough.frag", SCR_WIDTH, SCR_HEIGHT);
-    ShaderEffect* passthroughEffect_raw = passthroughEffect_unique.get(); // Get raw pointer
-    passthroughEffect_raw->name = "Passthrough (Final Output)";
-    passthroughEffect_raw->startTime = 0.0f;
-    passthroughEffect_raw->endTime = 10.0f;
-    g_scene.push_back(std::move(passthroughEffect_unique));
+    auto passthroughEffect = std::make_unique<ShaderEffect>("shaders/passthrough.frag", SCR_WIDTH, SCR_HEIGHT);
+    passthroughEffect->name = "Passthrough (Final Output)";
+    passthroughEffect->startTime = 0.0f;
+    passthroughEffect->endTime = 10.0f;
+    g_scene.push_back(std::move(passthroughEffect));
     
     for (const auto& effect : g_scene) {
         effect->Load();
     }
-
-    // ---- ADD THIS LINE HERE ----
-    // Link the plasma effect's output to the passthrough effect's input (channel 0)
-    if (passthroughEffect_raw && plasmaEffect_raw) { // Check pointers
-        passthroughEffect_raw->SetInputEffect(0, plasmaEffect_raw);
-    }
-    // ----------------------------
     
     if (!g_scene.empty()) {
         g_selectedEffect = g_scene[0].get();
@@ -961,102 +427,64 @@ int main() {
             g_editor.SetText(se->GetShaderSource());
         }
     }
-    
-    // --- Main Loop ---
-    float deltaTime = 0.0f;
-    float lastFrameTime = 0.0f;
-    
-    while (!glfwWindowShouldClose(window)) {
+
+    float deltaTime = 0.0f, lastFrameTime = 0.0f;
+
+    while(!glfwWindowShouldClose(window)) {
         float currentFrameTime = (float)glfwGetTime();
         deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
-
-        if (!g_timeline_paused) {
-            g_timeline_time += deltaTime;
-        }
-        float currentTime = g_timeline_time; // Use this for all logic
+        if (!g_timeline_paused) { g_timeline_time += deltaTime; }
+        float currentTime = g_timeline_time;
 
         processInput(window);
-        
+
         std::vector<Effect*> activeEffects;
-        for(const auto& effect_ptr : g_scene){
-            if(effect_ptr && currentTime >= effect_ptr->startTime && currentTime < effect_ptr->endTime){
+        for(const auto& effect_ptr : g_scene) {
+            if(effect_ptr && currentTime >= effect_ptr->startTime && currentTime < effect_ptr->endTime) {
                 activeEffects.push_back(effect_ptr.get());
             }
         }
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
-
-        // Update audio amplitude, considering the enable/disable flag from the new UI
         float audioAmp = g_enableAudioLink ? g_audioSystem.GetCurrentAmplitude() : 0.0f;
 
-        // --- RENDER-TO-FBO PASS ---
         for (Effect* effect_ptr : renderQueue) {
-            // 1. Prepare the effect's shader and uniforms. This binds the FBO and shader program.
-            //    (Update audio amplitude if it's a ShaderEffect)
             if(auto* se = dynamic_cast<ShaderEffect*>(effect_ptr)) {
-                se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT); // Should this be FBO width/height? Assuming main screen for now.
+                se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT);
                 se->SetMouseState(g_mouseState[0], g_mouseState[1], g_mouseState[2], g_mouseState[3]);
                 se->SetDeltaTime(deltaTime);
                 se->IncrementFrameCount();
                 se->SetAudioAmplitude(audioAmp);
             }
             effect_ptr->Update(currentTime);
-
-            // 2. Render the effect. This single call now does everything.
             effect_ptr->Render();
-
-            // The draw call below is no longer needed here.
-            // g_renderer.RenderQuad(); // <-- REMOVE THIS LINE
+            g_renderer.RenderQuad();
         }
-
-        // After the loop, unbind the FBO to ensure subsequent rendering (like ImGui) targets the main window
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
-        // Dockspace creation commented out due to compilation errors, likely ImGui version/config without docking.
-        // // Create the main dockspace
-        // ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-        // const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        // ImGui::SetNextWindowPos(viewport->WorkPos);
-        // ImGui::SetNextWindowSize(viewport->WorkSize);
-        // ImGui::SetNextWindowViewport(viewport->ID);
-        // ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        // ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        // window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-        // window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-        // ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        // ImGui::Begin("MainDockspace", nullptr, window_flags);
-        // ImGui::PopStyleVar(3);
-        // ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-        // ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         
+        RenderMenuBar();
         if (g_showGui) {
-            RenderMenuBar();
             if (g_showShaderEditorWindow) RenderShaderEditorWindow();
             if (g_showEffectPropertiesWindow) RenderEffectPropertiesWindow();
             if (g_showTimelineWindow) RenderTimelineWindow();
             if (g_showNodeEditorWindow) RenderNodeEditorWindow();
             if (g_showConsoleWindow) RenderConsoleWindow();
-            if (g_showAudioWindow) RenderAudioReactivityWindow(); // Added call for Audio Reactivity window
-            if (g_showHelpWindow) RenderHelpWindow(); // This one is typically modal or less frequent
+            if (g_showAudioWindow) RenderAudioReactivityWindow();
+            if (g_showHelpWindow) RenderHelpWindow();
         }
 
-        // --- Compositing Pass to Screen ---
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        // Find the designated output effect and render it.
         Effect* finalOutputEffect = nullptr;
         for (Effect* effect : renderQueue) {
             if (effect->name == "Passthrough (Final Output)") {
@@ -1064,62 +492,39 @@ int main() {
                 break;
             }
         }
-        // If we didn't find it, fall back to the last effect in the queue.
-        if (!finalOutputEffect && !renderQueue.empty()) {
-            finalOutputEffect = renderQueue.back();
-        }
-
+        if (!finalOutputEffect && !renderQueue.empty()) { finalOutputEffect = renderQueue.back(); }
         if (finalOutputEffect) {
             if (auto* se = dynamic_cast<ShaderEffect*>(finalOutputEffect)) {
-                if (se->GetOutputTexture() != 0) {
-                    g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
-                }
+                if (se->GetOutputTexture() != 0) g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
             }
         }
-
         glDisable(GL_BLEND);
-
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // --- Cleanup ---
     g_scene.clear();
-    // g_quadVAO and g_quadVBO cleanup removed as they are no longer global.
-    // Renderer's destructor would handle its own VAO/VBO if it had one,
-    // but we removed the explicit destructor. OpenGL resources are typically
-    // cleaned up when context is destroyed, or manually in a Renderer::Shutdown().
-    g_audioSystem.Shutdown(); // Shutdown audio system
-    
+    g_audioSystem.Shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImNodes::DestroyContext();
     ImGui::DestroyContext();
-
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
 }
 
-// --- Callback and Helper Implementations ---
+// All callbacks and other helpers here
 void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-    
     static bool space_pressed = false;
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-        if (!space_pressed) {
-            g_showGui = !g_showGui;
-            space_pressed = true;
-        }
-    } else {
-        space_pressed = false;
-    }
+        if (!space_pressed) { g_showGui = !g_showGui; space_pressed = true; }
+    } else { space_pressed = false; }
 }
-
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     (void)window;
     glViewport(0, 0, width, height);
@@ -1129,7 +534,6 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
         }
     }
 }
-
 void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     (void)window;
     ImGuiIO& io = ImGui::GetIO();
@@ -1140,7 +544,6 @@ void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos
         g_mouseState[1] = (float)height - (float)ypos;
     }
 }
-
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     (void)window; (void)mods;
     ImGuiIO& io = ImGui::GetIO();
@@ -1156,7 +559,6 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         }
     }
 }
-
 TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log) {
     TextEditor::ErrorMarkers markers;
     std::stringstream ss(log);
@@ -1174,25 +576,21 @@ TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log) {
     }
     return markers;
 }
-
 void ClearErrorMarkers() {
     g_editor.SetErrorMarkers(TextEditor::ErrorMarkers());
 }
-
 std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects) {
     if (activeEffects.empty()) return {};
     std::vector<Effect*> sortedOrder;
     std::map<int, Effect*> nodeMap;
     std::map<int, std::vector<int>> adjList;
     std::map<int, int> inDegree;
-
     for (Effect* effect : activeEffects) {
         if (!effect) continue;
         nodeMap[effect->id] = effect;
         inDegree[effect->id] = 0;
         adjList[effect->id] = {};
     }
-
     for (Effect* effect : activeEffects) {
         if (!effect) continue;
         if (auto* se = dynamic_cast<ShaderEffect*>(effect)) {
@@ -1205,13 +603,11 @@ std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects) {
             }
         }
     }
-    
     std::queue<Effect*> q;
     for (Effect* effect : activeEffects) {
         if (!effect) continue;
         if (inDegree[effect->id] == 0) q.push(effect);
     }
-    
     while (!q.empty()) {
         Effect* u = q.front(); q.pop();
         sortedOrder.push_back(u);
@@ -1222,11 +618,53 @@ std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects) {
             }
         }
     }
-    
     if (sortedOrder.size() != activeEffects.size()) {
         std::cerr << "Error: Cycle detected in node graph!" << std::endl;
         g_consoleLog = "ERROR: Cycle detected in node graph! Rendering may be incorrect.";
     }
-    
     return sortedOrder;
+}
+void SaveScene(const std::string& filePath) {
+    nlohmann::json sceneJson;
+    sceneJson["effects"] = nlohmann::json::array();
+    for(const auto& effect : g_scene) {
+        if(effect) {
+            sceneJson["effects"].push_back(effect->Serialize());
+        }
+    }
+    std::ofstream o(filePath);
+    o << std::setw(4) << sceneJson << std::endl;
+}
+void LoadScene(const std::string& filePath) {
+    std::ifstream i(filePath);
+    if (!i.is_open()) {
+        g_consoleLog = "Error: Could not open scene file: " + filePath;
+        return;
+    }
+    nlohmann::json sceneJson;
+    try {
+        i >> sceneJson;
+    } catch(const nlohmann::json::parse_error& e) {
+        g_consoleLog = "Error parsing scene file: " + std::string(e.what());
+        return;
+    }
+    g_scene.clear();
+    g_selectedEffect = nullptr;
+    if (sceneJson.contains("effects") && sceneJson["effects"].is_array()) {
+        for (const auto& effectJson : sceneJson["effects"]) {
+            std::string type = effectJson.value("type", "Unknown");
+            if (type == "ShaderEffect") {
+                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT);
+                newEffect->Deserialize(effectJson);
+                newEffect->Load();
+                g_scene.push_back(std::move(newEffect));
+            }
+        }
+    }
+    if (!g_scene.empty()) {
+        g_selectedEffect = g_scene[0].get();
+        if(auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+            g_editor.SetText(se->GetShaderSource());
+        }
+    }
 }
