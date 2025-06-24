@@ -1,11 +1,11 @@
 #include "ShaderEffect.h"
+#include "Renderer.h" // <-- ADD THIS INCLUDE
 #include "imgui.h"
 
 #include <fstream>
-#include <iostream> // For error logging related to FBO
+#include <iostream> // For error logging related to FBO, and cerr
 #include <sstream>
 #include <vector>
-#include <iostream> // For cerr
 #include <algorithm> // For std::sort, std::remove_if
 #include <regex>     // For parsing logic if moved here
 
@@ -385,8 +385,10 @@ void ShaderEffect::Render() {
         glUniform1f(m_iAudioAmpLoc, m_audioAmp);
     }
 
-    // NOTE: We no longer call any drawing functions here.
-    // The main loop will do that in the next step.
+    // 5. FINALLY, execute the draw call here.
+    Renderer::RenderQuad(); // <-- ADD THIS LINE
+
+    // The note about the main loop doing the drawing is no longer true.
 }
 
 void ShaderEffect::SetAudioAmplitude(float amp) {
