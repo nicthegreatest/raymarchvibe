@@ -70,6 +70,7 @@ private:
     // --- Shadertoy Predefined Uniform Values ---
     float m_iUserFloat1 = 0.5f;
     float m_iUserColor1[3] = {0.2f, 0.5f, 0.8f};
+    float m_audioAmp = 0.0f; // Audio amplitude
 
     // --- Uniform Locations ---
     // Common
@@ -93,6 +94,7 @@ private:
     GLint m_iUserFloat1Loc = -1;
     GLint m_iUserColor1Loc = -1;
     // Note: Locations for metadata-driven Shadertoy uniforms are stored in ShaderToyUniformControl structs
+    GLint m_iAudioAmpLoc = -1; // Location for iAudioAmp uniform
 
     // --- Parsed Controls from Shader Code ---
     std::vector<ShaderDefineControl> m_defineControls;
@@ -123,6 +125,7 @@ public:
     void SetDisplayResolution(int width, int height); // This will be used for iResolution uniform
     void SetDeltaTime(float dt) { m_deltaTime = dt; }
     void IncrementFrameCount() { m_frameCount++; }
+    void SetAudioAmplitude(float amp);
 
     // --- FBO specific methods ---
     GLuint GetOutputTexture() const override; // Override from Effect base
