@@ -65,6 +65,7 @@ static int g_selectedTimelineItem = -1;
 // Core Systems
 static Renderer g_renderer;
 static TextEditor g_editor;
+static AudioSystem g_audioSystem; // Global AudioSystem instance
 // static GLuint g_quadVAO = 0; // Shared VAO for fullscreen quad rendering - REMOVED
 // static GLuint g_quadVBO = 0; // REMOVED
 
@@ -75,6 +76,25 @@ static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
 
 // Input State
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
+// --- Placeholder Audio System ---
+// This is a dummy implementation. Replace with actual AudioSystem.
+class AudioSystem {
+public:
+    AudioSystem() {}
+    void Init() { /* In a real system: initialize audio input/processing */ }
+    float GetCurrentAmplitude() {
+        // Placeholder: return a value that changes over time, e.g., a sine wave
+        // This is just for testing the uniform.
+        return 0.5f + 0.5f * sin((float)glfwGetTime() * 2.0f);
+    }
+    void Shutdown() { /* In a real system: release audio resources */ }
+};
+// -------------------------------
+
+// Timeline State
+static bool g_timeline_paused = false;
+static float g_timeline_time = 0.0f;
 
 // --- Helper Functions ---
 
@@ -92,8 +112,88 @@ static Effect* FindEffectById(int effect_id) {
 // --- UI Window Implementations ---
 
 void RenderMenuBar() {
+// Forward declaration for a potential file dialog helper
+// bool ShowOpenFileDialog(std::string& outPath, const char* filter);
+// bool ShowSaveFileDialog(std::string& outPath, const char* filter, const char* defaultName = nullptr);
+
+
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Load Shader...")) {
+                // std::string filePath;
+                // if (ShowOpenFileDialog(filePath, "Shader Files (*.frag, *.fs){.frag,.fs},.*")) {
+                //     auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT); // Create with no initial file
+                //     if (newEffect->LoadShaderFromFile(filePath)) {
+                //         newEffect->name = filePath.substr(filePath.find_last_of("/\\") + 1);
+                //         // Set reasonable start/end times or make them user-configurable later
+                //         newEffect->startTime = g_timeline_time; // Start at current time
+                //         newEffect->endTime = g_timeline_time + 10.0f; // Default duration 10s
+                //         newEffect->Load(); // This compiles the shader etc.
+                //         g_scene.push_back(std::move(newEffect));
+                //         g_selectedEffect = g_scene.back().get(); // Select the new effect
+                //         if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                //             g_editor.SetText(se->GetShaderSource());
+                //             ClearErrorMarkers();
+                //         }
+                //         g_consoleLog = "Loaded and added shader: " + filePath;
+                //     } else {
+                //         g_consoleLog = "Error loading shader: " + newEffect->GetCompileErrorLog();
+                //     }
+                // }
+                g_consoleLog = "Load Shader: File dialog functionality not yet implemented.";
+            }
+            if (ImGui::MenuItem("Save Shader", nullptr, false, g_selectedEffect != nullptr)) {
+                // if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                //     if (!se->GetShaderFilePath().empty() && se->GetShaderFilePath() != "dynamic_source") {
+                //         std::ofstream outFile(se->GetShaderFilePath());
+                //         if (outFile.is_open()) {
+                //             outFile << se->GetShaderSource();
+                //             outFile.close();
+                //             g_consoleLog = "Shader saved to: " + se->GetShaderFilePath();
+                //         } else {
+                //             g_consoleLog = "Error: Could not open file for saving: " + se->GetShaderFilePath();
+                //         }
+                //     } else {
+                //         // Act as "Save Shader As..."
+                //         // std::string filePath;
+                //         // if (ShowSaveFileDialog(filePath, "Fragment Shader (*.frag){.frag},.*", "shader.frag")) {
+                //         //     se->SetShaderFilePath(filePath); // Update the effect's path
+                //         //     std::ofstream outFile(filePath);
+                //         //     if (outFile.is_open()) {
+                //         //         outFile << se->GetShaderSource();
+                //         //         outFile.close();
+                //         //         g_consoleLog = "Shader saved to: " + filePath;
+                //         //     } else {
+                //         //         g_consoleLog = "Error: Could not open file for saving: " + filePath;
+                //         //     }
+                //         // }
+                //         g_consoleLog = "Save Shader: File dialog for 'Save As' not yet implemented (selected shader has no path).";
+                //     }
+                // } else {
+                //     g_consoleLog = "Save Shader: No ShaderEffect selected or selected effect is not a shader.";
+                // }
+                g_consoleLog = "Save Shader: File dialog functionality not yet implemented.";
+            }
+            if (ImGui::MenuItem("Save Shader As...", nullptr, false, g_selectedEffect != nullptr)) {
+                // if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                //     // std::string filePath;
+                //     // if (ShowSaveFileDialog(filePath, "Fragment Shader (*.frag){.frag},.*", "shader.frag")) {
+                //     //     se->SetShaderFilePath(filePath); // Update the effect's path
+                //     //     std::ofstream outFile(filePath);
+                //     //     if (outFile.is_open()) {
+                //     //         outFile << se->GetShaderSource();
+                //     //         outFile.close();
+                //     //         g_consoleLog = "Shader saved to: " + filePath;
+                //     //     } else {
+                //     //         g_consoleLog = "Error: Could not open file for saving: " + filePath;
+                //     //     }
+                //     // }
+                // } else {
+                //     g_consoleLog = "Save Shader As: No ShaderEffect selected or selected effect is not a shader.";
+                // }
+                 g_consoleLog = "Save Shader As: File dialog functionality not yet implemented.";
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("Exit")) {
                 glfwSetWindowShouldClose(glfwGetCurrentContext(), true);
             }
@@ -161,9 +261,20 @@ void RenderTimelineWindow() {
         });
     }
 
-    float currentTime = (float)glfwGetTime();
+    // float currentTime = (float)glfwGetTime(); // Replaced by g_timeline_time
 
-    if (ImGui::SimpleTimeline("Scene", timelineItems, &currentTime, &g_selectedTimelineItem, 4, 0.0f, 60.0f)) {
+    if (ImGui::Button(g_timeline_paused ? "Play" : "Pause")) {
+        g_timeline_paused = !g_timeline_paused;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset")) {
+        g_timeline_time = 0.0f;
+    }
+    ImGui::SameLine();
+    ImGui::Text("Time: %.2f", g_timeline_time);
+    ImGui::Separator();
+
+    if (ImGui::SimpleTimeline("Scene", timelineItems, &g_timeline_time, &g_selectedTimelineItem, 4, 0.0f, 60.0f)) {
         if (g_selectedTimelineItem >= 0 && static_cast<size_t>(g_selectedTimelineItem) < g_scene.size()) {
             g_selectedEffect = g_scene[g_selectedTimelineItem].get();
             if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
@@ -253,6 +364,10 @@ void RenderNodeEditorWindow() {
 
 void RenderConsoleWindow() {
     ImGui::Begin("Console");
+    if (ImGui::Button("Clear")) { g_consoleLog = ""; }
+    ImGui::SameLine();
+    if (ImGui::Button("Copy")) { ImGui::SetClipboardText(g_consoleLog.c_str()); }
+    ImGui::Separator();
     ImGui::TextWrapped("%s", g_consoleLog.c_str());
     ImGui::End();
 }
@@ -308,11 +423,14 @@ int main() {
     ImGui::CreateContext();
     ImNodes::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // <-- DISABLED FOR COMPATIBILITY
+    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // <-- DISABLED FOR COMPATIBILITY (as per original file and compiler errors)
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
+
+    // --- Initialize Audio System ---
+    g_audioSystem.Init();
     
     // --- Scene Setup ---
     auto plasmaEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
@@ -343,9 +461,14 @@ int main() {
     float lastFrameTime = 0.0f;
     
     while (!glfwWindowShouldClose(window)) {
-        float currentTime = (float)glfwGetTime();
-        deltaTime = currentTime - lastFrameTime;
-        lastFrameTime = currentTime;
+        float currentFrameTime = (float)glfwGetTime();
+        deltaTime = currentFrameTime - lastFrameTime;
+        lastFrameTime = currentFrameTime;
+
+        if (!g_timeline_paused) {
+            g_timeline_time += deltaTime;
+        }
+        float currentTime = g_timeline_time; // Use this for all logic
 
         processInput(window);
         
@@ -357,29 +480,54 @@ int main() {
         }
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
 
+        float audioAmp = g_audioSystem.GetCurrentAmplitude(); // Keep this
+
+        // --- RENDER-TO-FBO PASS ---
         for (Effect* effect_ptr : renderQueue) {
+            // 1. Prepare the effect's shader and uniforms. This binds the FBO and shader program.
+            //    (Update audio amplitude if it's a ShaderEffect)
             if(auto* se = dynamic_cast<ShaderEffect*>(effect_ptr)) {
-                se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT);
+                se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT); // Should this be FBO width/height? Assuming main screen for now.
                 se->SetMouseState(g_mouseState[0], g_mouseState[1], g_mouseState[2], g_mouseState[3]);
                 se->SetDeltaTime(deltaTime);
                 se->IncrementFrameCount();
+                se->SetAudioAmplitude(audioAmp);
             }
-            effect_ptr->Update(currentTime); // Update time, etc.
-            effect_ptr->Render();            // Prepare effect's FBO, shader, uniforms
+            effect_ptr->Update(currentTime);
+            effect_ptr->Render();
 
-            // Now that the effect's FBO and shader are set up, draw the quad
+            // 2. Now that the correct FBO and shader are active, tell the renderer to draw the quad.
+            //    This executes the draw call, rendering the effect into its FBO.
             g_renderer.RenderQuad();
         }
-        // After all effects have rendered to their FBOs, unbind to draw to screen or for ImGui
+
+        // After the loop, unbind the FBO to ensure subsequent rendering (like ImGui) targets the main window
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+
+        // Dockspace creation commented out due to compilation errors, likely ImGui version/config without docking.
+        // // Create the main dockspace
+        // ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+        // const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        // ImGui::SetNextWindowPos(viewport->WorkPos);
+        // ImGui::SetNextWindowSize(viewport->WorkSize);
+        // ImGui::SetNextWindowViewport(viewport->ID);
+        // ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        // ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        // window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+        // window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+        // ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        // ImGui::Begin("MainDockspace", nullptr, window_flags);
+        // ImGui::PopStyleVar(3);
+        // ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+        // ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         
         if (g_showGui) {
-            RenderMenuBar();
+            RenderMenuBar(); // MenuBar would normally be part of the DockSpace window itself
             RenderShaderEditorWindow();
             RenderEffectPropertiesWindow();
             RenderTimelineWindow();
@@ -388,24 +536,38 @@ int main() {
             if (g_showHelpWindow) { RenderHelpWindow(); }
         }
 
+        // --- Compositing Pass to Screen ---
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        
+
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        
-        if (!renderQueue.empty()) {
-             Effect* finalEffect = renderQueue.back();
-             if (auto* se = dynamic_cast<ShaderEffect*>(finalEffect)) {
-                 if (se->GetOutputTexture() != 0) {
-                     g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
-                 }
-             }
+
+        // Find the designated output effect and render it.
+        Effect* finalOutputEffect = nullptr;
+        for (Effect* effect : renderQueue) {
+            if (effect->name == "Passthrough (Final Output)") {
+                finalOutputEffect = effect;
+                break;
+            }
         }
+        // If we didn't find it, fall back to the last effect in the queue.
+        if (!finalOutputEffect && !renderQueue.empty()) {
+            finalOutputEffect = renderQueue.back();
+        }
+
+        if (finalOutputEffect) {
+            if (auto* se = dynamic_cast<ShaderEffect*>(finalOutputEffect)) {
+                if (se->GetOutputTexture() != 0) {
+                    g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
+                }
+            }
+        }
+
         glDisable(GL_BLEND);
 
         ImGui::Render();
@@ -421,6 +583,7 @@ int main() {
     // Renderer's destructor would handle its own VAO/VBO if it had one,
     // but we removed the explicit destructor. OpenGL resources are typically
     // cleaned up when context is destroyed, or manually in a Renderer::Shutdown().
+    g_audioSystem.Shutdown(); // Shutdown audio system
     
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
