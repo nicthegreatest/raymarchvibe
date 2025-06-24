@@ -17,13 +17,10 @@ FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_Declare(
   ImGuiColorTextEdit
   GIT_REPOSITORY https://github.com/BalazsJako/ImGuiColorTextEdit.git
-  GIT_TAG master
-  # GIT_SUBMODULES "" # Keeping this commented for now to be as minimal as possible with MakeAvailable
+  GIT_TAG v2.1 # Pinned to a specific tag
 )
-FetchContent_MakeAvailable(ImGuiColorTextEdit) # This should declare, populate if needed, and make target available
+FetchContent_MakeAvailable(ImGuiColorTextEdit)
 
-# The add_executable line (around your line 79) that uses ${ImGuiColorTextEdit_SOURCE_DIR}
-# will fail if the _SOURCE_DIR is empty, leading to the //TextEditor.cpp error.
 option(RAYMARCHVIBE_ENABLE_SSL "Enable SSL support for httplib (requires OpenSSL)" ON)
 
 FetchContent_Declare(
@@ -31,37 +28,38 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
   GIT_TAG v0.15.3
 )
-FetchContent_GetProperties(httplib_fetch)
-if(NOT httplib_fetch_POPULATED)
-  FetchContent_Populate(httplib_fetch)
-endif()
+# FetchContent_MakeAvailable should handle population for header-only libraries if set up correctly by the lib
+FetchContent_MakeAvailable(httplib_fetch) # Simpler way if httplib's CMake supports it
+# If httplib_fetch doesn't create a target, direct include is still needed.
+# For now, assume FetchContent_MakeAvailable might not add include dirs for all header-only libs.
 include_directories(${httplib_fetch_SOURCE_DIR})
+
 
 FetchContent_Declare(
   glfw
   GIT_REPOSITORY https://github.com/glfw/glfw.git
-  GIT_TAG 3.4
+  GIT_TAG 3.4 # GLFW 3.4 is fine, could update to 3.4 if desired, but 3.3 is often a baseline
 )
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
-
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # Don't build examples
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)  # Don't build tests
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)   # Don't build docs
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW) # Policy for FetchContent with modern GLFW
 FetchContent_MakeAvailable(glfw)
 
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG v1.90.8
+  GIT_TAG v1.90.8 # Pinned to a specific tag
 )
-FetchContent_MakeAvailable(imgui) # This was correct, ensure it stays
+FetchContent_MakeAvailable(imgui)
 
-# ImGuizmo and imgui-timeline related lines are now fully removed.
-
-# ImGui Node Editor Library (manual file inclusion)
-# FetchContent_Declare(imnodes ...) REMOVED
-# FetchContent_MakeAvailable(imnodes) REMOVED
-# add_subdirectory(vendor/imnodes) # REMOVED - manual inclusion now
+# miniaudio
+FetchContent_Declare(
+  miniaudio
+  GIT_REPOSITORY https://github.com/mackron/miniaudio.git
+  GIT_TAG v0.11.21 # Pinned to a specific tag
+)
+FetchContent_MakeAvailable(miniaudio) # This makes miniaudio_SOURCE_DIR available
 
 add_library(glad_lib STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src/glad.c
@@ -94,44 +92,48 @@ add_executable(RaymarchVibe
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-  ${imgui_SOURCE_DIR}/imgui_demo.cpp
+  ${imgui_SOURCE_DIR}/imgui_demo.cpp # Consider making this conditional for release builds
   ${imguicolortextedit_SOURCE_DIR}/TextEditor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imnodes/imnodes.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog
-  src/AudioSystem.cpp # Added AudioSystem
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog/ImGuiFileDialog.cpp # Corrected path
+  src/AudioSystem.cpp # Ensure this file defines MINIAUDIO_IMPLEMENTATION if using miniaudio header-only
 )
 
 target_include_directories(RaymarchVibe PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/src
-  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imnodes # Added for vendor libraries like imnodes
-  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog # Added for ImGuiFileDialog
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imnodes
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
-  ${httplib_fetch_SOURCE_DIR}
-  ${imguicolortextedit_SOURCE_DIR}
-  ${miniaudio_SOURCE_DIR}
+  ${httplib_fetch_SOURCE_DIR} # For cpp-httplib
+  ${imguicolortextedit_SOURCE_DIR} # For ImGuiColorTextEdit
+  ${miniaudio_SOURCE_DIR} # For miniaudio
 )
 
 target_link_libraries(RaymarchVibe PRIVATE
   glad_lib
   nlohmann_json::nlohmann_json
-  glfw
+  glfw::glfw # Modern CMake target for GLFW
   OpenGL::GL
   Threads::Threads
-  # imnodes # Not a library target when manually adding .cpp
+  # imgui::imgui or imgui if provided by FetchContent for ImGui
+  # imnodes is compiled directly
 )
+# If imgui FetchContent provides a linkable target (e.g., imgui::imgui or imgui), link it:
+# target_link_libraries(RaymarchVibe PRIVATE imgui)
+
 
 if(RAYMARCHVIBE_ENABLE_SSL AND OpenSSL_FOUND)
   target_link_libraries(RaymarchVibe PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+  # Moved CPPHTTPLIB_OPENSSL_SUPPORT definition here for correctness
+  target_compile_definitions(RaymarchVibe PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 endif()
 
 target_compile_definitions(RaymarchVibe PRIVATE
   IMGUI_IMPL_OPENGL_LOADER_GLAD
 )
-if(RAYMARCHVIBE_ENABLE_SSL AND OpenSSL_FOUND)
-  target_compile_definitions(RaymarchVibe PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
-endif()
+# Removed CPPHTTPLIB_OPENSSL_SUPPORT from here, it's now conditional
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
   add_custom_command(
