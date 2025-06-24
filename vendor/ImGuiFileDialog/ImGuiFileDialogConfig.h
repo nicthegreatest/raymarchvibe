@@ -28,8 +28,7 @@
 //// QUICK PATH /////////////////
 /////////////////////////////////
 
-// the slash's buttons in path cna be used for quick select parallles directorie
-s
+// the slash's buttons in path cna be used for quick select parallles directories
 // #define USE_QUICK_PATH_SELECT
 
 /////////////////////////////////
@@ -37,12 +36,9 @@ s
 /////////////////////////////////
 
 // #define USE_THUMBNAILS
-// the thumbnail generation use the stb_image and stb_resize lib who need to def
-ine the implementation
-// btw if you already use them in your app, you can have compiler error due to "
-implemntation found in double"
-// so uncomment these line for prevent the creation of implementation of these l
-ibs again
+// the thumbnail generation use the stb_image and stb_resize lib who need to define the implementation
+// btw if you already use them in your app, you can have compiler error due to "implemntation found in double"
+// so uncomment these line for prevent the creation of implementation of these libs again
 // #define DONT_DEFINE_AGAIN__STB_IMAGE_IMPLEMENTATION
 // #define DONT_DEFINE_AGAIN__STB_IMAGE_RESIZE_IMPLEMENTATION
 // #define IMGUI_RADIO_BUTTON RadioButton
@@ -93,8 +89,7 @@ ibs again
 // widget
 // begin combo widget
 // #define IMGUI_BEGIN_COMBO ImGui::BeginCombo
-// when auto resized, FILTER_COMBO_MIN_WIDTH will be considered has minimum widt
-h
+// when auto resized, FILTER_COMBO_MIN_WIDTH will be considered has minimum width
 // FILTER_COMBO_AUTO_SIZE is enabled by default now to 1
 // uncomment if you want disable
 // #define FILTER_COMBO_AUTO_SIZE 0
@@ -122,8 +117,7 @@ h
 // #define dirNameString "Directory Path :"
 // #define buttonResetSearchString "Reset search"
 // #define buttonDriveString "Devices"
-// #define buttonEditPathString "Edit path\nYou can also right click on path but
-tons"
+// #define buttonEditPathString "Edit path\nYou can also right click on path buttons"
 // #define buttonResetPathString "Reset to current directory"
 // #define buttonCreateDirString "Create Directory"
 // #define OverWriteDialogTitleString "The file Already Exist !"
@@ -163,12 +157,10 @@ tons"
 // #define fileSizeMegaBytes "Mo"
 // #define fileSizeGigaBytes "Go"
 
-// default table sort field (must be FIELD_FILENAME, FIELD_TYPE, FIELD_SIZE, FIE
-LD_DATE or FIELD_THUMBNAILS)
+// default table sort field (must be FIELD_FILENAME, FIELD_TYPE, FIELD_SIZE, FIELD_DATE or FIELD_THUMBNAILS)
 // #define defaultSortField FIELD_FILENAME
 
-// default table sort order for each field (true => Descending, false => Ascendi
-ng)
+// default table sort order for each field (true => Descending, false => Ascending)
 // #define defaultSortOrderFilename true
 // #define defaultSortOrderType true
 // #define defaultSortOrderSize true
@@ -194,8 +186,7 @@ ng)
 //// PLACES FEATURES : BOOKMARKS /////
 //////////////////////////////////////
 
-// a group for bookmarks will be added by default, but you can also create it yo
-urself and many more
+// a group for bookmarks will be added by default, but you can also create it yourself and many more
 // #define USE_PLACES_BOOKMARKS
 // #define PLACES_BOOKMARK_DEFAULT_OPEPEND true
 // #define placesBookmarksGroupName "Bookmarks"
@@ -205,8 +196,7 @@ urself and many more
 //// PLACES FEATURES : DEVICES ///////
 //////////////////////////////////////
 
-// a group for system devices (returned by IFileSystem), but you can also add yo
-urs
+// a group for system devices (returned by IFileSystem), but you can also add yours
 // by ex if you would like to display a specific icon for some devices
 // #define USE_PLACES_DEVICES
 // #define PLACES_DEVICES_DEFAULT_OPEPEND true
