@@ -58,13 +58,10 @@ FetchContent_MakeAvailable(imgui) # This was correct, ensure it stays
 
 # ImGuizmo and imgui-timeline related lines are now fully removed.
 
-# ImGui Node Editor Library
-FetchContent_Declare(
-  imnodes
-  GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
-  GIT_TAG f7767935149f95515904833351673998101781f9 # Specific commit hash for tag 0.5
-)
-# FetchContent_MakeAvailable(imnodes) # Temporarily commented out
+# ImGui Node Editor Library (manual file inclusion)
+# FetchContent_Declare(imnodes ...) REMOVED
+# FetchContent_MakeAvailable(imnodes) REMOVED
+# add_subdirectory(vendor/imnodes) # REMOVED - manual inclusion now
 
 add_library(glad_lib STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src/glad.c
@@ -99,18 +96,16 @@ add_executable(RaymarchVibe
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imguicolortextedit_SOURCE_DIR}/TextEditor.cpp
-  # Removed ImGuizmo.cpp and ImGuiTimeline.cpp
-  # ${imnodes_SOURCE_DIR}/imnodes.cpp # Temporarily commented out
+  src/vendor/imnodes/imnodes.cpp # Manually added imnodes source
 )
 
 target_include_directories(RaymarchVibe PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/vendor # Added for vendor libraries like imnodes
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${httplib_fetch_SOURCE_DIR}
   ${imguicolortextedit_SOURCE_DIR}
-  # Removed ImGuizmo_SOURCE_DIR and imgui-timeline_SOURCE_DIR
-  # ${imnodes_SOURCE_DIR} # Temporarily commented out
 )
 
 target_link_libraries(RaymarchVibe PRIVATE
@@ -119,6 +114,7 @@ target_link_libraries(RaymarchVibe PRIVATE
   glfw
   OpenGL::GL
   Threads::Threads
+  # imnodes # Not a library target when manually adding .cpp
 )
 
 if(RAYMARCHVIBE_ENABLE_SSL AND OpenSSL_FOUND)
