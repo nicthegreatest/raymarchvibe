@@ -9,12 +9,16 @@ public:
     Renderer() = default;
     bool Init();
     void RenderFullscreenTexture(GLuint textureID);
-    void RenderQuad(); // This will draw the quad using its own VAO
+
+    // Make this method static so it can be called from anywhere
+    static void RenderQuad();
 
 private:
     GLuint m_compositingProgram = 0;
-    GLuint m_quadVAO = 0;
-    GLuint m_quadVBO = 0;
+
+    // Make the VAO and VBO static as well
+    static GLuint s_quadVAO;
+    static GLuint s_quadVBO;
 
     void setupQuad();
     bool setupCompositingShader();
