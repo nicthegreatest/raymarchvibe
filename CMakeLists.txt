@@ -97,12 +97,15 @@ add_executable(RaymarchVibe
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imguicolortextedit_SOURCE_DIR}/TextEditor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imnodes/imnodes.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog/ImGuiFileDialog.cpp
+  src/AudioSystem.cpp # Added AudioSystem
 )
 
 target_include_directories(RaymarchVibe PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imnodes # Added for vendor libraries like imnodes
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog # Added for ImGuiFileDialog
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${httplib_fetch_SOURCE_DIR}
