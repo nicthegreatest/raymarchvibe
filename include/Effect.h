@@ -31,6 +31,18 @@ public:
     // Gets the primary output texture of this effect (e.g., its FBO texture).
     virtual GLuint GetOutputTexture() const { return 0; }
 
+    // --- File Path and Naming ---
+    virtual void SetSourceFilePath(const std::string& path) { (void)path; /* Base implementation can be empty */ }
+    virtual const std::string& GetSourceFilePath() const { static std::string temp = ""; return temp; }
+    virtual void SetEffectName(const std::string& name) { this->name = name; }
+    virtual const std::string& GetEffectName() const { return this->name; }
+
+    // --- Serialization ---
+    virtual nlohmann::json Serialize() const = 0;
+    virtual void Deserialize(const nlohmann::json& data) = 0;
+
+    // --- Parameter Reset ---
+    virtual void ResetParameters() = 0;
 
     // --- Common properties for all effects ---
     std::string name = "Untitled Effect";

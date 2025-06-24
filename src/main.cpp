@@ -22,6 +22,7 @@
 #include "Effect.h"
 #include "ShaderEffect.h"
 #include "Renderer.h"
+#include "ShadertoyIntegration.h" // Added for Shadertoy fetching
 
 // --- ImGui and Widget Headers ---
 #include "imgui.h"
@@ -30,6 +31,7 @@
 #include "TextEditor.h"
 #include "ImGuiSimpleTimeline.h"
 #include "imnodes.h"
+#include "ImGuiFileDialog.h" // Added for file dialog
 
 
 // Window dimensions
@@ -84,9 +86,17 @@ static AudioSystem g_audioSystem; // Global AudioSystem instance
 // static GLuint g_quadVBO = 0; // REMOVED
 
 // UI State
-static bool g_showGui = true;
+static bool g_showGui = true; // Overall GUI toggle
 static bool g_showHelpWindow = false;
 static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
+
+// Individual window visibility toggles
+static bool g_showShaderEditorWindow = true;
+static bool g_showEffectPropertiesWindow = true;
+static bool g_showTimelineWindow = true;
+static bool g_showNodeEditorWindow = true;
+static bool g_showConsoleWindow = true;
+// g_showHelpWindow is already used for the About/Help window.
 
 // Input State
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -111,37 +121,47 @@ static Effect* FindEffectById(int effect_id) {
 // --- UI Window Implementations ---
 
 void RenderMenuBar() {
-// Forward declaration for a potential file dialog helper
-// bool ShowOpenFileDialog(std::string& outPath, const char* filter);
-// bool ShowSaveFileDialog(std::string& outPath, const char* filter, const char* defaultName = nullptr);
-
-
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Load Shader...")) {
-                // std::string filePath;
-                // if (ShowOpenFileDialog(filePath, "Shader Files (*.frag, *.fs){.frag,.fs},.*")) {
-                //     auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT); // Create with no initial file
-                //     if (newEffect->LoadShaderFromFile(filePath)) {
-                //         newEffect->name = filePath.substr(filePath.find_last_of("/\\") + 1);
-                //         // Set reasonable start/end times or make them user-configurable later
-                //         newEffect->startTime = g_timeline_time; // Start at current time
-                //         newEffect->endTime = g_timeline_time + 10.0f; // Default duration 10s
-                //         newEffect->Load(); // This compiles the shader etc.
-                //         g_scene.push_back(std::move(newEffect));
-                //         g_selectedEffect = g_scene.back().get(); // Select the new effect
-                //         if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                //             g_editor.SetText(se->GetShaderSource());
-                //             ClearErrorMarkers();
-                //         }
-                //         g_consoleLog = "Loaded and added shader: " + filePath;
-                //     } else {
-                //         g_consoleLog = "Error loading shader: " + newEffect->GetCompileErrorLog();
-                //     }
-                // }
-                g_consoleLog = "Load Shader: File dialog functionality not yet implemented.";
+                // Define a key for the file dialog
+                const char* dlgKey = "LoadShaderDlgKey";
+                // Set the allowed file extensions
+                const char* filters = "Shader Files (*.frag, *.fs){.frag,.fs},.*";
+                // Open the dialog
+                ImGuiFileDialog::Instance()->OpenDialog(dlgKey, "Choose Shader File", filters, ".");
             }
-            if (ImGui::MenuItem("Save Shader", nullptr, false, g_selectedEffect != nullptr)) {
+            bool canSave = false;
+            if (g_selectedEffect) {
+                if (dynamic_cast<ShaderEffect*>(g_selectedEffect.get())) {
+                    canSave = true;
+                }
+            }
+            if (ImGui::MenuItem("Save Shader", nullptr, false, canSave)) {
+                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect.get())) {
+                    const std::string& currentPath = se->GetSourceFilePath();
+                    if (!currentPath.empty() && currentPath.rfind("shadertoy://", 0) != 0 && currentPath != "dynamic_source") {
+                        std::string codeToSave = g_editor.GetText();
+                        std::ofstream outFile(currentPath);
+                        if (outFile.is_open()) {
+                            outFile << codeToSave;
+                            outFile.close();
+                            g_consoleLog = "Shader saved to: " + currentPath;
+                            // Optional: update m_shaderSourceCode in ShaderEffect if g_editor is canonical
+                            // se->ApplyShaderCode(codeToSave); // To ensure internal state matches saved state
+                        } else {
+                            g_consoleLog = "Error: Could not open file for saving: " + currentPath;
+                        }
+                    } else {
+                        // No valid path, or it's a special path; behave like "Save As..."
+                        // For now, just log. "Save As" will handle the dialog.
+                        g_consoleLog = "Save Shader: No file path associated or special path. Use 'Save As...'.";
+                        // Trigger Save As dialog directly (optional here, or user clicks Save As)
+                        // ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Choose File Location", ".frag", ".");
+                    }
+                }
+            }
+            if (ImGui::MenuItem("Save Shader As...", nullptr, false, g_selectedEffect != nullptr)) {
                 // if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
                 //     if (!se->GetShaderFilePath().empty() && se->GetShaderFilePath() != "dynamic_source") {
                 //         std::ofstream outFile(se->GetShaderFilePath());
@@ -173,24 +193,43 @@ void RenderMenuBar() {
                 // }
                 g_consoleLog = "Save Shader: File dialog functionality not yet implemented.";
             }
-            if (ImGui::MenuItem("Save Shader As...", nullptr, false, g_selectedEffect != nullptr)) {
-                // if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                //     // std::string filePath;
-                //     // if (ShowSaveFileDialog(filePath, "Fragment Shader (*.frag){.frag},.*", "shader.frag")) {
-                //     //     se->SetShaderFilePath(filePath); // Update the effect's path
-                //     //     std::ofstream outFile(filePath);
-                //     //     if (outFile.is_open()) {
-                //     //         outFile << se->GetShaderSource();
-                //     //         outFile.close();
-                //     //         g_consoleLog = "Shader saved to: " + filePath;
-                //     //     } else {
-                //     //         g_consoleLog = "Error: Could not open file for saving: " + filePath;
-                //     //     }
-                //     // }
-                // } else {
-                //     g_consoleLog = "Save Shader As: No ShaderEffect selected or selected effect is not a shader.";
-                // }
-                 g_consoleLog = "Save Shader As: File dialog functionality not yet implemented.";
+            // Note: The following "Save Shader As..." is duplicated from the one below.
+            // This one will be replaced by the new logic.
+            if (ImGui::MenuItem("Save Shader As...", nullptr, false, canSave)) { // Reuse canSave logic from "Save Shader"
+                if (dynamic_cast<ShaderEffect*>(g_selectedEffect.get())) {
+                    const char* dlgKey = "SaveShaderAsDlgKey";
+                    const char* filters = "Shader Files (*.frag, *.fs){.frag,.fs},.*";
+                    std::string defaultName = "untitled.frag";
+                    if (g_selectedEffect) {
+                        std::string currentEffectName = g_selectedEffect->GetEffectName();
+                        const std::string& currentEffectPath = g_selectedEffect->GetSourceFilePath();
+
+                        if (!currentEffectPath.empty() &&
+                            currentEffectPath.find("dynamic_source") == std::string::npos &&
+                            currentEffectPath.find("shadertoy://") == std::string::npos) {
+                            size_t lastSlash = currentEffectPath.find_last_of("/\\");
+                            if (lastSlash != std::string::npos) {
+                                defaultName = currentEffectPath.substr(lastSlash + 1);
+                            } else {
+                                defaultName = currentEffectPath;
+                            }
+                        } else if (!currentEffectName.empty() && currentEffectName != "Untitled Effect") {
+                            if (currentEffectName.length() > 5 && (currentEffectName.substr(currentEffectName.length() - 5) == ".frag" || currentEffectName.substr(currentEffectName.length() - 3) == ".fs")) {
+                                defaultName = currentEffectName;
+                            } else {
+                                defaultName = currentEffectName + ".frag";
+                            }
+                        }
+                    }
+                    ImGuiFileDialog::Instance()->OpenDialog(dlgKey, "Save Shader As...", filters, ".", defaultName.c_str());
+                }
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Save Scene...")) {
+                ImGuiFileDialog::Instance()->OpenDialog("SaveSceneDlgKey", "Save Scene File", ".json", ".");
+            }
+            if (ImGui::MenuItem("Load Scene...")) {
+                ImGuiFileDialog::Instance()->OpenDialog("LoadSceneDlgKey", "Load Scene File", ".json", ".");
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Exit")) {
@@ -199,7 +238,13 @@ void RenderMenuBar() {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("Toggle GUI", "Spacebar", &g_showGui);
+            ImGui::MenuItem("Shader Editor", nullptr, &g_showShaderEditorWindow);
+            ImGui::MenuItem("Effect Properties", nullptr, &g_showEffectPropertiesWindow);
+            ImGui::MenuItem("Timeline", nullptr, &g_showTimelineWindow);
+            ImGui::MenuItem("Node Editor", nullptr, &g_showNodeEditorWindow);
+            ImGui::MenuItem("Console", nullptr, &g_showConsoleWindow);
+            ImGui::Separator();
+            ImGui::MenuItem("Toggle All GUI", "Spacebar", &g_showGui);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Help")) {
@@ -207,6 +252,167 @@ void RenderMenuBar() {
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
+    }
+
+    // Handle "Load Shader" Dialog
+    const char* loadShaderDlgKey = "LoadShaderDlgKey";
+    if (ImGuiFileDialog::Instance()->Display(loadShaderDlgKey)) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
+            std::string fileName = ImGuiFileDialog::Instance()->GetCurrentFileName(); // Shorter name for display
+
+            // Use SCR_WIDTH, SCR_HEIGHT for now, consider dynamic sizing later
+            auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT);
+
+            // SetEffectName - will be added to Effect.h/ShaderEffect.h
+            // newEffect->SetEffectName(fileName); // Plan step
+            newEffect->name = fileName; // Direct assignment for now
+
+            if (newEffect->LoadShaderFromFile(filePath)) {
+                // SetSourceFilePath - will be added to Effect.h/ShaderEffect.h
+                // newEffect->SetSourceFilePath(filePath); // Plan step
+
+                newEffect->startTime = g_timeline_time;
+                newEffect->endTime = g_timeline_time + 10.0f;
+
+                // newEffect->Load() should compile the shader and parse controls.
+                // ShaderEffect::LoadShaderFromFile already calls ApplyShaderCode, which does this.
+                // So, an explicit newEffect->Load() might be redundant if LoadShaderFromFile is comprehensive.
+                // For now, let's assume LoadShaderFromFile prepares it sufficiently or calls Load internally.
+                // If ApplyShaderCode is not called by LoadShaderFromFile, then newEffect->Load() is needed.
+                // ShaderEffect::Load() calls ApplyShaderCode(m_shaderSourceCode).
+                // Let's ensure LoadShaderFromFile populates m_shaderSourceCode, then call Load().
+                newEffect->Load(); // This will call ApplyShaderCode with the source loaded by LoadShaderFromFile
+
+                g_scene.push_back(std::move(newEffect));
+                g_selectedEffect = g_scene.back().get();
+                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                    g_editor.SetText(se->GetShaderSource());
+                    ClearErrorMarkers(); // Clear errors from previous shader
+                    const std::string& compileLog = se->GetCompileErrorLog();
+                    if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
+                        g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
+                        g_consoleLog = "Loaded shader " + fileName + " with errors/warnings:\n" + compileLog;
+                    } else {
+                        g_consoleLog = "Loaded shader: " + fileName;
+                    }
+                } else {
+                    g_consoleLog = "Loaded shader: " + fileName + " (not a ShaderEffect or casting failed)";
+                }
+            } else {
+                g_consoleLog = "Error loading shader: " + filePath + "\n" + newEffect->GetCompileErrorLog();
+            }
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    // Handle "Save Shader As" Dialog
+    const char* saveShaderAsDlgKey = "SaveShaderAsDlgKey";
+    if (ImGuiFileDialog::Instance()->Display(saveShaderAsDlgKey)) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
+            std::string fileName = ImGuiFileDialog::Instance()->GetCurrentFileName(); // Just the file name part
+
+            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect.get())) {
+                std::string codeToSave = g_editor.GetText();
+                std::ofstream outFile(filePath);
+                if (outFile.is_open()) {
+                    outFile << codeToSave;
+                    outFile.close();
+                    g_consoleLog = "Shader saved to: " + filePath;
+                    se->SetSourceFilePath(filePath);
+                    se->SetEffectName(fileName);
+                    // Optional: If editor's text should become the new canonical source in ShaderEffect
+                    // se->LoadShaderFromSource(codeToSave); // This would re-ApplyShaderCode
+                    // se->Load(); // To re-trigger compilation and parsing if LoadShaderFromSource doesn't
+                } else {
+                    g_consoleLog = "Error: Could not open file for saving: " + filePath;
+                }
+            } else {
+                g_consoleLog = "Error: No ShaderEffect selected for 'Save As'.";
+            }
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    // Handle "Save Scene" Dialog
+    if (ImGuiFileDialog::Instance()->Display("SaveSceneDlgKey")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
+            nlohmann::json sceneJson;
+            sceneJson["effects"] = nlohmann::json::array();
+            for (const auto& effect : g_scene) {
+                if (effect) { // Should always be true with unique_ptr unless moved from
+                    sceneJson["effects"].push_back(effect->Serialize());
+                }
+            }
+            std::ofstream o(filePath);
+            if (o.is_open()) {
+                o << std::setw(4) << sceneJson << std::endl; // Pretty print
+                o.close();
+                g_consoleLog = "Scene saved to: " + filePath;
+            } else {
+                g_consoleLog = "Error: Could not open scene file for saving: " + filePath;
+            }
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    // Handle "Load Scene" Dialog
+    if (ImGuiFileDialog::Instance()->Display("LoadSceneDlgKey")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
+            std::ifstream i(filePath);
+            if (i.is_open()) {
+                nlohmann::json sceneJson;
+                try {
+                    i >> sceneJson;
+                    i.close();
+
+                    g_scene.clear();
+                    g_selectedEffect = nullptr;
+                    g_selectedTimelineItem = -1;
+                    g_editor.SetText(""); // Clear editor
+                    ClearErrorMarkers();
+
+
+                    if (sceneJson.contains("effects") && sceneJson["effects"].is_array()) {
+                        for (const auto& effectJson : sceneJson["effects"]) {
+                            std::string type = effectJson.value("type", "Unknown");
+                            if (type == "ShaderEffect") {
+                                // Pass SCR_WIDTH, SCR_HEIGHT as default, Deserialize might override FBO settings if saved
+                                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT);
+                                newEffect->Deserialize(effectJson);
+                                // Important: Call Load() after Deserialize to compile shader, parse controls, create FBO
+                                newEffect->Load();
+                                g_scene.push_back(std::move(newEffect));
+                            } else {
+                                g_consoleLog += "Warning: Unknown effect type '" + type + "' in scene file. Skipping.\n";
+                            }
+                        }
+                        g_consoleLog = "Scene loaded from: " + filePath;
+                        if (!g_scene.empty()) {
+                            g_selectedEffect = g_scene[0].get(); // Select first effect
+                             if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                                g_editor.SetText(se->GetShaderSource());
+                                // Optionally display compile log of first shader
+                            }
+                        }
+                    } else {
+                        g_consoleLog = "Error: Scene file " + filePath + " is missing 'effects' array.";
+                    }
+                } catch (const nlohmann::json::parse_error& e) {
+                    i.close();
+                    g_consoleLog = "Error parsing scene file " + filePath + ":\n" + e.what();
+                } catch (const nlohmann::json::exception& e) {
+                     i.close();
+                    g_consoleLog = "Error processing scene data from " + filePath + ":\n" + e.what();
+                }
+            } else {
+                g_consoleLog = "Error: Could not open scene file for loading: " + filePath;
+            }
+        }
+        ImGuiFileDialog::Instance()->Close();
     }
 }
 
@@ -229,12 +435,83 @@ void RenderShaderEditorWindow() {
     ImGui::Text("Mouse: (%.1f, %.1f)", g_mouseState[0], g_mouseState[1]);
 
     g_editor.Render("TextEditor");
+
+    ImGui::Separator();
+    ImGui::Text("Fetch Shadertoy:");
+    ImGui::SameLine();
+    static char shadertoyIdBuffer[256] = "";
+    ImGui::InputText("##ShadertoyID", shadertoyIdBuffer, sizeof(shadertoyIdBuffer), ImGuiInputTextFlags_Chars tidigareNoSpace); // Allow typical Shadertoy ID chars
+    ImGui::SameLine();
+    if (ImGui::Button("Fetch##Shadertoy")) {
+        std::string idOrUrl = shadertoyIdBuffer;
+        std::string shadertoyId = ShadertoyIntegration::ExtractId(idOrUrl);
+        if (!shadertoyId.empty()) {
+            // API Key: For now, assuming FetchCode can fetch public shaders without an API key,
+            // or it has a way to get it (e.g. environment variable).
+            // If an API key is strictly needed and not globally available, this needs more setup.
+            std::string apiKey = ""; // Placeholder for API key
+            std::string errorMsg;
+            std::string fetchedCode = ShadertoyIntegration::FetchCode(shadertoyId, apiKey, errorMsg);
+
+            if (!fetchedCode.empty()) {
+                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT, true);
+                newEffect->name = "Shadertoy - " + shadertoyId;
+                newEffect->SetSourceFilePath("shadertoy://" + shadertoyId); // Virtual path
+
+                // LoadShaderFromSource should set m_shaderSourceCode and m_isShadertoyMode
+                if (newEffect->LoadShaderFromSource(fetchedCode)) {
+                     // newEffect->SetShadertoyMode(true); // Should be handled by LoadShaderFromSource or constructor flag
+                }
+                newEffect->Load(); // Compile, parse controls, init FBO
+
+                g_scene.push_back(std::move(newEffect));
+                g_selectedEffect = g_scene.back().get();
+                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                    g_editor.SetText(se->GetShaderSource());
+                    ClearErrorMarkers();
+                     const std::string& compileLog = se->GetCompileErrorLog();
+                    if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
+                        g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
+                         g_consoleLog = "Fetched Shadertoy " + shadertoyId + " with errors/warnings:\n" + compileLog;
+                    } else {
+                        g_consoleLog = "Fetched and loaded Shadertoy: " + shadertoyId;
+                    }
+                }
+                shadertoyIdBuffer[0] = '\0'; // Clear input field
+            } else {
+                g_consoleLog = "Error fetching Shadertoy " + shadertoyId + ": " + errorMsg;
+            }
+        } else {
+            g_consoleLog = "Invalid Shadertoy ID or URL: " + idOrUrl;
+        }
+    }
+
     ImGui::End();
 }
 
 void RenderEffectPropertiesWindow() {
     ImGui::Begin("Effect Properties");
     if (g_selectedEffect) {
+        if (ImGui::Button("Reset Parameters")) {
+            g_selectedEffect->ResetParameters();
+            // If the selected effect is a ShaderEffect and its source was modified by ResetParameters
+            // (e.g. define toggles), update the editor.
+            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                g_editor.SetText(se->GetShaderSource());
+                // Also, clear and potentially update error markers based on the re-application of code
+                ClearErrorMarkers();
+                const std::string& log = se->GetCompileErrorLog();
+                if (!log.empty() && log.find("Successfully") == std::string::npos && log.find("applied successfully") == std::string::npos) {
+                    g_editor.SetErrorMarkers(ParseGlslErrorLog(log));
+                    g_consoleLog = "Parameters reset. Shader status:\n" + log;
+                } else {
+                    g_consoleLog = "Parameters reset successfully.";
+                }
+            } else {
+                 g_consoleLog = "Parameters reset for non-shader effect.";
+            }
+        }
+        ImGui::Separator();
         g_selectedEffect->RenderUI();
     } else {
         ImGui::Text("No effect selected.");
@@ -536,13 +813,13 @@ int main() {
         // ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         
         if (g_showGui) {
-            RenderMenuBar(); // MenuBar would normally be part of the DockSpace window itself
-            RenderShaderEditorWindow();
-            RenderEffectPropertiesWindow();
-            RenderTimelineWindow();
-            RenderNodeEditorWindow();
-            RenderConsoleWindow();
-            if (g_showHelpWindow) { RenderHelpWindow(); }
+            RenderMenuBar();
+            if (g_showShaderEditorWindow) RenderShaderEditorWindow();
+            if (g_showEffectPropertiesWindow) RenderEffectPropertiesWindow();
+            if (g_showTimelineWindow) RenderTimelineWindow();
+            if (g_showNodeEditorWindow) RenderNodeEditorWindow();
+            if (g_showConsoleWindow) RenderConsoleWindow();
+            if (g_showHelpWindow) RenderHelpWindow(); // This one is typically modal or less frequent
         }
 
         // --- Compositing Pass to Screen ---
