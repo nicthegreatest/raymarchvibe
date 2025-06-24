@@ -61,6 +61,9 @@ private:
 const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 
+// --- Global Constants ---
+static const std::string PASSTHROUGH_EFFECT_NAME = "Passthrough (Final Output)";
+
 // --- Forward Declarations ---
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
@@ -131,9 +134,13 @@ void RenderMenuBar() {
                         std::ofstream outFile(currentPath);
                         if (outFile.is_open()) {
                             outFile << g_editor.GetText();
-                            g_consoleLog = "Shader saved to: " + currentPath;
+                            if (!outFile.good()) { // Check after writing
+                                g_consoleLog = "Error: Failed to write shader to file: " + currentPath;
+                            } else {
+                                g_consoleLog = "Shader saved to: " + currentPath;
+                            }
                         } else {
-                            g_consoleLog = "Error: Could not open file for saving: " + currentPath;
+                            g_consoleLog = "Error: Could not open file for saving shader: " + currentPath;
                         }
                     } else {
                         ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.*");
@@ -203,7 +210,9 @@ void RenderShaderEditorWindow() {
             std::string apiKey = "";
             std::string errorMsg;
             std::string fetchedCode = ShadertoyIntegration::FetchCode(shadertoyId, apiKey, errorMsg);
-            if (!fetchedCode.empty()) {
+            if (fetchedCode.empty()) { // Check if fetch failed first
+                g_consoleLog = "Error fetching Shadertoy " + shadertoyId + ": " + (errorMsg.empty() ? "Received empty code." : errorMsg);
+            } else {
                 auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT, true);
                 newEffect->name = "Shadertoy - " + shadertoyId;
                 newEffect->SetSourceFilePath("shadertoy://" + shadertoyId);
@@ -487,7 +496,7 @@ int main() {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         Effect* finalOutputEffect = nullptr;
         for (Effect* effect : renderQueue) {
-            if (effect->name == "Passthrough (Final Output)") {
+            if (effect->name == PASSTHROUGH_EFFECT_NAME) { // Used constant
                 finalOutputEffect = effect;
                 break;
             }
@@ -569,9 +578,13 @@ TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log) {
     auto trim_local = [](const std::string& s){ auto f=s.find_first_not_of(" \t\r\n"); return (f==std::string::npos)?"":s.substr(f, s.find_last_not_of(" \t\r\n")-f+1);};
     while(std::getline(ss, line)) {
         if(std::regex_search(line, m, r) && m.size() > 2) {
-            try { markers[std::stoi(m[2].str())] = trim_local(m[3].str()); } catch (...) {}
+            try { markers[std::stoi(m[2].str())] = trim_local(m[3].str()); }
+            catch (const std::invalid_argument& ia) { /* g_consoleLog += "GLSL Parser: Invalid argument for stoi: " + std::string(ia.what()) + "\n"; */ }
+            catch (const std::out_of_range& oor) { /* g_consoleLog += "GLSL Parser: Out of range for stoi: " + std::string(oor.what()) + "\n"; */ }
         } else if (std::regex_search(line, m, r2) && m.size() > 2) {
-             try { markers[std::stoi(m[2].str())] = trim_local(line); } catch (...) {}
+             try { markers[std::stoi(m[2].str())] = trim_local(line); }
+             catch (const std::invalid_argument& ia) { /* g_consoleLog += "GLSL Parser: Invalid argument for stoi: " + std::string(ia.what()) + "\n"; */ }
+             catch (const std::out_of_range& oor) { /* g_consoleLog += "GLSL Parser: Out of range for stoi: " + std::string(oor.what()) + "\n"; */ }
         }
     }
     return markers;
@@ -633,7 +646,16 @@ void SaveScene(const std::string& filePath) {
         }
     }
     std::ofstream o(filePath);
+    if (!o.is_open()) {
+        g_consoleLog = "Error: Could not open file for saving scene: " + filePath;
+        return;
+    }
     o << std::setw(4) << sceneJson << std::endl;
+    if (!o.good()) {
+        g_consoleLog = "Error: Failed to write scene to file: " + filePath;
+    } else {
+        g_consoleLog = "Scene saved to: " + filePath; // Success message
+    }
 }
 void LoadScene(const std::string& filePath) {
     std::ifstream i(filePath);
