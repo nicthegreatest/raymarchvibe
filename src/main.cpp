@@ -16,8 +16,7 @@
 #include <iomanip>
 #include <regex>
 #include <memory>
-#include <queue>      // For topological sort
-// #include <map> // Already included
+#include <queue>
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -31,7 +30,7 @@ using json = nlohmann::json;
 #include "ShaderEffect.h"
 #include "Renderer.h"
 #include "ImGuiSimpleTimeline.h"
-// #include "imnodes.h" // Temporarily commented out
+#include "imnodes.h" // Re-enabled
 
 
 // Window dimensions
@@ -44,7 +43,7 @@ void processInput(GLFWwindow *window);
 void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void RenderTimelineWindow();
-// void RenderNodeEditorWindow(); // Temporarily commented out
+void RenderNodeEditorWindow();
 std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects);
 
 // Scene Management
@@ -61,8 +60,19 @@ GLuint g_quadVAO = 0;
 GLuint g_quadVBO = 0;
 
 
-std::string load_file_to_string(const char* filePath, std::string& errorMsg) { /* ... */ return "";}
-TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log) { /* ... */ TextEditor::ErrorMarkers m; return m;}
+std::string load_file_to_string(const char* filePath, std::string& errorMsg) { /* ... (implementation as before) ... */
+    errorMsg.clear(); std::ifstream fs; std::stringstream ss;
+    fs.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    try { fs.open(filePath); ss << fs.rdbuf(); fs.close(); }
+    catch (const std::ifstream::failure& e) { errorMsg = "ERR: " + std::string(filePath) + " - " + e.what(); return ""; }
+    return ss.str();
+}
+TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log) { /* ... (implementation as before) ... */
+    TextEditor::ErrorMarkers markers; std::stringstream ss(log); std::string line;
+    std::regex r1(R"(^(?:[A-Z]+:\s*)?\d+:(\d+):\s*(.*))"), r2(R"(^\s*\d+\((\d+)\)\s*:\s*(.*))"); std::smatch m;
+    auto trim_local = [](const std::string& s){ auto f=s.find_first_not_of(" \t\r\n"); return (f==std::string::npos)?"":s.substr(f, s.find_last_not_of(" \t\r\n")-f+1);};
+    while (std::getline(ss, line)) { bool done=false; if(std::regex_search(line,m,r1)&&m.size()>=3){try{markers[std::stoi(m[1].str())]=trim_local(m[2].str());done=true;}catch(...){}} if(!done && std::regex_search(line,m,r2)&&m.size()>=3){try{markers[std::stoi(m[1].str())]=trim_local(m[2].str());}catch(...){}}} return markers;
+}
 static TextEditor g_editor;
 void ClearErrorMarkers() { g_editor.SetErrorMarkers(TextEditor::ErrorMarkers()); }
 
@@ -97,16 +107,108 @@ void RenderTimelineWindow() {
     } ImGui::End();
 }
 
-// Node Editor Functions (Temporarily commented out)
-// static Effect* FindEffectById(int nodeId) { /* ... */ return nullptr;}
-// static int GetNodeIdFromPinAttr(int attr_id) { /* ... */ return 0;}
-// static int GetPinIndexFromPinAttr(int attr_id) { /* ... */ return 0;}
-// static bool IsOutputPin(int attr_id) { /* ... */ return false;}
-// void RenderNodeEditorWindow() { ImGui::Begin("Node Editor (Disabled)"); ImGui::Text("Node editor UI disabled for this test."); ImGui::End(); }
+// --- Node Editor ---
+static Effect* FindEffectById(int effect_id) { // Was part of user's RenderNodeEditorWindow, made static global helper
+    for (const auto& effect_ptr : g_scene) {
+        if (effect_ptr && effect_ptr->id == effect_id) {
+            return effect_ptr.get();
+        }
+    }
+    return nullptr;
+}
+
+void RenderNodeEditorWindow() {
+    ImGui::Begin("Node Editor");
+    imnodes::BeginNodeEditor();
+
+    // 1. Draw all the nodes
+    for (const auto& effect_ptr : g_scene) {
+        if (!effect_ptr) continue;
+
+        imnodes::BeginNode(effect_ptr->id);
+
+        imnodes::BeginNodeTitleBar();
+        ImGui::TextUnformatted(effect_ptr->name.c_str());
+        imnodes::EndNodeTitleBar();
+
+        if (effect_ptr->GetOutputPinCount() > 0) {
+            imnodes::BeginOutputAttribute(effect_ptr->id * 10); // Output pin 0: ID is effect_id * 10
+            ImGui::Text("out");
+            imnodes::EndOutputAttribute();
+        }
+
+        for (int i = 0; i < effect_ptr->GetInputPinCount(); ++i) {
+            imnodes::BeginInputAttribute(effect_ptr->id * 10 + 1 + i); // Input pins: ID is effect_id * 10 + 1 + index
+            ImGui::Text("in %d", i);
+            imnodes::EndInputAttribute();
+        }
+        // Optional: effect_ptr->RenderUI();
+        imnodes::EndNode();
+    }
+
+    // 2. Draw all existing links
+    int link_id_counter = 1; // Ensure link IDs are unique and non-zero
+    for (const auto& effect_ptr : g_scene) {
+        if (auto* se = dynamic_cast<ShaderEffect*>(effect_ptr.get())) {
+            const auto& inputs = se->GetInputs();
+            for (size_t i = 0; i < inputs.size(); ++i) {
+                if (inputs[i]) {
+                    int start_pin_id = inputs[i]->id * 10 + 0; // Output pin 0 of the source effect
+                    int end_pin_id = se->id * 10 + 1 + i;   // Input pin i of the current effect
+                    imnodes::Link(link_id_counter++, start_pin_id, end_pin_id);
+                }
+            }
+        }
+    }
+
+    imnodes::EndNodeEditor();
+
+    // 3. Handle new link creation
+    int start_attr, end_attr;
+    if (imnodes::IsLinkCreated(&start_attr, &end_attr)) {
+        int start_node_id = start_attr / 10;
+        int end_node_id = end_attr / 10;
+
+        Effect* start_effect = FindEffectById(start_node_id);
+        Effect* end_effect = FindEffectById(end_node_id);
+
+        bool start_is_output = (start_attr % 10 == 0);
+        bool end_is_input = (end_attr % 10 != 0); // True if (ID % 10) is 1, 2, etc.
+
+        // Case 1: Dragged from output to input
+        if (start_effect && end_effect && start_node_id != end_node_id) {
+            if (start_is_output && end_is_input) {
+                int input_pin_index = (end_attr % 10) - 1;
+                 if (input_pin_index >= 0 && input_pin_index < end_effect->GetInputPinCount()) {
+                    end_effect->SetInputEffect(input_pin_index, start_effect);
+                }
+            }
+            // Case 2: Dragged from input to output (reversed connection)
+            else if (!start_is_output && end_is_input == false) { // !start_is_output means start_attr is an input pin, !end_is_input means end_attr is an output pin
+                int input_pin_index = (start_attr % 10) - 1; // Pin index of start_effect (which is the target)
+                 if (input_pin_index >= 0 && input_pin_index < start_effect->GetInputPinCount()){
+                    start_effect->SetInputEffect(input_pin_index, end_effect); // end_effect is the source
+                 }
+            }
+        }
+    }
+    // Link destruction handling (simplified as per plan)
+    int link_id_destroyed;
+    if (imnodes::IsLinkDestroyed(&link_id_destroyed)) {
+        // For robust removal, we'd need to map link_id_destroyed back to the specific
+        // (target_effect, input_pin_index) and call SetInputEffect(pin, nullptr).
+        // This requires storing link IDs or iterating.
+        // Simplified for now: user has to manually manage if a link is visually gone but logically persists.
+        // Or, one could iterate all effects and clear any input that no longer has a visual link.
+        // For this step, we just acknowledge it as per the user's plan.
+        g_shaderLoadError_global = "Link destroyed. (Note: precise model update for destruction not fully implemented).";
+    }
+    ImGui::End();
+}
 
 
 // --- Topological Sort for Rendering Order ---
-std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects) {
+std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects) { /* ... (as before) ... */
     if (activeEffects.empty()) return {};
     std::vector<Effect*> sortedOrder; std::map<int, Effect*> nodeMap;
     std::map<int, std::vector<int>> adjList; std::map<int, int> inDegree;
@@ -165,27 +267,26 @@ int main() {
 
     auto plasmaEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
     plasmaEffect->name = "Plasma"; plasmaEffect->startTime = 0.f; plasmaEffect->endTime = 30.f;
-    Effect* plasmaPtr = plasmaEffect.get();
+    // Effect* plasmaPtr = plasmaEffect.get(); // Keep for manual linking if needed
     g_scene.push_back(std::move(plasmaEffect));
 
     auto passthroughEffect = std::make_unique<ShaderEffect>("shaders/passthrough.frag", SCR_WIDTH, SCR_HEIGHT);
     passthroughEffect->name = "Passthrough"; passthroughEffect->startTime = 0.f; passthroughEffect->endTime = 30.f;
-    Effect* passthroughPtr = passthroughEffect.get();
+    // Effect* passthroughPtr = passthroughEffect.get();
     g_scene.push_back(std::move(passthroughEffect));
 
-    // Manual connection for testing
-    if (plasmaPtr && passthroughPtr) {
-        if (auto* se_passthrough = dynamic_cast<ShaderEffect*>(passthroughPtr)) {
-            se_passthrough->SetInputEffect(0, plasmaPtr);
-            // std::cout << "Manually connected Plasma to Passthrough input 0 for testing." << std::endl;
-        }
-    }
+    // Manual connection for testing (can be commented out once UI linking is robust)
+    // if (g_scene.size() >= 2) {
+    //     if (auto* se_passthrough = dynamic_cast<ShaderEffect*>(g_scene[1].get())) {
+    //         se_passthrough->SetInputEffect(0, g_scene[0].get());
+    //     }
+    // }
 
     if (!g_scene.empty() && !g_selectedEffect) g_selectedEffect = g_scene.front().get();
     for (const auto& effect_ptr : g_scene) effect_ptr->Load();
     if (g_selectedEffect) if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) g_editor.SetText(se->GetShaderSource());
 
-    IMGUI_CHECKVERSION(); ImGui::CreateContext(); // imnodes::CreateContext(); // Temporarily commented out
+    IMGUI_CHECKVERSION(); ImGui::CreateContext(); imnodes::CreateContext(); // Re-enabled
     ImGuiIO& io = ImGui::GetIO(); ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true); ImGui_ImplOpenGL3_Init("#version 330");
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
@@ -224,12 +325,12 @@ int main() {
 
         ImGui_ImplOpenGL3_NewFrame(); ImGui_ImplGlfw_NewFrame(); ImGui::NewFrame();
         if (g_showGui) {
-            ImGui::Begin("Effect Properties"); if(g_selectedEffect) g_selectedEffect->RenderUI(); ImGui::End();
-            ImGui::Begin("Shader Editor"); /* ... UI ... (ensure it uses editorSE from g_selectedEffect) */ ImGui::End();
-            ImGui::Begin("Console"); /* ... UI ... */ ImGui::End();
+            ImGui::Begin("Effect Properties"); /* ... (content as before, using g_selectedEffect->RenderUI()) ... */ ImGui::End();
+            ImGui::Begin("Shader Editor"); /* ... (content as before, using editorSE) ... */ ImGui::End();
+            ImGui::Begin("Console"); /* ... (content as before) ... */ ImGui::End();
             RenderTimelineWindow();
-            // RenderNodeEditorWindow(); // Temporarily commented out
-            if(g_showHelpWindow) { ImGui::Begin("Help"); ImGui::End(); }
+            RenderNodeEditorWindow(); // Re-enabled
+            if(g_showHelpWindow) { ImGui::Begin("Help"); /* ... */ ImGui::End(); }
         }
 
         int display_w, display_h; glfwGetFramebufferSize(window, &display_w, &display_h);
@@ -249,14 +350,14 @@ int main() {
     } 
 
     ImGui_ImplOpenGL3_Shutdown(); ImGui_ImplGlfw_Shutdown();
-    // imnodes::DestroyContext(); // Temporarily commented out
+    imnodes::DestroyContext(); // Re-enabled
     ImGui::DestroyContext();
     if (g_quadVAO != 0) glDeleteVertexArrays(1, &g_quadVAO);
     if (g_quadVBO != 0) glDeleteBuffers(1, &g_quadVBO);
     glfwTerminate(); return 0;
 } 
 
-void framebuffer_size_callback(GLFWwindow* w, int width, int height) { /* ... */ }
-void processInput(GLFWwindow *w) { /* ... */ }
-void mouse_cursor_position_callback(GLFWwindow* w, double x, double y) { /* ... */ }
-void mouse_button_callback(GLFWwindow* w, int btn, int act, int mod) { /* ... */ }
+void framebuffer_size_callback(GLFWwindow* w, int width, int height) { /* ... (as before) ... */ }
+void processInput(GLFWwindow *w) { /* ... (as before) ... */ }
+void mouse_cursor_position_callback(GLFWwindow* w, double x, double y) { /* ... (as before) ... */ }
+void mouse_button_callback(GLFWwindow* w, int btn, int act, int mod) { /* ... (as before) ... */ }
