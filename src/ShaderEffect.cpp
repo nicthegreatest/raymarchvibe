@@ -381,6 +381,7 @@ void ShaderEffect::Render() {
         if (m_uLightPosLoc != -1) glUniform3fv(m_uLightPosLoc, 1, m_lightPosition);
         if (m_uLightColorLoc != -1) glUniform3fv(m_uLightColorLoc, 1, m_lightColor);
     }
+  
     if (m_iAudioAmpLoc != -1) {
         glUniform1f(m_iAudioAmpLoc, m_audioAmp);
     }
@@ -777,6 +778,9 @@ void ShaderEffect::CompileAndLinkShader() {
     std::string finalFragmentCode = m_shaderSourceCode;
     // Check if the source already contains a main function
     bool hasMainFunction = m_shaderSourceCode.find("void main()") != std::string::npos ||
+
+    bool hasMainFunction = m_shaderSourceCode.find("void main()") != std::string::npos || 
+
                            m_shaderSourceCode.find("void main(void)") != std::string::npos;
 
     if (m_isShadertoyMode && !hasMainFunction) { // <-- ADDED !hasMainFunction CHECK
@@ -901,6 +905,10 @@ void ShaderEffect::FetchUniformLocations() {
 
         m_iTimeDeltaLocation = m_iFrameLocation = m_iMouseLocation = m_iUserFloat1Loc = m_iUserColor1Loc = -1;
     }
+    
+    // Common uniform for both modes, if present
+    m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
+    // if (m_iAudioAmpLoc == -1) warnings_collector += "Warn: iAudioAmp uniform not found.\n"; // Optional warning
 
     // Common uniform for both modes, if present
     m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
