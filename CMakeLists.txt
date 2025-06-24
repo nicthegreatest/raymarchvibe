@@ -101,8 +101,8 @@ add_executable(RaymarchVibe
 
 target_include_directories(RaymarchVibe PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/vendor
-  ${CMAKE_CURRENT_SOURCE_DIR}/vendor# Added for vendor libraries like imnodes
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imnodes # Added for vendor libraries like imnodes
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${httplib_fetch_SOURCE_DIR}
