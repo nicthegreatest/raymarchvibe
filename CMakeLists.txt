@@ -97,7 +97,7 @@ add_executable(RaymarchVibe
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imguicolortextedit_SOURCE_DIR}/TextEditor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imnodes/imnodes.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog/ImGuiFileDialog.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog
   src/AudioSystem.cpp # Added AudioSystem
 )
 
@@ -110,6 +110,7 @@ target_include_directories(RaymarchVibe PRIVATE
   ${imgui_SOURCE_DIR}/backends
   ${httplib_fetch_SOURCE_DIR}
   ${imguicolortextedit_SOURCE_DIR}
+  ${miniaudio_SOURCE_DIR}
 )
 
 target_link_libraries(RaymarchVibe PRIVATE
