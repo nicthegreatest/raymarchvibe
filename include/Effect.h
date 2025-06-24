@@ -27,7 +27,7 @@ public:
     virtual int GetInputPinCount() const { return 0; }
     virtual int GetOutputPinCount() const { return 1; } // Default to one output texture
     // Sets the effect that provides input to a given input pin of this effect.
-    virtual void SetInputEffect(int pinIndex, Effect* inputEffect) {}
+    virtual void SetInputEffect(int pinIndex, Effect* inputEffect) { (void)pinIndex; (void)inputEffect; }
     // Gets the primary output texture of this effect (e.g., its FBO texture).
     virtual GLuint GetOutputTexture() const { return 0; }
 

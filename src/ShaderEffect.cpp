@@ -62,20 +62,35 @@ ShaderConstControl::ShaderConstControl(const std::string& n, const std::string& 
 
 
 ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidth, int initialHeight, bool isShadertoy)
-    : Effect(), // Call base constructor to assign ID
+    : Effect(), // Base class first
       m_shaderProgram(0),
       m_isShadertoyMode(isShadertoy),
       m_shaderLoaded(false),
       m_time(0.0f),
       m_deltaTime(0.0f),
       m_frameCount(0),
-      m_scale(1.0f), m_timeSpeed(1.0f), m_patternScale(1.0f), m_cameraFOV(60.0f),
+      // m_mouseState, m_currentDisplayWidth, m_currentDisplayHeight, m_objectColor use default initializers
+      m_scale(1.0f),
+      m_timeSpeed(1.0f),
+      // m_colorMod uses default initializer
+      m_patternScale(1.0f),
+      // m_cameraPosition, m_cameraTarget use default initializers
+      m_cameraFOV(60.0f),
+      // m_lightPosition, m_lightColor use default initializers
       m_iUserFloat1(0.5f),
+      // m_iUserColor1 uses default initializer
+      m_audioAmp(0.0f),
+      // All m_...Loc use default initializers (-1) set in header
+      m_iAudioAmpLoc(-1), // Explicitly listed here as it was in the original list
+      // m_defineControls, m_shadertoyUniformControls, m_constControls use default initializers
       m_shaderParser(),
-      m_fboID(0), m_fboTextureID(0), m_rboID(0),
-      m_fboWidth(initialWidth), m_fboHeight(initialHeight),
-      m_iChannel0SamplerLoc(-1), // Updated member name
-      m_audioAmp(0.0f), m_iAudioAmpLoc(-1)
+      // m_inputs uses default initializer
+      m_iChannel0SamplerLoc(-1), // Explicitly listed
+      m_fboID(0),
+      m_fboTextureID(0),
+      m_rboID(0),
+      m_fboWidth(initialWidth),
+      m_fboHeight(initialHeight)
 {
     m_inputs.resize(1, nullptr); // Assuming 1 input slot for now
 
