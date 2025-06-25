@@ -167,6 +167,29 @@ static std::string LoadFileContent(const std::string& path, std::string& errorMs
     return buffer.str();
 }
 
+// Helper function to check for GL errors
+void checkGLError(const std::string& label, bool logToGlobalConsole = true) {
+    GLenum err;
+    while((err = glGetError()) != GL_NO_ERROR) {
+        std::string errorStr;
+        switch(err) {
+            case GL_INVALID_ENUM: errorStr = "INVALID_ENUM"; break;
+            case GL_INVALID_VALUE: errorStr = "INVALID_VALUE"; break;
+            case GL_INVALID_OPERATION: errorStr = "INVALID_OPERATION"; break;
+            case GL_STACK_OVERFLOW: errorStr = "STACK_OVERFLOW"; break; // Should not happen with modern GL
+            case GL_STACK_UNDERFLOW: errorStr = "STACK_UNDERFLOW"; break; // Should not happen with modern GL
+            case GL_OUT_OF_MEMORY: errorStr = "OUT_OF_MEMORY"; break;
+            case GL_INVALID_FRAMEBUFFER_OPERATION: errorStr = "INVALID_FRAMEBUFFER_OPERATION"; break;
+            default: errorStr = "UNKNOWN_ERROR (" + std::to_string(err) + ")"; break;
+        }
+        std::string logMsg = "GL_ERROR (" + label + "): " + errorStr;
+        std::cerr << logMsg << std::endl;
+        if (logToGlobalConsole && g_consoleLog.size() < 4096) { // Prevent g_consoleLog from getting too huge
+             g_consoleLog += logMsg + "\n";
+        }
+    }
+}
+
 
 // --- UI Window Implementations ---
 
@@ -824,10 +847,10 @@ int main() {
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
         float audioAmp = g_enableAudioLink ? g_audioSystem.GetCurrentAmplitude() : 0.0f;
 
-        g_consoleLog += "MainLoop: renderQueue size: " + std::to_string(renderQueue.size()) + "\n";
+        // g_consoleLog += "MainLoop: renderQueue size: " + std::to_string(renderQueue.size()) + "\n"; // Can be verbose
 
         for (Effect* effect_ptr : renderQueue) {
-            g_consoleLog += "MainLoop: Processing effect: " + effect_ptr->name + "\n";
+            // g_consoleLog += "MainLoop: Processing effect: " + effect_ptr->name + "\n"; // Can be verbose
             if(auto* se = dynamic_cast<ShaderEffect*>(effect_ptr)) {
                 se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT);
                 se->SetMouseState(g_mouseState[0], g_mouseState[1], g_mouseState[2], g_mouseState[3]);
@@ -837,9 +860,11 @@ int main() {
             }
             effect_ptr->Update(currentTime);
             effect_ptr->Render();
-            g_renderer.RenderQuad();
+            checkGLError("After Effect->Render for " + effect_ptr->name);
+            // g_renderer.RenderQuad(); // This line was confirmed to be removed/not present in current file.
         }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        checkGLError("After Unbinding FBOs (to default)");
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -860,8 +885,10 @@ int main() {
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        checkGLError("Before Main Screen Clear");
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+        checkGLError("After Main Screen Clear");
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         Effect* finalOutputEffect = nullptr;
@@ -875,19 +902,22 @@ int main() {
 
         if (finalOutputEffect) {
             if (auto* se = dynamic_cast<ShaderEffect*>(finalOutputEffect)) {
-                g_consoleLog += "MainLoop: FinalOutputEffect: " + se->name + ", TextureID: " + std::to_string(se->GetOutputTexture()) + "\n";
+                // g_consoleLog += "MainLoop: FinalOutputEffect: " + se->name + ", TextureID: " + std::to_string(se->GetOutputTexture()) + "\n"; // Already logged this
                 if (se->GetOutputTexture() != 0) {
+                    checkGLError("Before RenderFullscreenTexture");
                     g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
+                    checkGLError("After RenderFullscreenTexture");
                 } else {
-                    g_consoleLog += "MainLoop: FinalOutputEffect " + se->name + " has TextureID 0.\n";
+                    // g_consoleLog += "MainLoop: FinalOutputEffect " + se->name + " has TextureID 0.\n"; // Already logged
                 }
             } else {
-                g_consoleLog += "MainLoop: FinalOutputEffect '" + finalOutputEffect->name + "' is not a ShaderEffect.\n";
+                // g_consoleLog += "MainLoop: FinalOutputEffect '" + finalOutputEffect->name + "' is not a ShaderEffect.\n"; // Already logged
             }
         } else {
-            g_consoleLog += "MainLoop: No finalOutputEffect found to render.\n";
+            // g_consoleLog += "MainLoop: No finalOutputEffect found to render.\n"; // Already logged
         }
         glDisable(GL_BLEND);
+        checkGLError("After Disabling Blend, Before ImGui Render");
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
