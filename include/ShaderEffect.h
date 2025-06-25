@@ -106,9 +106,9 @@ private:
     GLint m_iAudioAmpLoc = -1; // Location for iAudioAmp uniform
 
     // --- Parsed Controls from Shader Code ---
-    std::vector<ShaderDefineControl> m_defineControls;
+    std::vector<DefineControl> m_defineControls; // Changed from ShaderDefineControl
     std::vector<ShaderToyUniformControl> m_shadertoyUniformControls; // For uniforms parsed from metadata comments
-    std::vector<ShaderConstControl> m_constControls;
+    std::vector<ConstVariableControl> m_constControls; // Changed from ShaderConstControl
 
     // --- Parser Instance ---
     ShaderParser m_shaderParser;
