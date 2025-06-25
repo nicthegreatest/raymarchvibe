@@ -2,37 +2,95 @@
 
 #include <string>
 #include <vector>
-#include "ShaderParameterControls.h" // Needs access to the control structs
+#include <map>
+#include <glad/glad.h>      // For GLint
+#include <nlohmann/json.hpp> // For json
+#include <cstdint>           // For uint8_t, uint64_t
+#include "TextEditor.h"      // ImGuiColorTextEdit include
+
+using json = nlohmann::json;
+
+// --- Struct Definitions ---
+
+struct DefineControl {
+    std::string name;
+    std::string originalValueString;
+    float floatValue = 0.0f;
+    bool hasValue = false;
+    bool isEnabled = true;
+    int originalLine = -1;
+};
+
+struct ShaderToyUniformControl {
+    std::string name;
+    std::string glslType;
+    GLint location = -1;
+    json metadata;
+
+    float fValue = 0.0f;
+    float v2Value[2] = {0.0f, 0.0f};
+    float v3Value[3] = {0.0f, 0.0f, 0.0f};
+    float v4Value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    int iValue = 0;
+    bool bValue = false;
+    bool isColor = false;
+
+    ShaderToyUniformControl(const std::string& n, const std::string& type_str, const json& meta);
+};
+
+struct ConstVariableControl {
+    std::string name;
+    std::string glslType;
+    std::string originalValueString;
+    int lineIndex = -1;
+    size_t charPosition = 0;
+
+    float fValue = 0.0f;
+    int iValue = 0;
+    float v2Value[2] = {0.0f, 0.0f};
+    float v3Value[3] = {0.0f, 0.0f, 0.0f};
+    float v4Value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    bool isColor = false;
+    float multiplier = 1.0f;
+
+    ConstVariableControl() = default; // Add default constructor if needed elsewhere
+    ConstVariableControl(const std::string& name, const std::string& glslType, int lineIndex, const std::string& originalValueString);
+};
+
 
 class ShaderParser {
 public:
     ShaderParser();
     ~ShaderParser();
 
-    // Parses shader source to find #define statements and populate ShaderDefineControl structures.
-    void ScanAndPrepareDefineControls(const std::string& shaderSource, std::vector<ShaderDefineControl>& defineControls);
+    TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log);
 
-    // Parses shader source for Shadertoy-style metadata comments to populate ShaderToyUniformControl structures.
-    void ScanAndPrepareUniformControls(const std::string& shaderSource, std::vector<ShaderToyUniformControl>& uniformControls);
+    // --- Define Controls ---
+    void ScanAndPrepareDefineControls(const std::string& shaderCode); // Changed to const std::string&
+    const std::vector<DefineControl>& GetDefineControls() const;
+    std::vector<DefineControl>& GetDefineControls(); // Should this be const? Probably for getting.
+    std::string ToggleDefineInString(const std::string& shaderCode, const std::string& defineName, bool enable, const std::string& originalValue);
+    std::string UpdateDefineValueInString(const std::string& shaderCode, const std::string& defineName, float newValue);
 
-    // Parses shader source for 'const type NAME = value;' declarations to populate ShaderConstControl structures.
-    void ScanAndPrepareConstControls(const std::string& shaderSource, std::vector<ShaderConstControl>& constControls);
+    // --- Shadertoy Uniform Controls ---
+    void ScanAndPrepareUniformControls(const std::string& shaderCode); // Changed to const std::string&
+    const std::vector<ShaderToyUniformControl>& GetUniformControls() const;
+    std::vector<ShaderToyUniformControl>& GetUniformControls(); // Should this be const?
+    void ClearAllControls();
 
-    // Helper to parse GLSL error logs for error markers in a text editor
-    // This might live elsewhere or be static, but fits the "parsing" theme.
-    // For now, let's assume it's part of this parser's responsibilities.
-    // TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log); // TextEditor dependency
-
-    // Utility to extract Shadertoy ID from URL or string
-    static std::string ExtractShaderId(const std::string& idOrUrl);
-
-    // Functions to modify shader code strings (for defines, consts)
-    // These might be better as static utility functions or part of ShaderEffect if it directly manipulates its source string.
-    // For now, placing them here conceptually.
-    std::string ToggleDefineInString(const std::string& sourceCode, const std::string& defineName, bool enable, const std::string& originalValueStringIfKnown);
-    std::string UpdateDefineValueInString(const std::string& sourceCode, const std::string& defineName, float newValue);
-    std::string UpdateConstValueInString(const std::string& sourceCode, ShaderConstControl& control /* may need to update control.originalValueString */);
+    // --- Const Variable Controls ---
+    void ScanAndPrepareConstControls(const std::string& shaderCode);
+    const std::vector<ConstVariableControl>& GetConstControls() const;
+    std::vector<ConstVariableControl>& GetConstControls(); // Should this be const?
+    std::string UpdateConstValueInString(const std::string& shaderCode, const ConstVariableControl& control);
 
 private:
-    // Internal helper methods for parsing if needed
+    std::vector<DefineControl> m_defineControls;
+    std::vector<ShaderToyUniformControl> m_uniformControls;
+    std::vector<ConstVariableControl> m_constControls;
+
+    void ParseConstValueString(const std::string& valueStr, ConstVariableControl& control);
+    std::string ReconstructConstValueString(const ConstVariableControl& control) const;
+
+    // The local static trim function has been removed.
 };

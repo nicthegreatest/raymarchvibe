@@ -1,10 +1,14 @@
 // Add this line BEFORE including AudioSystem.h (which includes miniaudio.h)
 // or directly before #include "miniaudio.h" if you were to include it here directly.
 // Since AudioSystem.h includes miniaudio.h, we put it before AudioSystem.h
-#define MINIAUDIO_IMPLEMENTATION 
-#include "AudioSystem.h" // This line already includes "miniaudio.h"
+#define MINIAUDIO_IMPLEMENTATION // Define it here, once, before miniaudio.h is included via AudioSystem.h
+#include "AudioSystem.h"
 
-#include <cstring> // For strncpy, if not included by iostream or string already
+#include <iostream> // For std::cout, std::endl
+#include <string>   // For std::string, std::to_string
+#include <vector>   // For std::vector (used internally)
+#include <cstring>  // For strncpy
+#include <cmath>    // For fabsf
 
 // --- Constructor ---
 AudioSystem::AudioSystem() {
@@ -28,14 +32,15 @@ AudioSystem::~AudioSystem() {
 }
 
 // --- Public Methods ---
-void AudioSystem::Initialize() {
+bool AudioSystem::Initialize() { // Changed to bool to match header
     if (ma_context_init(NULL, 0, NULL, &miniaudioContext) != MA_SUCCESS) {
         AppendToErrorLog("AUDIO ERROR: Failed to initialize Miniaudio context.");
         contextInitialized = false;
-        return;
+        return false; // Return false on failure
     }
     contextInitialized = true;
-    EnumerateCaptureDevices();
+    EnumerateCaptureDevices(); // Assuming this doesn't indicate overall success/failure for Initialize itself
+    return true; // Added missing return true for success path
     // Optionally, initialize default capture device here if desired at startup
     // For example, if the default source is Microphone:
     // if (currentAudioSourceIndex == 0) {
@@ -126,23 +131,23 @@ bool AudioSystem::InitializeAndStartSelectedCaptureDevice() {
         return false;
     }
 
-    miniaudioDeviceConfig = ma_device_config_init(ma_device_type_capture);
-    miniaudioDeviceConfig.capture.format   = ma_format_f32;
-    miniaudioDeviceConfig.capture.channels = 1; 
-    miniaudioDeviceConfig.sampleRate       = 48000; 
-    miniaudioDeviceConfig.dataCallback     = data_callback_static; 
-    miniaudioDeviceConfig.pUserData        = this; 
+    deviceConfig = ma_device_config_init(ma_device_type_capture); // Use member variable 'deviceConfig'
+    deviceConfig.capture.format   = ma_format_f32;
+    deviceConfig.capture.channels = 1;
+    deviceConfig.sampleRate       = 48000;
+    deviceConfig.dataCallback     = data_callback_static;
+    deviceConfig.pUserData        = this;
 
     if (selectedActualCaptureDeviceIndex >= 0 && selectedActualCaptureDeviceIndex < static_cast<int>(miniaudioAvailableCaptureDevicesInfo.size())) {
-        miniaudioDeviceConfig.capture.pDeviceID = &miniaudioAvailableCaptureDevicesInfo[selectedActualCaptureDeviceIndex].id;
+        deviceConfig.capture.pDeviceID = &miniaudioAvailableCaptureDevicesInfo[selectedActualCaptureDeviceIndex].id; // Use member variable 'deviceConfig'
         std::cout << "Attempting to initialize with selected capture device: " 
                   << miniaudioCaptureDevice_StdString_Names[selectedActualCaptureDeviceIndex] << std::endl;
     } else {
         AppendToErrorLog("AUDIO WARN: Invalid selected capture device index. Attempting system default.");
-        miniaudioDeviceConfig.capture.pDeviceID = NULL; 
+        deviceConfig.capture.pDeviceID = NULL; // Use member variable 'deviceConfig'
     }
 
-    ma_result result = ma_device_init(&miniaudioContext, &miniaudioDeviceConfig, &miniaudioCaptureDevice); 
+    ma_result result = ma_device_init(&miniaudioContext, &deviceConfig, &device); // Use member variables 'deviceConfig' and 'device'
     if (result != MA_SUCCESS) {
         std::string errorDesc = ma_result_description(result);
         AppendToErrorLog("AUDIO ERROR: Failed to initialize capture device. Error: " + errorDesc);
@@ -150,24 +155,24 @@ bool AudioSystem::InitializeAndStartSelectedCaptureDevice() {
         return false; 
     }
 
-    result = ma_device_start(&miniaudioCaptureDevice);
+    result = ma_device_start(&device); // Use member variable 'device'
     if (result != MA_SUCCESS) {
         std::string errorDesc = ma_result_description(result);
         AppendToErrorLog("AUDIO ERROR: Failed to start capture device. Error: " + errorDesc);
-        ma_device_uninit(&miniaudioCaptureDevice); 
+        ma_device_uninit(&device); // Use member variable 'device'
         miniaudioDeviceInitialized = false;
         return false;
     } 
     
     miniaudioDeviceInitialized = true; 
-    std::cout << "Audio capture device started successfully. Device: " << miniaudioCaptureDevice.capture.name << std::endl;
-    AppendToErrorLog("Audio capture active: " + std::string(miniaudioCaptureDevice.capture.name));
+    std::cout << "Audio capture device started successfully. Device: " << device.capture.name << std::endl; // Use member variable 'device'
+    AppendToErrorLog("Audio capture active: " + std::string(device.capture.name)); // Use member variable 'device'
     return true;
 }
 
 void AudioSystem::StopCaptureDevice() {
     if (miniaudioDeviceInitialized) {
-        ma_device_uninit(&miniaudioCaptureDevice);
+        ma_device_uninit(&device); // Use member variable 'device'
         miniaudioDeviceInitialized = false;
         currentAudioAmplitude = 0.0f; 
         std::cout << "Audio capture device stopped and uninitialized." << std::endl;
@@ -369,7 +374,7 @@ void AudioSystem::data_callback_member(const void* pInput, ma_uint32 frameCount)
     const float* inputFrames = static_cast<const float*>(pInput); 
     float sumOfAbsoluteSamples = 0.0f;
     
-    ma_uint32 channels = miniaudioDeviceConfig.capture.channels;
+    ma_uint32 channels = deviceConfig.capture.channels; // Use member variable 'deviceConfig'
     if (channels == 0) channels = 1; 
 
     ma_uint32 samplesToProcess = frameCount * channels; 
