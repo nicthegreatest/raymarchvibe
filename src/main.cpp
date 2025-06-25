@@ -893,29 +893,52 @@ int main() {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         Effect* finalOutputEffect = nullptr;
-        for (Effect* effect : renderQueue) {
-            if (effect->name == PASSTHROUGH_EFFECT_NAME) { // Used constant
-                finalOutputEffect = effect;
+        // --- BEGIN TEMPORARY MODIFICATION FOR DIAGNOSIS ---
+        // Try to find "Plasma" effect specifically to render its output directly
+        for (const auto& effect_ptr_unique : g_scene) { // Iterate over g_scene to find Plasma by name
+            if (effect_ptr_unique && effect_ptr_unique->name == "Plasma") {
+                finalOutputEffect = effect_ptr_unique.get();
+                g_consoleLog += "MainLoop: DIAGNOSTIC OVERRIDE - Forcing finalOutputEffect to Plasma.\n";
                 break;
             }
         }
-        if (!finalOutputEffect && !renderQueue.empty()) { finalOutputEffect = renderQueue.back(); }
+        if (!finalOutputEffect) { // Fallback if "Plasma" wasn't found (should not happen with current setup)
+             g_consoleLog += "MainLoop: DIAGNOSTIC OVERRIDE - Plasma effect not found in g_scene. Checking renderQueue.\n";
+            for (Effect* effect : renderQueue) {
+                if (effect->name == "Plasma") {
+                    finalOutputEffect = effect;
+                    break;
+                }
+            }
+        }
+        // If still not found, use original logic as a last resort (though we expect Plasma)
+        if (!finalOutputEffect) {
+            g_consoleLog += "MainLoop: DIAGNOSTIC OVERRIDE - Plasma not in renderQueue. Using original passthrough/last logic.\n";
+            for (Effect* effect : renderQueue) {
+                if (effect->name == PASSTHROUGH_EFFECT_NAME) {
+                    finalOutputEffect = effect;
+                    break;
+                }
+            }
+            if (!finalOutputEffect && !renderQueue.empty()) { finalOutputEffect = renderQueue.back(); }
+        }
+        // --- END TEMPORARY MODIFICATION FOR DIAGNOSIS ---
 
         if (finalOutputEffect) {
             if (auto* se = dynamic_cast<ShaderEffect*>(finalOutputEffect)) {
-                // g_consoleLog += "MainLoop: FinalOutputEffect: " + se->name + ", TextureID: " + std::to_string(se->GetOutputTexture()) + "\n"; // Already logged this
+                g_consoleLog += "MainLoop: Attempting to render finalOutputEffect: " + se->name + ", TextureID: " + std::to_string(se->GetOutputTexture()) + "\n";
                 if (se->GetOutputTexture() != 0) {
-                    checkGLError("Before RenderFullscreenTexture");
+                    checkGLError("Before RenderFullscreenTexture (" + se->name + ")");
                     g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
-                    checkGLError("After RenderFullscreenTexture");
+                    checkGLError("After RenderFullscreenTexture (" + se->name + ")");
                 } else {
-                    // g_consoleLog += "MainLoop: FinalOutputEffect " + se->name + " has TextureID 0.\n"; // Already logged
+                    g_consoleLog += "MainLoop: FinalOutputEffect " + se->name + " has TextureID 0. Cannot render.\n";
                 }
             } else {
-                // g_consoleLog += "MainLoop: FinalOutputEffect '" + finalOutputEffect->name + "' is not a ShaderEffect.\n"; // Already logged
+                g_consoleLog += "MainLoop: FinalOutputEffect '" + finalOutputEffect->name + "' is not a ShaderEffect.\n";
             }
         } else {
-            // g_consoleLog += "MainLoop: No finalOutputEffect found to render.\n"; // Already logged
+            g_consoleLog += "MainLoop: No finalOutputEffect could be determined to render.\n";
         }
         glDisable(GL_BLEND);
         checkGLError("After Disabling Blend, Before ImGui Render");
