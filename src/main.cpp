@@ -83,7 +83,7 @@ static bool g_showAudioWindow = false;
 static bool g_enableAudioLink = false; // Changed to false
 static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-static bool g_timeline_paused = false;
+static bool g_timeline_paused = true; // Changed to true
 static float g_timeline_time = 0.0f;
 
 // Demo shaders list - moved to global static for access by multiple UI functions
@@ -815,7 +815,10 @@ int main() {
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
         float audioAmp = g_enableAudioLink ? g_audioSystem.GetCurrentAmplitude() : 0.0f;
 
+        g_consoleLog += "MainLoop: renderQueue size: " + std::to_string(renderQueue.size()) + "\n";
+
         for (Effect* effect_ptr : renderQueue) {
+            g_consoleLog += "MainLoop: Processing effect: " + effect_ptr->name + "\n";
             if(auto* se = dynamic_cast<ShaderEffect*>(effect_ptr)) {
                 se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT);
                 se->SetMouseState(g_mouseState[0], g_mouseState[1], g_mouseState[2], g_mouseState[3]);
@@ -860,10 +863,20 @@ int main() {
             }
         }
         if (!finalOutputEffect && !renderQueue.empty()) { finalOutputEffect = renderQueue.back(); }
+
         if (finalOutputEffect) {
             if (auto* se = dynamic_cast<ShaderEffect*>(finalOutputEffect)) {
-                if (se->GetOutputTexture() != 0) g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
+                g_consoleLog += "MainLoop: FinalOutputEffect: " + se->name + ", TextureID: " + std::to_string(se->GetOutputTexture()) + "\n";
+                if (se->GetOutputTexture() != 0) {
+                    g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
+                } else {
+                    g_consoleLog += "MainLoop: FinalOutputEffect " + se->name + " has TextureID 0.\n";
+                }
+            } else {
+                g_consoleLog += "MainLoop: FinalOutputEffect '" + finalOutputEffect->name + "' is not a ShaderEffect.\n";
             }
+        } else {
+            g_consoleLog += "MainLoop: No finalOutputEffect found to render.\n";
         }
         glDisable(GL_BLEND);
         ImGui::Render();
