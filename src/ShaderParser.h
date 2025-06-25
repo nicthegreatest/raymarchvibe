@@ -52,6 +52,9 @@ struct ConstVariableControl {
     float v4Value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     bool isColor = false; 
     float multiplier = 1.0f; 
+
+    ConstVariableControl() = default; // Add default constructor if needed elsewhere
+    ConstVariableControl(const std::string& name, const std::string& glslType, int lineIndex, const std::string& originalValueString);
 };
 
 
@@ -63,22 +66,22 @@ public:
     TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log);
 
     // --- Define Controls ---
-    void ScanAndPrepareDefineControls(const char* shaderCode);
+    void ScanAndPrepareDefineControls(const std::string& shaderCode); // Changed to const std::string&
     const std::vector<DefineControl>& GetDefineControls() const;
-    std::vector<DefineControl>& GetDefineControls();
+    std::vector<DefineControl>& GetDefineControls(); // Should this be const? Probably for getting.
     std::string ToggleDefineInString(const std::string& shaderCode, const std::string& defineName, bool enable, const std::string& originalValue);
     std::string UpdateDefineValueInString(const std::string& shaderCode, const std::string& defineName, float newValue);
 
     // --- Shadertoy Uniform Controls ---
-    void ScanAndPrepareUniformControls(const char* shaderCode); 
+    void ScanAndPrepareUniformControls(const std::string& shaderCode); // Changed to const std::string&
     const std::vector<ShaderToyUniformControl>& GetUniformControls() const;
-    std::vector<ShaderToyUniformControl>& GetUniformControls();
+    std::vector<ShaderToyUniformControl>& GetUniformControls(); // Should this be const?
     void ClearAllControls(); 
 
     // --- Const Variable Controls ---
     void ScanAndPrepareConstControls(const std::string& shaderCode);
     const std::vector<ConstVariableControl>& GetConstControls() const;
-    std::vector<ConstVariableControl>& GetConstControls();
+    std::vector<ConstVariableControl>& GetConstControls(); // Should this be const?
     std::string UpdateConstValueInString(const std::string& shaderCode, const ConstVariableControl& control);
 
 private:
