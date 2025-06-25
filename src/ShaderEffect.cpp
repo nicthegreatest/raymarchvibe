@@ -100,9 +100,10 @@ GLuint ShaderEffect::GetOutputTexture() const {
 
 void ShaderEffect::ResizeFrameBuffer(int width, int height) {
     if (width <= 0 || height <= 0) {
-        std::cerr << "ShaderEffect::ResizeFrameBuffer error: Invalid dimensions (" << width << "x" << height << ")" << std::endl;
+        std::cerr << "ShaderEffect::ResizeFrameBuffer error: Invalid dimensions (" << width << "x" << height << ") for " << name << std::endl;
         return;
     }
+    std::cerr << "ShaderEffect::ResizeFrameBuffer for " << name << " to " << width << "x" << height << ". Current FBO ID: " << m_fboID << std::endl;
 
     m_fboWidth = width;
     m_fboHeight = height;
@@ -135,14 +136,15 @@ void ShaderEffect::ResizeFrameBuffer(int width, int height) {
     glBindRenderbuffer(GL_RENDERBUFFER, 0); // Unbind RBO
 
     // Check FBO completeness
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+    GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer for " << name << " is not complete! Status: 0x" << std::hex << fboStatus << std::dec << std::endl;
         // Cleanup on failure
         glDeleteFramebuffers(1, &m_fboID); m_fboID = 0;
         glDeleteTextures(1, &m_fboTextureID); m_fboTextureID = 0;
         glDeleteRenderbuffers(1, &m_rboID); m_rboID = 0;
     } else {
-        // std::cout << "ShaderEffect FBO created/resized successfully: " << m_fboWidth << "x" << m_fboHeight << std::endl;
+        std::cerr << "ShaderEffect FBO for " << name << " created/resized successfully: " << m_fboWidth << "x" << m_fboHeight << ", FBO ID: " << m_fboID << ", Texture ID: " << m_fboTextureID << std::endl;
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind FBO
@@ -202,6 +204,7 @@ bool ShaderEffect::LoadShaderFromSource(const std::string& sourceCode) {
 }
 
 void ShaderEffect::Load() {
+    std::cerr << "ShaderEffect::Load() called for: " << name << ", FilePath: " << m_shaderFilePath << std::endl;
     // Ensure FBO dimensions are set before creating FBO (e.g. from constructor or explicit call after SetDisplayResolution)
     // For now, m_fboWidth/Height are initialized in constructor.
     // If they are 0, use some default from main.cpp or constants.
@@ -210,22 +213,25 @@ void ShaderEffect::Load() {
     if (m_fboWidth == 0 || m_fboHeight == 0) { // If not set by constructor or resize
         // This part may need adjustment depending on how initial resolution is passed.
         // For now, assuming constructor defaults are sensible or Resize is called from main.
-        std::cerr << "Warning: ShaderEffect::Load() called with FBO dimensions 0. Using default 800x600 for FBO." << std::endl;
+        std::cerr << "Warning: ShaderEffect::Load() for " << name << " called with FBO dimensions 0. Using default 800x600 for FBO." << std::endl;
         ResizeFrameBuffer(800, 600); // Fallback if not set
     } else {
+        std::cerr << "ShaderEffect::Load() for " << name << ", calling ResizeFrameBuffer with " << m_fboWidth << "x" << m_fboHeight << std::endl;
         ResizeFrameBuffer(m_fboWidth, m_fboHeight); // Create FBO with current dimensions
     }
 
 
     if (m_shaderSourceCode.empty() && !m_shaderFilePath.empty()) {
+        std::cerr << "ShaderEffect::Load() for " << name << ": Source code empty, loading from file: " << m_shaderFilePath << std::endl;
         std::string loadError;
         m_shaderSourceCode = LoadShaderSourceFile(m_shaderFilePath, loadError);
         if (!loadError.empty()) {
             m_compileErrorLog = "File load error during Load(): " + loadError;
             m_shaderLoaded = false;
-            std::cerr << m_compileErrorLog << std::endl;
+            std::cerr << "ShaderEffect::Load() for " << name << " - File load error: " << m_compileErrorLog << std::endl;
             return;
         }
+        std::cerr << "ShaderEffect::Load() for " << name << ": Successfully loaded source from file." << std::endl;
         // Auto-detect Shadertoy mode again if source was just loaded
         if (m_shaderSourceCode.find("mainImage") != std::string::npos &&
             m_shaderSourceCode.find("fragCoord") != std::string::npos) {
@@ -236,34 +242,37 @@ void ShaderEffect::Load() {
     }
 
     if (m_shaderSourceCode.empty()) {
-        m_compileErrorLog = "Shader source code is empty. Cannot load.";
+        m_compileErrorLog = "Shader source code for " + name + " is empty. Cannot load.";
         m_shaderLoaded = false;
         std::cerr << m_compileErrorLog << std::endl;
         return;
     }
+    std::cerr << "ShaderEffect::Load() for " << name << ": Calling ApplyShaderCode." << std::endl;
     ApplyShaderCode(m_shaderSourceCode);
 }
 
 
 void ShaderEffect::ApplyShaderCode(const std::string& newShaderCode) {
+    std::cerr << "ShaderEffect::ApplyShaderCode() called for: " << name << std::endl;
     m_shaderSourceCode = newShaderCode;
     m_compileErrorLog.clear();
 
     CompileAndLinkShader(); // This updates m_shaderProgram and m_compileErrorLog
+    std::cerr << "ShaderEffect::ApplyShaderCode for " << name << " - CompileAndLinkShader done. Program ID: " << m_shaderProgram << ", ErrorLog: " << m_compileErrorLog << std::endl;
 
     if (m_shaderProgram != 0) {
+        std::cerr << "ShaderEffect::ApplyShaderCode for " << name << ": Shader program valid. Fetching uniforms and parsing controls." << std::endl;
         FetchUniformLocations(); // Fetches locations for the new program
         ParseShaderControls();   // Parses defines, metadata uniforms, consts from m_shaderSourceCode
         m_shaderLoaded = true;
-        // m_compileErrorLog += "Applied successfully!"; // Or keep it clean if no errors
-        if (m_compileErrorLog.empty()) { // If CompileAndLinkShader was successful
+        if (m_compileErrorLog.empty()) {
              m_compileErrorLog = "Shader applied successfully.";
-             // Add any warnings from FetchUniformLocations or ParseShaderControls if they generate them
         }
+         std::cerr << "ShaderEffect::ApplyShaderCode for " << name << ": Loaded successfully. Final error log: " << m_compileErrorLog << std::endl;
     } else {
         m_shaderLoaded = false;
+        std::cerr << "ShaderEffect::ApplyShaderCode for " << name << ": Shader program is 0. Load failed. Error log: " << m_compileErrorLog << std::endl;
         // m_compileErrorLog will already be set by CompileAndLinkShader
-        std::cerr << "ShaderEffect::ApplyShaderCode failed. Error log:\n" << m_compileErrorLog << std::endl;
     }
 }
 
@@ -303,7 +312,14 @@ void ShaderEffect::Update(float currentTime) {
 // In ShaderEffect.cpp
 
 void ShaderEffect::Render() {
+    // Diagnostic Log
+    std::cerr << "ShaderEffect::Render() called for: " << name
+              << ", Program: " << m_shaderProgram
+              << ", FBO: " << m_fboID
+              << ", Loaded: " << (m_shaderLoaded ? "true" : "false") << std::endl;
+
     if (!m_shaderLoaded || m_shaderProgram == 0 || m_fboID == 0) {
+        std::cerr << "ShaderEffect::Render() for " << name << " skipped (not loaded/no program/no FBO)." << std::endl;
         return; // Don't render if not ready
     }
 
