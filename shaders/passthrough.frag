@@ -5,6 +5,7 @@ in vec2 TexCoords; // Assuming this comes from a standard fullscreen vert shader
 
 uniform sampler2D iChannel0; // Texture from the previous effect in the chain (RENAMED from u_inputTexture)
 uniform float iTime; // Just to make it do something if no input
+uniform vec3 iResolution; // Added to silence warning & for fallback pattern
 
 void main() {
     vec4 inputColor = texture(iChannel0, TexCoords); // Use iChannel0
