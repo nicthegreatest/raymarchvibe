@@ -129,6 +129,22 @@ private:
 
     // Internal state for UI
     bool m_snapWindows = false;
+
+    // --- Find Functionality State ---
+    char m_findText[256];
+    TextEditor::Coordinates m_findStartCoord; // To store the starting point for the next search
+    TextEditor::Coordinates m_lastMatchStartCoord; // To store the actual start of the last match
+    TextEditor::Coordinates m_lastMatchEndCoord;   // To store the actual end of the last match
+    bool m_foundText;
+    bool m_findCaseSensitive;
+    int m_currentFindIndex; // To keep track of multiple occurrences, or simply for "Find Next" logic
+
+    void HandleFindNext();
+    void HandleFindPrevious(); // Declaration for later
+    TextEditor::Coordinates GetCoordinatesForOffset(const std::string& text, int offset);
+    int GetOffsetForCoordinates(const std::string& text, const TextEditor::Coordinates& coords);
+
+
 };
 
 #endif // UIMANAGER_H
