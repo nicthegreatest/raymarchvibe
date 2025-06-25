@@ -7,6 +7,8 @@
 #include "Utils.h"
 #include <fstream>
 #include <sstream>
+#include <algorithm> // For std::transform
+#include <cctype>    // For std::tolower
 
 #include <GLFW/glfw3.h>
 
@@ -40,7 +42,16 @@ UIManager::UIManager(
     p_filePathBuffer_Load(filePathBuffer_Load), p_filePathBuffer_SaveAs(filePathBuffer_SaveAs),
     p_shadertoyInputBuffer(shadertoyInputBuffer), m_shadertoyApiKey_ref(shadertoyApiKey),
     m_shaderSamples_ref(shaderSamples), m_currentSampleIndex_ref(currentSampleIndex)
-{}
+{
+    // Initialize find functionality state
+    m_findText[0] = '\0';
+    m_findStartCoord = {0, 0};
+    m_lastMatchStartCoord = {0,0};
+    m_lastMatchEndCoord = {0,0};
+    m_foundText = false;
+    m_findCaseSensitive = false;
+    m_currentFindIndex = -1; // Or 0, depending on how "Find Next" logic is implemented
+}
 
 
 void UIManager::Initialize() {
@@ -263,11 +274,48 @@ void UIManager::RenderShaderEditorWindow(const float* mouseState) {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::Button("Apply (F5)")) { ApplyShaderFromEditorAndHandleResults(); }
         if (ImGui::Button("Reset Params")) { ResetAllParameters(); }
+
+        ImGui::Separator(); // Separator for Find controls
+
+        // Find UI
+        ImGui::PushItemWidth(150); // Adjust width as needed
+        bool findTextChanged = ImGui::InputText("##Find", m_findText, sizeof(m_findText), ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        if (ImGui::Button("Next") || findTextChanged) { // findTextChanged allows Enter to trigger find
+            // When text changes, we should reset the search start position or assume it's a new search
+            if (findTextChanged) {
+                m_foundText = false; // Treat as a new search if text changed
+                m_findStartCoord = m_editor_ref.GetCursorPosition(); // Start from current cursor
+                m_lastMatchEndCoord = {-1,-1}; // Reset last match
+            }
+            HandleFindNext();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Prev")) {
+             if (findTextChanged) { // Also consider enter for previous, though less common
+                m_foundText = false;
+                m_findStartCoord = m_editor_ref.GetCursorPosition();
+                m_lastMatchStartCoord = {-1,-1}; // Reset last match for prev
+            }
+            HandleFindPrevious();
+        }
+        ImGui::SameLine();
+        ImGui::Checkbox("Case Sens.", &m_findCaseSensitive);
+
+        ImGui::Separator(); // Separator after Find controls
+
         ImGui::Text("Mouse: (%.1f, %.1f)", mouseState[0], mouseState[1]);
         ImGui::Text("Click: (%.1f, %.1f)", mouseState[2], mouseState[3]);
         ImGui::EndMenuBar();
     }
     
+    // Display find status (optional)
+    // if (strlen(m_findText) > 0 && !m_foundText && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+    //     ImGui::TextColored(ImVec4(1,0,0,1), "Text not found");
+    // }
+
+
     auto cpos = m_editor_ref.GetCursorPosition();
     ImGui::Text("%6d/%-6d %6d lines | %s | %s | %s", cpos.mLine + 1, cpos.mColumn + 1, m_editor_ref.GetTotalLines(),
         m_editor_ref.IsOverwrite() ? "Ovr" : "Ins",
@@ -277,6 +325,196 @@ void UIManager::RenderShaderEditorWindow(const float* mouseState) {
     m_editor_ref.Render("TextEditor");
 
     ImGui::End();
+}
+
+// Helper function to convert string offset to TextEditor::Coordinates
+TextEditor::Coordinates UIManager::GetCoordinatesForOffset(const std::string& text, int offset) {
+    int line = 0, col = 0;
+    for (int i = 0; i < offset && i < (int)text.length(); ++i) {
+        if (text[i] == '\n') {
+            line++;
+            col = 0;
+        } else {
+            col++;
+        }
+    }
+    return {line, col};
+}
+
+// Helper function to convert TextEditor::Coordinates to string offset
+int UIManager::GetOffsetForCoordinates(const std::string& text, const TextEditor::Coordinates& coords) {
+    int offset = 0;
+    int currentLine = 0;
+    int currentCol = 0; // Keep track of column within the current line processed so far
+
+    for (char c : text) {
+        if (currentLine == coords.mLine && currentCol == coords.mColumn) {
+            return offset;
+        }
+        if (c == '\n') {
+            currentLine++;
+            currentCol = 0; // Reset column for the new line
+            if (currentLine > coords.mLine) break; // Optimization: if we passed the target line
+        } else {
+            currentCol++;
+        }
+        offset++;
+    }
+    // If coords are beyond the text (e.g., end of file cursor might be one past last char on a line)
+    // or if the exact coordinate wasn't matched (e.g. column beyond line length),
+    // this will return the offset to the end of text or the closest valid position processed.
+    // For precise behavior, ensure coords are valid within the text.
+    if (currentLine == coords.mLine && currentCol == coords.mColumn) {
+         return offset;
+    }
+    // Fallback: if coords are at the very end of the text
+    if (coords.mLine == currentLine && coords.mColumn == currentCol) return (int)text.length();
+
+    // If coordinates are invalid (e.g., line number too high, or column too high for a line)
+    // return -1 or handle as an error. For simplicity, returning text.length() or a clamped value.
+    // The TextEditor itself usually handles out-of-bounds coordinates gracefully.
+    return (int)text.length(); // Or a more sophisticated clamping/error
+}
+
+
+void UIManager::HandleFindNext() {
+    if (strlen(m_findText) == 0) {
+        m_foundText = false;
+        return;
+    }
+
+    std::string editorText = m_editor_ref.GetText();
+    std::string searchText = m_findText;
+
+    // Determine start offset for search
+    // If a previous match was found, start searching after it. Otherwise, start from m_findStartCoord.
+    int startOffset = 0;
+    if (m_foundText && m_lastMatchEndCoord.mLine >=0 && m_lastMatchEndCoord.mColumn >=0) { // m_foundText indicates a previous successful search
+        startOffset = GetOffsetForCoordinates(editorText, m_lastMatchEndCoord);
+    } else {
+         // If no previous match, or starting a new search, use m_findStartCoord (typically cursor pos or start of doc)
+         // For simplicity, let's reset to current cursor if not actively in a "find next" sequence from a specific match
+         // This behavior might need refinement based on desired UX.
+         // For now, if not m_foundText, we start from where m_findStartCoord was last set (e.g. by user interaction or default)
+         // Or more simply, from current cursor position for a new "Find Next" click if nothing was selected.
+        if (!m_editor_ref.HasSelection()) { // If nothing selected, start from cursor
+            m_findStartCoord = m_editor_ref.GetCursorPosition();
+        } else { // If something IS selected, and it's not our previous find, start search from end of current selection
+            auto selectionStart = m_editor_ref.GetSelectionStart();
+            auto selectionEnd = m_editor_ref.GetSelectionEnd();
+            if (!(selectionStart == m_lastMatchStartCoord && selectionEnd == m_lastMatchEndCoord)) {
+                 m_findStartCoord = selectionEnd;
+            }
+            // else, it IS our previous find, so startOffset is already correctly set to search after m_lastMatchEndCoord
+        }
+         startOffset = GetOffsetForCoordinates(editorText, m_findStartCoord);
+    }
+
+    // Ensure startOffset is within bounds
+    if (startOffset >= (int)editorText.length()) {
+        startOffset = 0; // Wrap around to the beginning
+    }
+
+
+    std::string textToSearch = editorText;
+    if (!m_findCaseSensitive) {
+        std::transform(textToSearch.begin(), textToSearch.end(), textToSearch.begin(), ::tolower);
+        std::transform(searchText.begin(), searchText.end(), searchText.begin(), ::tolower);
+    }
+
+    size_t foundPos = textToSearch.find(searchText, startOffset);
+
+    if (foundPos != std::string::npos) {
+        m_foundText = true;
+        m_lastMatchStartCoord = GetCoordinatesForOffset(editorText, (int)foundPos);
+        m_lastMatchEndCoord = GetCoordinatesForOffset(editorText, (int)foundPos + (int)searchText.length());
+
+        m_editor_ref.SetSelection(m_lastMatchStartCoord, m_lastMatchEndCoord);
+        m_editor_ref.SetCursorPosition(m_lastMatchStartCoord);
+        m_currentFindIndex = (int)foundPos; // Store flat index for now
+    } else {
+        // If not found from startOffset, try searching from the beginning of the document (wrap around)
+        foundPos = textToSearch.find(searchText, 0);
+        if (foundPos != std::string::npos) {
+            m_foundText = true;
+            m_lastMatchStartCoord = GetCoordinatesForOffset(editorText, (int)foundPos);
+            m_lastMatchEndCoord = GetCoordinatesForOffset(editorText, (int)foundPos + (int)searchText.length());
+
+            m_editor_ref.SetSelection(m_lastMatchStartCoord, m_lastMatchEndCoord);
+            m_editor_ref.SetCursorPosition(m_lastMatchStartCoord);
+            m_currentFindIndex = (int)foundPos;
+        } else {
+            m_foundText = false;
+            m_currentFindIndex = -1;
+            // Optionally, provide feedback to the user that the text was not found (e.g., status bar message)
+        }
+    }
+}
+
+void UIManager::HandleFindPrevious() {
+    // Basic implementation sketch - proper previous search needs careful offset management
+    if (strlen(m_findText) == 0) {
+        m_foundText = false;
+        return;
+    }
+
+    std::string editorText = m_editor_ref.GetText();
+    std::string searchText = m_findText;
+
+    int startOffset = 0;
+    // If a previous match was found, start searching before it.
+    if (m_foundText && m_lastMatchStartCoord.mLine >=0 && m_lastMatchStartCoord.mColumn >=0) {
+        startOffset = GetOffsetForCoordinates(editorText, m_lastMatchStartCoord);
+        if (startOffset > 0) startOffset--; // Start search just before the current match
+        else startOffset = (int)editorText.length() -1; // wrap to end if at beginning
+    } else {
+        // If no previous match, start from current cursor or end of document
+        m_findStartCoord = m_editor_ref.GetCursorPosition();
+        startOffset = GetOffsetForCoordinates(editorText, m_findStartCoord);
+         if (startOffset > 0) startOffset--;
+         else startOffset = (int)editorText.length() -1;
+    }
+    if (startOffset < 0) startOffset = (int)editorText.length() -1; // Ensure it's not negative
+
+    std::string textToSearch = editorText;
+    if (!m_findCaseSensitive) {
+        std::transform(textToSearch.begin(), textToSearch.end(), textToSearch.begin(), ::tolower);
+        std::transform(searchText.begin(), searchText.end(), searchText.begin(), ::tolower);
+    }
+
+    size_t foundPos = std::string::npos;
+    // Iterate backwards using rfind
+    if (startOffset >= (int)searchText.length() -1 ) { // ensure startOffset allows for full searchText
+         foundPos = textToSearch.rfind(searchText, startOffset);
+    } else if (!searchText.empty()){ // if search text is not empty but startOffset is too small, search the whole doc from end
+         foundPos = textToSearch.rfind(searchText, std::string::npos);
+    }
+
+
+    if (foundPos != std::string::npos) {
+        m_foundText = true;
+        m_lastMatchStartCoord = GetCoordinatesForOffset(editorText, (int)foundPos);
+        m_lastMatchEndCoord = GetCoordinatesForOffset(editorText, (int)foundPos + (int)searchText.length());
+
+        m_editor_ref.SetSelection(m_lastMatchStartCoord, m_lastMatchEndCoord);
+        m_editor_ref.SetCursorPosition(m_lastMatchStartCoord);
+        m_currentFindIndex = (int)foundPos;
+    } else {
+         // Wrap around to search from the end if not found
+        foundPos = textToSearch.rfind(searchText, std::string::npos); // Search from the very end
+        if (foundPos != std::string::npos) {
+            m_foundText = true;
+            m_lastMatchStartCoord = GetCoordinatesForOffset(editorText, (int)foundPos);
+            m_lastMatchEndCoord = GetCoordinatesForOffset(editorText, (int)foundPos + (int)searchText.length());
+
+            m_editor_ref.SetSelection(m_lastMatchStartCoord, m_lastMatchEndCoord);
+            m_editor_ref.SetCursorPosition(m_lastMatchStartCoord);
+            m_currentFindIndex = (int)foundPos;
+        } else {
+            m_foundText = false;
+            m_currentFindIndex = -1;
+        }
+    }
 }
 
 
