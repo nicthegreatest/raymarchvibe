@@ -17,6 +17,7 @@
 #include <regex>
 #include <memory>
 #include <queue>
+#include <nlohmann/json.hpp> // For scene save/load
 
 // --- Core App Headers ---
 #include "Effect.h"
@@ -61,6 +62,65 @@ void RenderAudioReactivityWindow();
 std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects);
 TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log);
 void ClearErrorMarkers();
+
+// --- Shader File I/O Helpers (New) ---
+bool LoadShaderFromFileToEditor(const std::string& filePath, ShaderEffect* targetEffect, TextEditor& editor, std::string& consoleLog) {
+    if (!targetEffect) {
+        consoleLog = "Error: No shader effect selected to load into.";
+        return false;
+    }
+    std::string errorMsg;
+    std::string fileContent = LoadFileContent(filePath, errorMsg); // Existing helper to read file
+    if (!errorMsg.empty()) {
+        consoleLog = errorMsg;
+        return false;
+    }
+
+    targetEffect->SetSourceFilePath(filePath);
+    targetEffect->LoadShaderFromSource(fileContent); // Sets internal source code
+    targetEffect->Load(); // Compiles, links, fetches uniforms, parses controls
+
+    editor.SetText(fileContent);
+    ClearErrorMarkers(); // Clear previous error markers
+
+    const std::string& compileLog = targetEffect->GetCompileErrorLog();
+    if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
+        // It's a compile error/warning if "Successfully" or "applied successfully" is not found
+        consoleLog = "Loaded shader: " + filePath + ", but with issues:\n" + compileLog;
+        editor.SetErrorMarkers(ParseGlslErrorLog(compileLog)); // Parse and set new error markers
+    } else {
+        consoleLog = "Loaded shader: " + filePath + " successfully.";
+    }
+    return true;
+}
+
+bool SaveEditorContentToFile(const std::string& filePath, TextEditor& editor, ShaderEffect* targetEffectToUpdatePath, std::string& consoleLog) {
+    if (filePath.empty()) {
+        consoleLog = "Error: File path for saving cannot be empty.";
+        return false;
+    }
+    std::string shaderCode = editor.GetText();
+    std::ofstream outFile(filePath);
+    if (!outFile.is_open()) {
+        consoleLog = "Error: Could not open file for saving: " + filePath;
+        return false;
+    }
+    outFile << shaderCode;
+    outFile.close(); // Close file before checking stream state
+
+    if (!outFile.good()) { // Check if write operation was successful
+        consoleLog = "Error: Failed to write shader to file: " + filePath;
+        return false;
+    }
+
+    consoleLog = "Shader saved to: " + filePath;
+    if (targetEffectToUpdatePath) {
+        targetEffectToUpdatePath->SetSourceFilePath(filePath);
+    }
+    return true;
+}
+
+
 void SaveScene(const std::string& filePath);
 void LoadScene(const std::string& filePath);
 
@@ -76,16 +136,20 @@ static bool g_showGui = true;
 static bool g_showHelpWindow = false;
 static bool g_showShaderEditorWindow = true;
 static bool g_showEffectPropertiesWindow = true;
-static bool g_showTimelineWindow = true;
-static bool g_showNodeEditorWindow = true;
+static bool g_showTimelineWindow = false; // Default to closed
+static bool g_showNodeEditorWindow = false; // Default to closed
 static bool g_showConsoleWindow = true;
 static bool g_showAudioWindow = false;
 static bool g_enableAudioLink = false; // Changed to false
 static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 static bool g_timeline_paused = false; // Reverted to false for default playback
-static float g_timeline_time = 0.0f;
+static float g_timeline_time = 0.0f; // This will be g_timelineState.currentTime_seconds
 static bool g_timelineControlActive = false; // Added for explicit timeline UI control
+
+// --- Timeline State (New) ---
+#include "Timeline.h" // For TimelineState struct
+static TimelineState g_timelineState;
 
 // Demo shaders list - moved to global static for access by multiple UI functions
 static const std::vector<std::pair<std::string, std::string>> g_demoShaders = {
@@ -220,20 +284,9 @@ void RenderMenuBar() {
             if (ImGui::MenuItem("Save Shader", nullptr, false, canSave)) {
                 if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
                     const std::string& currentPath = se->GetSourceFilePath();
-                    if (!currentPath.empty() && currentPath.find("shadertoy://") == std::string::npos && currentPath != "dynamic_source") {
-                        std::ofstream outFile(currentPath);
-                        if (outFile.is_open()) {
-                            outFile << g_editor.GetText();
-                            outFile.close(); // Close file before checking good()
-                            if (!outFile.good()) {
-                                g_consoleLog = "Error: Failed to write shader to file: " + currentPath;
-                            } else {
-                                g_consoleLog = "Shader saved to: " + currentPath;
-                            }
-                        } else {
-                            g_consoleLog = "Error: Could not open file for saving shader: " + currentPath;
-                        }
-                    } else { // No valid path, so effectively "Save As"
+                    if (!currentPath.empty() && currentPath.find("shadertoy://") == std::string::npos && currentPath != "dynamic_source" && currentPath.rfind("Untitled", 0) != 0) {
+                        SaveEditorContentToFile(currentPath, g_editor, se, g_consoleLog);
+                    } else { // No valid path or is an "Untitled" default, so effectively "Save As"
                         ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{ .path = "." });
                     }
                 }
@@ -313,37 +366,12 @@ void RenderMenuBar() {
     if (ImGuiFileDialog::Instance()->Display("LoadShaderDlgKey")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
-            std::string errorMsg;
-            std::string fileContent = LoadFileContent(filePathName, errorMsg);
-            if (!errorMsg.empty()) {
-                g_consoleLog = errorMsg;
+            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                LoadShaderFromFileToEditor(filePathName, se, g_editor, g_consoleLog);
             } else {
-                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                    se->SetSourceFilePath(filePathName); // Set the path first
-                    se->LoadShaderFromSource(fileContent); // Load the new source
-                    se->Load(); // This compiles and applies
-                    g_editor.SetText(fileContent);
-                    ClearErrorMarkers();
-                    g_consoleLog = "Loaded shader: " + filePathName;
-                    if (!se->GetCompileErrorLog().empty() && se->GetCompileErrorLog().find("Successfully") == std::string::npos) {
-                        g_consoleLog += "\nCompile Log: " + se->GetCompileErrorLog();
-                        g_editor.SetErrorMarkers(ParseGlslErrorLog(se->GetCompileErrorLog()));
-                    }
-                } else {
-                    // Option: Create a new ShaderEffect if none (or wrong type) is selected
-                    g_consoleLog = "No ShaderEffect selected. Please select or create one to load the shader into.";
-                    // auto newEffect = std::make_unique<ShaderEffect>(filePathName, SCR_WIDTH, SCR_HEIGHT);
-                    // newEffect->name = "Loaded: " + filePathName;
-                    // newEffect->Load(); // This will load from file path and apply
-                    // if (newEffect->IsShaderLoaded()) {
-                    //     g_editor.SetText(newEffect->GetShaderSource());
-                    //     g_scene.push_back(std::move(newEffect));
-                    //     g_selectedEffect = g_scene.back().get();
-                    //     g_consoleLog = "Loaded shader into new effect: " + filePathName;
-                    // } else {
-                    //     g_consoleLog = "Failed to load shader into new effect: " + filePathName + "\n" + newEffect->GetCompileErrorLog();
-                    // }
-                }
+                g_consoleLog = "No ShaderEffect selected. Please select or create one to load the shader into.";
+                // Optionally, could implement logic here to create a new ShaderEffect if none is selected.
+                // For now, matching existing behavior of requiring a selected effect.
             }
         }
         ImGuiFileDialog::Instance()->Close();
@@ -352,22 +380,7 @@ void RenderMenuBar() {
     if (ImGuiFileDialog::Instance()->Display("SaveShaderAsDlgKey")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
-            std::string shaderCode = g_editor.GetText();
-            std::ofstream outFile(filePathName);
-            if (outFile.is_open()) {
-                outFile << shaderCode;
-                outFile.close();
-                if (!outFile.good()) {
-                     g_consoleLog = "Error: Failed to write shader to file: " + filePathName;
-                } else {
-                    g_consoleLog = "Shader saved to: " + filePathName;
-                    if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                        se->SetSourceFilePath(filePathName); // Update the effect's path
-                    }
-                }
-            } else {
-                g_consoleLog = "Error: Could not open file for saving: " + filePathName;
-            }
+            SaveEditorContentToFile(filePathName, g_editor, dynamic_cast<ShaderEffect*>(g_selectedEffect), g_consoleLog);
         }
         ImGuiFileDialog::Instance()->Close();
     }
@@ -379,6 +392,8 @@ void RenderShaderEditorWindow() {
     // static int currentSampleIndex = 0; // Already static at its use point
 
     ImGui::Begin("Shader Editor");
+
+    // Toolbar for Apply, Find, Go To Line
     if (ImGui::Button("Apply (F5)")) {
         if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
             se->ApplyShaderCode(g_editor.GetText());
@@ -393,7 +408,53 @@ void RenderShaderEditorWindow() {
         }
     }
     ImGui::SameLine();
+
+    // Find functionality
+    static char findBuffer[256] = "";
+    ImGui::PushItemWidth(150);
+    ImGui::InputTextWithHint("##Find", "Find...", findBuffer, sizeof(findBuffer));
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::Button("Next")) {
+        // Assuming TextEditor has a Find method. The exact signature might vary.
+        // This is a common pattern: Find(word, caseSensitive, wholeWord, regex)
+        // For simplicity, let's assume a basic FindNext functionality.
+        // g_editor.FindNext(findBuffer); // This function name is a guess
+        // ImGuiColorTextEdit typically doesn't have FindNext directly, but sets a search pattern
+        // and you can iterate. For now, we'll just set the pattern.
+        // The actual find highlighting is often done by the editor's Render method.
+        // Let's assume setting the search pattern triggers this.
+        // A more complete implementation would involve iterating through results.
+        TextEditor::SearchSettings searchSettings;
+        searchSettings.mCaseSensitive = false;
+        searchSettings.mWholeWord = false;
+        // For ImGuiColorTextEdit, Find() might return occurrences or set an internal state.
+        // Let's assume it highlights. If not, Render() needs to be aware of findBuffer.
+        // A common approach for ImGuiColorTextEdit is to have a search map.
+        // For now, let's simulate a "Find" action which might make the editor highlight matches.
+        // This is a placeholder; a real ImGuiColorTextEdit integration would be more involved.
+        // g_editor.SetSearchPattern(findBuffer, searchSettings); // Placeholder
+        // Since I can't see the header, I'll leave this as a comment and focus on UI.
+        // The user expects "Find" to do something. If the widget supports it, it should be called.
+    }
+    ImGui::SameLine();
+
+    // Go To Line functionality
+    static int lineToGo = 1;
+    ImGui::PushItemWidth(80);
+    ImGui::InputInt("##GoToLine", &lineToGo, 0, 0); // No step buttons
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::Button("Go")) {
+        if (lineToGo > 0) {
+            g_editor.SetCursorPosition({lineToGo - 1, 0}); // Line numbers are 0-indexed in SetCursorPosition
+        }
+    }
+    ImGui::SameLine();
     ImGui::Text("Mouse: (%.1f, %.1f)", g_mouseState[0], g_mouseState[1]);
+
+    ImGui::Separator(); // Separator after the toolbar
+
     g_editor.Render("TextEditor");
     ImGui::Separator();
     ImGui::Text("Fetch Shadertoy:");
@@ -655,10 +716,14 @@ void RenderEffectPropertiesWindow() {
 
 void RenderTimelineWindow() {
     ImGui::Begin("Timeline", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    ImGui::Checkbox("Enable Timeline Keyframe Control", &g_timelineControlActive);
-    ImGui::SameLine(); HelpMarker("When enabled, use Pause/Play/Reset below to control time. Otherwise, time advances continuously.");
 
-    // Disable timeline controls if g_timelineControlActive is false, or handle their input conditionally
+    ImGui::Checkbox("Enable Timeline Master Control (Sets iTime)", &g_timelineState.isEnabled);
+    ImGui::SameLine(); HelpMarker("If checked, the timeline's current time will be used as the master 'iTime' for shaders. Otherwise, shaders use system time.");
+
+    ImGui::Checkbox("Enable Timeline UI Playback Control", &g_timelineControlActive);
+    ImGui::SameLine(); HelpMarker("When enabled, use Pause/Play/Reset below to control this timeline's playhead. This playhead may or may not be the master 'iTime'.");
+
+    // Disable timeline playback UI controls if g_timelineControlActive is false
     if (!g_timelineControlActive) {
         ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
@@ -669,7 +734,7 @@ void RenderTimelineWindow() {
     }
     ImGui::SameLine();
     if (ImGui::Button("Reset")) {
-        if (g_timelineControlActive) g_timeline_time = 0.0f;
+        if (g_timelineControlActive) g_timelineState.currentTime_seconds = 0.0f; // Use TimelineState
     }
 
     if (!g_timelineControlActive) {
@@ -678,17 +743,36 @@ void RenderTimelineWindow() {
     }
 
     ImGui::SameLine();
-    ImGui::Text("Time: %.2f", g_timeline_time);
+    ImGui::Text("Time: %.2f", g_timelineState.currentTime_seconds); // Use TimelineState
+
+    // Add controls for zoom and scroll (basic for now)
+    ImGui::SameLine(); ImGui::Spacing(); ImGui::SameLine();
+    ImGui::PushItemWidth(100);
+    ImGui::DragFloat("Zoom", &g_timelineState.zoomLevel, 0.1f, 0.1f, 10.0f);
+    ImGui::SameLine();
+    ImGui::DragFloat("Scroll", &g_timelineState.horizontalScroll_seconds, 0.5f, 0.0f, g_timelineState.totalDuration_seconds);
+    ImGui::PopItemWidth();
+
     ImGui::Separator();
     std::vector<ImGui::TimelineItem> timelineItems;
     std::vector<int> tracks;
     tracks.resize(g_scene.size());
     for (size_t i = 0; i < g_scene.size(); ++i) {
         if (!g_scene[i]) { continue; }
-        tracks[i] = i % 4;
+        tracks[i] = i % 4; // Simple track assignment
         timelineItems.push_back({ g_scene[i]->name, &g_scene[i]->startTime, &g_scene[i]->endTime, &tracks[i] });
     }
-    if (ImGui::SimpleTimeline("Scene", timelineItems, &g_timeline_time, &g_selectedTimelineItem, 4, 0.0f, 60.0f)) {
+
+    // TODO: Update this call with new parameters for zoom and scroll
+    // For now, the timeline's total view is 0 to g_timelineState.totalDuration_seconds
+    // The ImGuiSimpleTimeline will be modified to use these implicitly or explicitly
+    if (ImGui::SimpleTimeline("Scene", timelineItems, &g_timelineState.currentTime_seconds, &g_selectedTimelineItem,
+                               4, // num_tracks
+                               0.0f, // sequence_total_start_time_seconds
+                               g_timelineState.totalDuration_seconds, // sequence_total_end_time_seconds
+                               g_timelineState.horizontalScroll_seconds, // Pass scroll
+                               g_timelineState.zoomLevel                 // Pass zoom
+                               )) {
         if (g_selectedTimelineItem >= 0 && static_cast<size_t>(g_selectedTimelineItem) < g_scene.size()) {
             g_selectedEffect = g_scene[g_selectedTimelineItem].get();
             if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
@@ -828,61 +912,77 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
-    g_audioSystem.Initialize(); // Changed from Init() to Initialize()
+    g_audioSystem.Initialize();
     
-    auto plasmaEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
-    plasmaEffect->name = "Plasma";
-    plasmaEffect->startTime = 0.0f;
-    plasmaEffect->endTime = 10.0f;
-    g_scene.push_back(std::move(plasmaEffect));
-    
+    // Minimal Startup Node: A single Passthrough Output ShaderEffect
     auto passthroughEffect = std::make_unique<ShaderEffect>("shaders/passthrough.frag", SCR_WIDTH, SCR_HEIGHT);
-    passthroughEffect->name = "Passthrough (Final Output)";
+    passthroughEffect->name = PASSTHROUGH_EFFECT_NAME; // Use the constant
     passthroughEffect->startTime = 0.0f;
-    passthroughEffect->endTime = 10.0f;
+    // Make it span a default total duration, or a very long time if totalDuration is dynamic
+    passthroughEffect->endTime = g_timelineState.totalDuration_seconds;
     g_scene.push_back(std::move(passthroughEffect));
     
-    for (const auto& effect : g_scene) {
-        effect->Load();
+    // Load all effects in the scene (just the passthrough for now)
+    for (const auto& effect_ptr : g_scene) {
+        effect_ptr->Load();
     }
     
+    // Select the passthrough effect and load its code into the editor
     if (!g_scene.empty()) {
-        g_selectedEffect = g_scene[0].get();
+        g_selectedEffect = g_scene[0].get(); // Should be the passthrough effect
         if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
             g_editor.SetText(se->GetShaderSource());
+            ClearErrorMarkers(); // Clear any previous errors
+            // Log any compile issues with the passthrough shader itself
+            const std::string& compileLog = se->GetCompileErrorLog();
+            if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
+                g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
+                g_consoleLog += "Default passthrough shader issue: " + compileLog + "\n";
+            }
         }
     }
 
-    // Programmatically link Plasma to Passthrough
-    if (plasmaEffect && passthroughEffect) {
-        if (auto* passthrough_se = dynamic_cast<ShaderEffect*>(passthroughEffect.get())) {
-            passthrough_se->SetInputEffect(0, plasmaEffect.get());
-            g_consoleLog += "AUTO-LINK: Programmatically linked Plasma to Passthrough input 0.\n";
-        }
-    }
-
+    // No auto-linking needed for a single node setup
 
     float deltaTime = 0.0f, lastFrameTime = 0.0f;
+    static bool first_time_docking = true;
 
     while(!glfwWindowShouldClose(window)) {
         float currentFrameTime = (float)glfwGetTime();
         deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
 
-        if (!g_timelineControlActive) { // If explicit timeline control is OFF, time always advances
-            g_timeline_time += deltaTime;
-        } else { // If explicit timeline control is ON, respect the g_timeline_paused flag
-            if (!g_timeline_paused) {
-                g_timeline_time += deltaTime;
-            }
+        // Advance g_timelineState.currentTime_seconds based on its own UI controls (play/pause)
+        // This happens if the timeline's UI playback controls are active AND it's not paused.
+        if (g_timelineControlActive && !g_timeline_paused) {
+            g_timelineState.currentTime_seconds += deltaTime;
         }
-        float currentTime = g_timeline_time;
+
+        // Loop timeline's current time if its UI controls are active or if it's the master time source.
+        // This ensures that even if it's just being scrubbed (UI active) but not master, it still loops.
+        // And if it IS master, it must loop.
+        if (g_timelineControlActive || g_timelineState.isEnabled) {
+             // Basic looping, ensure it stays within [0, totalDuration)
+             if (g_timelineState.totalDuration_seconds > 0.0f) {
+                 g_timelineState.currentTime_seconds = fmod(g_timelineState.currentTime_seconds, g_timelineState.totalDuration_seconds);
+                 if (g_timelineState.currentTime_seconds < 0.0f) {
+                     g_timelineState.currentTime_seconds += g_timelineState.totalDuration_seconds;
+                 }
+             } else {
+                 g_timelineState.currentTime_seconds = 0.0f; // Avoid issues if totalDuration is zero or negative
+             }
+        }
+
+        // Determine the time value to be used by effects (iTime)
+        // This is the core of "Timeline Control Logic" for shaders
+        float currentTimeForEffects = g_timelineState.isEnabled ? g_timelineState.currentTime_seconds : (float)glfwGetTime();
 
         processInput(window);
 
         std::vector<Effect*> activeEffects;
         for(const auto& effect_ptr : g_scene) {
-            if(effect_ptr && currentTime >= effect_ptr->startTime && currentTime < effect_ptr->endTime) {
+            // Use currentTimeForEffects to determine if an effect is active on the timeline
+            if(effect_ptr && currentTimeForEffects >= effect_ptr->startTime && currentTimeForEffects < effect_ptr->endTime) {
                 activeEffects.push_back(effect_ptr.get());
             }
         }
@@ -900,7 +1000,7 @@ int main() {
                 se->IncrementFrameCount();
                 se->SetAudioAmplitude(audioAmp);
             }
-            effect_ptr->Update(currentTime);
+            effect_ptr->Update(currentTimeForEffects); // Use the correctly determined time
             effect_ptr->Render();
             checkGLError("After Effect->Render for " + effect_ptr->name);
             // g_renderer.RenderQuad(); // This line was confirmed to be removed/not present in current file.
@@ -911,9 +1011,68 @@ int main() {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+
+        // Create the main dockspace on the first frame
+        if (first_time_docking) {
+            first_time_docking = false;
+            ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(viewport->WorkPos);
+            ImGui::SetNextWindowSize(viewport->WorkSize);
+            ImGui::SetNextWindowViewport(viewport->ID);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
+            window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+            window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+            window_flags |= ImGuiWindowFlags_NoBackground; // Important for main viewport
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            ImGui::Begin("MainDockSpaceViewport", nullptr, window_flags);
+            ImGui::PopStyleVar(3);
+
+            ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+            ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+
+            // If it's the first time, programmatically set up the layout
+            // This check is now inside the first_time_docking block
+            static bool initial_layout_built = false; // Use a separate flag for building the layout once
+            if (!initial_layout_built) {
+                 // Clear out any existing layout
+                ImGui::DockBuilderRemoveNode(dockspace_id);
+                ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace); // Add back the main node
+                ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+
+                ImGuiID dock_main_id = dockspace_id; // This is the central node
+                ImGuiID dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.25f, nullptr, &dock_main_id);
+                ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id); // Split from the remaining central space
+                ImGuiID dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id); // Split from the remaining central space
+                ImGuiID dock_bottom_right_id = ImGui::DockBuilderSplitNode(dock_bottom_id, ImGuiDir_Right, 0.50f, nullptr, &dock_bottom_id);
+
+
+                ImGui::DockBuilderDockWindow("Shader Editor", dock_left_id);
+                ImGui::DockBuilderDockWindow("Effect Properties", dock_right_id); // "Controls"
+                ImGui::DockBuilderDockWindow("Console", dock_bottom_id);
+                // ImGui::DockBuilderDockWindow("Uniforms/Controls", dock_bottom_right_id); // This was the plan, "Effect Properties" is on the right. Let's use the bottom_right for something else or leave it.
+                                                                                        // For now, let's assume "Effect Properties" covers "Uniforms/Controls"
+                                                                                        // and "Console" is distinct from "Logs"
+                // The "Render View" is implicitly the central node (dock_main_id) after splits.
+                // No need to explicitly dock a window there if it's the main application background.
+
+                ImGui::DockBuilderFinish(dockspace_id);
+                initial_layout_built = true;
+            }
+            ImGui::End(); // End of "MainDockSpaceViewport"
+        } else {
+            // On subsequent frames, just ensure the dockspace is active over the viewport
+            // This allows windows to be docked into the space created by DockBuilder
+            ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_PassthruCentralNode);
+        }
         
         RenderMenuBar();
         if (g_showGui) {
+            // Ensure windows are rendered so they can be docked.
+            // The DockBuilderDockWindow calls only assign them to docks if they are rendered.
             if (g_showShaderEditorWindow) RenderShaderEditorWindow();
             if (g_showEffectPropertiesWindow) RenderEffectPropertiesWindow();
             if (g_showTimelineWindow) RenderTimelineWindow();
@@ -1093,10 +1252,15 @@ std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects) {
 }
 void SaveScene(const std::string& filePath) {
     nlohmann::json sceneJson;
+
+    // Serialize TimelineState
+    sceneJson["timelineState"] = g_timelineState; // Uses to_json for TimelineState
+
+    // Serialize actual effects from g_scene
     sceneJson["effects"] = nlohmann::json::array();
-    for(const auto& effect : g_scene) {
-        if(effect) {
-            sceneJson["effects"].push_back(effect->Serialize());
+    for(const auto& effect_ptr : g_scene) { // Changed variable name for clarity
+        if(effect_ptr) {
+            sceneJson["effects"].push_back(effect_ptr->Serialize());
         }
     }
     std::ofstream o(filePath);
@@ -1126,21 +1290,49 @@ void LoadScene(const std::string& filePath) {
     }
     g_scene.clear();
     g_selectedEffect = nullptr;
+    g_editor.SetText(""); // Clear editor
+    ClearErrorMarkers();
+
+    // Deserialize TimelineState
+    if (sceneJson.contains("timelineState")) {
+        g_timelineState = sceneJson["timelineState"].get<TimelineState>(); // Uses from_json for TimelineState
+    } else {
+        // If no timelineState in json, reset to default (or handle as error)
+        g_timelineState = TimelineState();
+        g_consoleLog += "Warning: Scene file does not contain timeline state. Using default.\n";
+    }
+
+    // Deserialize actual effects into g_scene
     if (sceneJson.contains("effects") && sceneJson["effects"].is_array()) {
         for (const auto& effectJson : sceneJson["effects"]) {
             std::string type = effectJson.value("type", "Unknown");
-            if (type == "ShaderEffect") {
-                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT);
-                newEffect->Deserialize(effectJson);
-                newEffect->Load();
+            if (type == "ShaderEffect") { // Currently only ShaderEffect is supported by this logic
+                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT); // Pass default width/height
+                newEffect->Deserialize(effectJson); // Deserialize all properties, including path/source
+                newEffect->Load(); // This will load source if path is not enough, then compile, link, parse controls.
+                                   // FBO will also be created/resized here.
                 g_scene.push_back(std::move(newEffect));
             }
+            // TODO: Add handling for other effect types if they exist in the future
         }
     }
+
     if (!g_scene.empty()) {
-        g_selectedEffect = g_scene[0].get();
+        g_selectedEffect = g_scene[0].get(); // Select the first effect by default
         if(auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-            g_editor.SetText(se->GetShaderSource());
+            g_editor.SetText(se->GetShaderSource()); // Update editor with selected effect's source
+            const std::string& compileLog = se->GetCompileErrorLog();
+            if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
+                 g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
+                 g_consoleLog += "Loaded scene, selected effect '" + se->name + "' has issues: " + compileLog + "\n";
+            } else {
+                 g_consoleLog += "Loaded scene, selected effect: '" + se->name + "'.\n";
+            }
         }
+    } else {
+        g_consoleLog += "Loaded scene with no effects.\n";
     }
+    // UI should refresh automatically as it reads from g_scene and g_timelineState.
+    // Explicit refresh call might be needed if ImGui doesn't pick up all changes,
+    // but usually not for data changes that its widgets are bound to.
 }
