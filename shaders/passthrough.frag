@@ -3,22 +3,26 @@ out vec4 FragColor;
 
 in vec2 TexCoords; // Assuming this comes from a standard fullscreen vert shader
 
-uniform sampler2D u_inputTexture; // Texture from the previous effect in the chain
+uniform sampler2D iChannel0; // Texture from the previous effect in the chain (RENAMED from u_inputTexture)
 uniform float iTime; // Just to make it do something if no input
 
 void main() {
-    vec4 inputColor = texture(u_inputTexture, TexCoords);
+    vec4 inputColor = texture(iChannel0, TexCoords); // Use iChannel0
 
     // If no input texture is properly bound, texture() might return black or undefined.
     // Let's add a fallback or a slight modification to see if the shader is working.
-    if (inputColor.a == 0.0 && inputColor.r == 0.0 && inputColor.g == 0.0 && inputColor.b == 0.0) {
-        // If input is black/transparent (possibly unbound), draw a time-based pattern
-        vec2 uv = TexCoords * 2.0 - 1.0; // -1 to 1
-        float color = 0.5 + 0.5 * sin(uv.x * 10.0 + iTime);
-        FragColor = vec4(color, uv.y, 0.5, 1.0);
-    } else {
+    // Check if input is effectively black (very dark) or fully transparent
+    bool isBlack = (inputColor.r < 0.01 && inputColor.g < 0.01 && inputColor.b < 0.01);
+    bool isTransparent = inputColor.a < 0.01;
+
+    if (isBlack && isTransparent) { // If input is black AND transparent (typical for unbound/default texture)
+        FragColor = vec4(1.0, 0.0, 1.0, 1.0); // Bright Magenta for unbound/empty input
+    } else if (isBlack) { // If input is black but opaque (Plasma might be outputting black)
+        FragColor = vec4(1.0, 0.0, 0.0, 1.0); // Bright Red for black input
+    }
+    else {
         // Simple effect: desaturate or tint the input
-        float grayscale = dot(inputColor.rgb, vec3(0.299, 0.587, 0.114));
+        // float grayscale = dot(inputColor.rgb, vec3(0.299, 0.587, 0.114));
         // FragColor = vec4(vec3(grayscale), inputColor.a); // Grayscale
         FragColor = vec4(inputColor.r * 0.5, inputColor.g, inputColor.b * 0.8, inputColor.a); // Tint
     }

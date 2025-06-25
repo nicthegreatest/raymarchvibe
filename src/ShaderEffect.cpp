@@ -18,47 +18,9 @@ static GLuint CompileShader(const char* source, GLenum type, std::string& errorL
 static GLuint CreateShaderProgram(GLuint vertexShaderID, GLuint fragmentShaderID, std::string& errorLogString); // Already defined below
 static std::string LoadPassthroughVertexShaderSource(std::string& errorMsg); // Already defined below
 
-// Constructor for ShaderToyUniformControl (if not in .h, needed for vector<ShaderToyUniformControl>)
-ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std::string& type_str, const nlohmann::json& meta)
-    : name(n), glslType(type_str), metadata(meta), location(-1), fValue(0.0f), iValue(0), bValue(false), isColor(false) { // Ensure member init order matches declaration
-    std::fill_n(v2Value, 2, 0.0f);
-    std::fill_n(v3Value, 3, 0.0f);
-    std::fill_n(v4Value, 4, 0.0f);
-
-    if (metadata.contains("default")) {
-        try {
-            if (glslType == "float" && metadata["default"].is_number()) {
-                fValue = metadata["default"].get<float>();
-            } else if (glslType == "vec2" && metadata["default"].is_array() && metadata["default"].size() == 2) {
-                for(size_t i=0; i<2; ++i) if(metadata["default"][i].is_number()) v2Value[i] = metadata["default"][i].get<float>();
-            } else if (glslType == "vec3" && metadata["default"].is_array() && metadata["default"].size() == 3) {
-                for(size_t i=0; i<3; ++i) if(metadata["default"][i].is_number()) v3Value[i] = metadata["default"][i].get<float>();
-            } else if (glslType == "vec4" && metadata["default"].is_array() && metadata["default"].size() == 4) {
-                for(size_t i=0; i<4; ++i) if(metadata["default"][i].is_number()) v4Value[i] = metadata["default"][i].get<float>();
-            } else if (glslType == "int" && metadata["default"].is_number_integer()) {
-                iValue = metadata["default"].get<int>();
-            } else if (glslType == "bool" && metadata["default"].is_boolean()) {
-                bValue = metadata["default"].get<bool>();
-            }
-        } catch (const nlohmann::json::exception& e) {
-            std::cerr << "Error accessing 'default' for uniform " << name << " of type " << glslType << ": " << e.what() << std::endl;
-        }
-    }
-    std::string widgetType = metadata.value("widget", "");
-    if ((glslType == "vec3" || glslType == "vec4") && widgetType == "color") {
-        isColor = true;
-    }
-}
-
-// Constructor for ShaderConstControl
-ShaderConstControl::ShaderConstControl(const std::string& n, const std::string& type, int line, const std::string& valStr)
-    : name(n), glslType(type), lineNumber(line), originalValueString(valStr),
-      fValue(0.0f), iValue(0), multiplier(1.0f), isColor(false) {
-    std::fill_n(v2Value, 2, 0.0f);
-    std::fill_n(v3Value, 3, 0.0f);
-    std::fill_n(v4Value, 4, 0.0f);
-    // Value parsing logic will be in ShaderParser or a dedicated method
-}
+// REMOVED: Constructor definitions for ShaderToyUniformControl and ShaderConstControl.
+// These are (and should be) defined in ShaderParser.cpp.
+// ShaderEffect.cpp should include ShaderParser.h for their declarations.
 
 
 ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidth, int initialHeight, bool isShadertoy)
@@ -138,9 +100,10 @@ GLuint ShaderEffect::GetOutputTexture() const {
 
 void ShaderEffect::ResizeFrameBuffer(int width, int height) {
     if (width <= 0 || height <= 0) {
-        std::cerr << "ShaderEffect::ResizeFrameBuffer error: Invalid dimensions (" << width << "x" << height << ")" << std::endl;
+        std::cerr << "ShaderEffect::ResizeFrameBuffer error: Invalid dimensions (" << width << "x" << height << ") for " << name << std::endl;
         return;
     }
+    std::cerr << "ShaderEffect::ResizeFrameBuffer for " << name << " to " << width << "x" << height << ". Current FBO ID: " << m_fboID << std::endl;
 
     m_fboWidth = width;
     m_fboHeight = height;
@@ -173,14 +136,15 @@ void ShaderEffect::ResizeFrameBuffer(int width, int height) {
     glBindRenderbuffer(GL_RENDERBUFFER, 0); // Unbind RBO
 
     // Check FBO completeness
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+    GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer for " << name << " is not complete! Status: 0x" << std::hex << fboStatus << std::dec << std::endl;
         // Cleanup on failure
         glDeleteFramebuffers(1, &m_fboID); m_fboID = 0;
         glDeleteTextures(1, &m_fboTextureID); m_fboTextureID = 0;
         glDeleteRenderbuffers(1, &m_rboID); m_rboID = 0;
     } else {
-        // std::cout << "ShaderEffect FBO created/resized successfully: " << m_fboWidth << "x" << m_fboHeight << std::endl;
+        std::cerr << "ShaderEffect FBO for " << name << " created/resized successfully: " << m_fboWidth << "x" << m_fboHeight << ", FBO ID: " << m_fboID << ", Texture ID: " << m_fboTextureID << std::endl;
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind FBO
@@ -240,6 +204,7 @@ bool ShaderEffect::LoadShaderFromSource(const std::string& sourceCode) {
 }
 
 void ShaderEffect::Load() {
+    std::cerr << "ShaderEffect::Load() called for: " << name << ", FilePath: " << m_shaderFilePath << std::endl;
     // Ensure FBO dimensions are set before creating FBO (e.g. from constructor or explicit call after SetDisplayResolution)
     // For now, m_fboWidth/Height are initialized in constructor.
     // If they are 0, use some default from main.cpp or constants.
@@ -248,22 +213,25 @@ void ShaderEffect::Load() {
     if (m_fboWidth == 0 || m_fboHeight == 0) { // If not set by constructor or resize
         // This part may need adjustment depending on how initial resolution is passed.
         // For now, assuming constructor defaults are sensible or Resize is called from main.
-        std::cerr << "Warning: ShaderEffect::Load() called with FBO dimensions 0. Using default 800x600 for FBO." << std::endl;
+        std::cerr << "Warning: ShaderEffect::Load() for " << name << " called with FBO dimensions 0. Using default 800x600 for FBO." << std::endl;
         ResizeFrameBuffer(800, 600); // Fallback if not set
     } else {
+        std::cerr << "ShaderEffect::Load() for " << name << ", calling ResizeFrameBuffer with " << m_fboWidth << "x" << m_fboHeight << std::endl;
         ResizeFrameBuffer(m_fboWidth, m_fboHeight); // Create FBO with current dimensions
     }
 
 
     if (m_shaderSourceCode.empty() && !m_shaderFilePath.empty()) {
+        std::cerr << "ShaderEffect::Load() for " << name << ": Source code empty, loading from file: " << m_shaderFilePath << std::endl;
         std::string loadError;
         m_shaderSourceCode = LoadShaderSourceFile(m_shaderFilePath, loadError);
         if (!loadError.empty()) {
             m_compileErrorLog = "File load error during Load(): " + loadError;
             m_shaderLoaded = false;
-            std::cerr << m_compileErrorLog << std::endl;
+            std::cerr << "ShaderEffect::Load() for " << name << " - File load error: " << m_compileErrorLog << std::endl;
             return;
         }
+        std::cerr << "ShaderEffect::Load() for " << name << ": Successfully loaded source from file." << std::endl;
         // Auto-detect Shadertoy mode again if source was just loaded
         if (m_shaderSourceCode.find("mainImage") != std::string::npos &&
             m_shaderSourceCode.find("fragCoord") != std::string::npos) {
@@ -274,34 +242,37 @@ void ShaderEffect::Load() {
     }
 
     if (m_shaderSourceCode.empty()) {
-        m_compileErrorLog = "Shader source code is empty. Cannot load.";
+        m_compileErrorLog = "Shader source code for " + name + " is empty. Cannot load.";
         m_shaderLoaded = false;
         std::cerr << m_compileErrorLog << std::endl;
         return;
     }
+    std::cerr << "ShaderEffect::Load() for " << name << ": Calling ApplyShaderCode." << std::endl;
     ApplyShaderCode(m_shaderSourceCode);
 }
 
 
 void ShaderEffect::ApplyShaderCode(const std::string& newShaderCode) {
+    std::cerr << "ShaderEffect::ApplyShaderCode() called for: " << name << std::endl;
     m_shaderSourceCode = newShaderCode;
     m_compileErrorLog.clear();
 
     CompileAndLinkShader(); // This updates m_shaderProgram and m_compileErrorLog
+    std::cerr << "ShaderEffect::ApplyShaderCode for " << name << " - CompileAndLinkShader done. Program ID: " << m_shaderProgram << ", ErrorLog: " << m_compileErrorLog << std::endl;
 
     if (m_shaderProgram != 0) {
+        std::cerr << "ShaderEffect::ApplyShaderCode for " << name << ": Shader program valid. Fetching uniforms and parsing controls." << std::endl;
         FetchUniformLocations(); // Fetches locations for the new program
         ParseShaderControls();   // Parses defines, metadata uniforms, consts from m_shaderSourceCode
         m_shaderLoaded = true;
-        // m_compileErrorLog += "Applied successfully!"; // Or keep it clean if no errors
-        if (m_compileErrorLog.empty()) { // If CompileAndLinkShader was successful
+        if (m_compileErrorLog.empty()) {
              m_compileErrorLog = "Shader applied successfully.";
-             // Add any warnings from FetchUniformLocations or ParseShaderControls if they generate them
         }
+         std::cerr << "ShaderEffect::ApplyShaderCode for " << name << ": Loaded successfully. Final error log: " << m_compileErrorLog << std::endl;
     } else {
         m_shaderLoaded = false;
+        std::cerr << "ShaderEffect::ApplyShaderCode for " << name << ": Shader program is 0. Load failed. Error log: " << m_compileErrorLog << std::endl;
         // m_compileErrorLog will already be set by CompileAndLinkShader
-        std::cerr << "ShaderEffect::ApplyShaderCode failed. Error log:\n" << m_compileErrorLog << std::endl;
     }
 }
 
@@ -341,7 +312,14 @@ void ShaderEffect::Update(float currentTime) {
 // In ShaderEffect.cpp
 
 void ShaderEffect::Render() {
+    // Diagnostic Log
+    std::cerr << "ShaderEffect::Render() called for: " << name
+              << ", Program: " << m_shaderProgram
+              << ", FBO: " << m_fboID
+              << ", Loaded: " << (m_shaderLoaded ? "true" : "false") << std::endl;
+
     if (!m_shaderLoaded || m_shaderProgram == 0 || m_fboID == 0) {
+        std::cerr << "ShaderEffect::Render() for " << name << " skipped (not loaded/no program/no FBO)." << std::endl;
         return; // Don't render if not ready
     }
 
@@ -357,10 +335,20 @@ void ShaderEffect::Render() {
     if (!m_inputs.empty() && m_inputs[0] != nullptr) {
         if (auto* inputSE = dynamic_cast<ShaderEffect*>(m_inputs[0])) {
             GLuint inputTextureID = inputSE->GetOutputTexture();
+            if (this->name == "Passthrough (Final Output)") { // Specific log for Passthrough
+                std::cerr << "ShaderEffect::Render for Passthrough: inputSE=" << inputSE->name
+                          << ", inputTextureID=" << inputTextureID
+                          << ", m_iChannel0SamplerLoc=" << m_iChannel0SamplerLoc << std::endl;
+            }
             if (inputTextureID != 0 && m_iChannel0SamplerLoc != -1) {
+                 if (this->name == "Passthrough (Final Output)") {
+                    std::cerr << "ShaderEffect::Render for Passthrough: Binding iChannel0 with texture ID " << inputTextureID << std::endl;
+                }
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, inputTextureID);
                 glUniform1i(m_iChannel0SamplerLoc, 0);
+            } else if (this->name == "Passthrough (Final Output)" && m_iChannel0SamplerLoc != -1 && inputTextureID == 0) {
+                 std::cerr << "ShaderEffect::Render for Passthrough: Input texture ID is 0. Not binding iChannel0." << std::endl;
             }
         }
     }
@@ -873,9 +861,10 @@ void ShaderEffect::FetchUniformLocations() {
     if (m_shaderProgram == 0) return;
     std::string warnings_collector;
     m_iChannel0SamplerLoc = glGetUniformLocation(m_shaderProgram, "iChannel0"); // Use "iChannel0"
+    std::cerr << "ShaderEffect::FetchUniformLocations for " << name << ": m_iChannel0SamplerLoc = " << m_iChannel0SamplerLoc << std::endl;
     if (m_iChannel0SamplerLoc == -1) {
         // It's common for shaders not to use iChannel0, so this might be more of a debug log than a warning.
-        // std::cout << "Debug: Uniform 'iChannel0' not found in shader for effect: " << name << std::endl;
+         std::cerr << "ShaderEffect::FetchUniformLocations for " << name << ": Uniform 'iChannel0' not found." << std::endl;
         // warnings_collector += "Info: Uniform 'iChannel0' not found.\n"; // Or make it less alarming
     }
 
@@ -941,11 +930,15 @@ void ShaderEffect::FetchUniformLocations() {
 void ShaderEffect::ParseShaderControls() {
     if (m_shaderSourceCode.empty()) return;
 
-    m_shaderParser.ScanAndPrepareDefineControls(m_shaderSourceCode, m_defineControls);
-    m_shaderParser.ScanAndPrepareConstControls(m_shaderSourceCode, m_constControls);
+    m_shaderParser.ScanAndPrepareDefineControls(m_shaderSourceCode);
+    m_defineControls = m_shaderParser.GetDefineControls();
+
+    m_shaderParser.ScanAndPrepareConstControls(m_shaderSourceCode);
+    m_constControls = m_shaderParser.GetConstControls();
 
     if (m_isShadertoyMode) {
-        m_shaderParser.ScanAndPrepareUniformControls(m_shaderSourceCode, m_shadertoyUniformControls);
+        m_shaderParser.ScanAndPrepareUniformControls(m_shaderSourceCode);
+        m_shadertoyUniformControls = m_shaderParser.GetUniformControls();
     } else {
         m_shadertoyUniformControls.clear(); // Not applicable in native mode
     }
@@ -1101,7 +1094,7 @@ void ShaderEffect::Deserialize(const nlohmann::json& data) {
     if (data.contains("defineControls")) {
         m_defineControls.clear(); // Or update existing if names match? For simplicity, clear and repopulate.
         for (const auto& dJson : data["defineControls"]) {
-            ShaderDefineControl dc;
+            DefineControl dc; // Changed from ShaderDefineControl
             dc.name = dJson.value("name", "");
             dc.isEnabled = dJson.value("isEnabled", false);
             dc.floatValue = dJson.value("floatValue", 0.0f);
@@ -1132,7 +1125,7 @@ void ShaderEffect::Deserialize(const nlohmann::json& data) {
     if (data.contains("constControls")) {
         m_constControls.clear();
         for (const auto& cJson : data["constControls"]) {
-            ShaderConstControl cc(cJson.value("name",""), cJson.value("glslType","float"), 0, ""); // dummy line/val
+            ConstVariableControl cc(cJson.value("name",""), cJson.value("glslType","float"), 0, ""); // Changed from ShaderConstControl, dummy line/val
             cc.fValue = cJson.value("fValue", 0.0f);
             cc.iValue = cJson.value("iValue", 0);
              if (cJson.contains("v2Value") && cJson["v2Value"].is_array() && cJson["v2Value"].size() == 2) {
