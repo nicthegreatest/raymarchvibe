@@ -9,6 +9,26 @@
 #include <algorithm> // For std::sort, std::remove_if
 #include <regex>     // For parsing logic if moved here
 
+// Local GL error checker for ShaderEffect
+static void checkGLErrorInEffect(const std::string& label, const std::string& effectName) {
+    GLenum err;
+    while((err = glGetError()) != GL_NO_ERROR) {
+        std::string errorStr;
+        switch(err) {
+            case GL_INVALID_ENUM: errorStr = "INVALID_ENUM"; break;
+            case GL_INVALID_VALUE: errorStr = "INVALID_VALUE"; break;
+            case GL_INVALID_OPERATION: errorStr = "INVALID_OPERATION"; break;
+            case GL_STACK_OVERFLOW: errorStr = "STACK_OVERFLOW"; break;
+            case GL_STACK_UNDERFLOW: errorStr = "STACK_UNDERFLOW"; break;
+            case GL_OUT_OF_MEMORY: errorStr = "OUT_OF_MEMORY"; break;
+            case GL_INVALID_FRAMEBUFFER_OPERATION: errorStr = "INVALID_FRAMEBUFFER_OPERATION"; break;
+            default: errorStr = "UNKNOWN_ERROR (" + std::to_string(err) + ")"; break;
+        }
+        std::cerr << "GL_ERROR (Effect: " << effectName << ", Op: " << label << "): " << errorStr << std::endl;
+    }
+}
+
+
 // Helper function declarations (prototypes) for functions that will be moved
 // from main.cpp or new helper functions.
 // These would ideally be static members or free functions in a utility namespace.
@@ -115,28 +135,42 @@ void ShaderEffect::ResizeFrameBuffer(int width, int height) {
 
     // Create Framebuffer
     glGenFramebuffers(1, &m_fboID);
+    checkGLErrorInEffect("glGenFramebuffers", name);
     glBindFramebuffer(GL_FRAMEBUFFER, m_fboID);
+    checkGLErrorInEffect("glBindFramebuffer (FBO Texture Gen)", name);
 
     // Create Texture Attachment
     glGenTextures(1, &m_fboTextureID);
+    checkGLErrorInEffect("glGenTextures", name);
     glBindTexture(GL_TEXTURE_2D, m_fboTextureID);
+    checkGLErrorInEffect("glBindTexture (FBO Texture Gen)", name);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_fboWidth, m_fboHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    checkGLErrorInEffect("glTexImage2D (FBO Texture Gen)", name);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // Prevent edge artifacts
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    checkGLErrorInEffect("glTexParameteri (FBO Texture Gen)", name);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_fboTextureID, 0);
-    glBindTexture(GL_TEXTURE_2D, 0); // Unbind texture
+    checkGLErrorInEffect("glFramebufferTexture2D", name);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    checkGLErrorInEffect("Unbind Texture (FBO Texture Gen)", name);
 
     // Create Renderbuffer Object for Depth/Stencil attachment
     glGenRenderbuffers(1, &m_rboID);
+    checkGLErrorInEffect("glGenRenderbuffers", name);
     glBindRenderbuffer(GL_RENDERBUFFER, m_rboID);
+    checkGLErrorInEffect("glBindRenderbuffer", name);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_fboWidth, m_fboHeight);
+    checkGLErrorInEffect("glRenderbufferStorage", name);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_rboID);
-    glBindRenderbuffer(GL_RENDERBUFFER, 0); // Unbind RBO
+    checkGLErrorInEffect("glFramebufferRenderbuffer", name);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    checkGLErrorInEffect("Unbind RBO", name);
 
     // Check FBO completeness
     GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    checkGLErrorInEffect("glCheckFramebufferStatus", name); // Check error from the status check itself
     if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
         std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer for " << name << " is not complete! Status: 0x" << std::hex << fboStatus << std::dec << std::endl;
         // Cleanup on failure
@@ -147,7 +181,8 @@ void ShaderEffect::ResizeFrameBuffer(int width, int height) {
         std::cerr << "ShaderEffect FBO for " << name << " created/resized successfully: " << m_fboWidth << "x" << m_fboHeight << ", FBO ID: " << m_fboID << ", Texture ID: " << m_fboTextureID << std::endl;
     }
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind FBO
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGLErrorInEffect("Unbind FBO (End of ResizeFrameBuffer)", name);
 }
 
 // --- Node Editor Methods ---
@@ -325,11 +360,15 @@ void ShaderEffect::Render() {
 
     // 1. Bind this effect's FBO as the render target
     glBindFramebuffer(GL_FRAMEBUFFER, m_fboID);
+    checkGLErrorInEffect("glBindFramebuffer (Effect FBO)", name);
     glViewport(0, 0, m_fboWidth, m_fboHeight);
+    checkGLErrorInEffect("glViewport (Effect FBO)", name);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the FBO
+    checkGLErrorInEffect("glClear (Effect FBO)", name);
 
     // 2. Use this effect's shader program
     glUseProgram(m_shaderProgram);
+    checkGLErrorInEffect("glUseProgram", name);
 
     // 3. Bind the input texture from a previous node (if connected)
     if (!m_inputs.empty() && m_inputs[0] != nullptr) {
@@ -390,9 +429,11 @@ void ShaderEffect::Render() {
     }
 
     // 5. FINALLY, execute the draw call here.
-    Renderer::RenderQuad(); // <-- ADD THIS LINE
+    Renderer::RenderQuad();
+    checkGLErrorInEffect("After Renderer::RenderQuad", name);
 
     // The note about the main loop doing the drawing is no longer true.
+    // No explicit unbind of FBO here, main loop binds FBO 0 after this effect's Render()
 }
 
 void ShaderEffect::SetAudioAmplitude(float amp) {
