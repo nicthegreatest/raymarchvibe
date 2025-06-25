@@ -335,10 +335,20 @@ void ShaderEffect::Render() {
     if (!m_inputs.empty() && m_inputs[0] != nullptr) {
         if (auto* inputSE = dynamic_cast<ShaderEffect*>(m_inputs[0])) {
             GLuint inputTextureID = inputSE->GetOutputTexture();
+            if (this->name == "Passthrough (Final Output)") { // Specific log for Passthrough
+                std::cerr << "ShaderEffect::Render for Passthrough: inputSE=" << inputSE->name
+                          << ", inputTextureID=" << inputTextureID
+                          << ", m_iChannel0SamplerLoc=" << m_iChannel0SamplerLoc << std::endl;
+            }
             if (inputTextureID != 0 && m_iChannel0SamplerLoc != -1) {
+                 if (this->name == "Passthrough (Final Output)") {
+                    std::cerr << "ShaderEffect::Render for Passthrough: Binding iChannel0 with texture ID " << inputTextureID << std::endl;
+                }
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, inputTextureID);
                 glUniform1i(m_iChannel0SamplerLoc, 0);
+            } else if (this->name == "Passthrough (Final Output)" && m_iChannel0SamplerLoc != -1 && inputTextureID == 0) {
+                 std::cerr << "ShaderEffect::Render for Passthrough: Input texture ID is 0. Not binding iChannel0." << std::endl;
             }
         }
     }
@@ -851,9 +861,10 @@ void ShaderEffect::FetchUniformLocations() {
     if (m_shaderProgram == 0) return;
     std::string warnings_collector;
     m_iChannel0SamplerLoc = glGetUniformLocation(m_shaderProgram, "iChannel0"); // Use "iChannel0"
+    std::cerr << "ShaderEffect::FetchUniformLocations for " << name << ": m_iChannel0SamplerLoc = " << m_iChannel0SamplerLoc << std::endl;
     if (m_iChannel0SamplerLoc == -1) {
         // It's common for shaders not to use iChannel0, so this might be more of a debug log than a warning.
-        // std::cout << "Debug: Uniform 'iChannel0' not found in shader for effect: " << name << std::endl;
+         std::cerr << "ShaderEffect::FetchUniformLocations for " << name << ": Uniform 'iChannel0' not found." << std::endl;
         // warnings_collector += "Info: Uniform 'iChannel0' not found.\n"; // Or make it less alarming
     }
 
