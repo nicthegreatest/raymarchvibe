@@ -795,6 +795,15 @@ int main() {
         }
     }
 
+    // Programmatically link Plasma to Passthrough
+    if (plasmaEffect && passthroughEffect) {
+        if (auto* passthrough_se = dynamic_cast<ShaderEffect*>(passthroughEffect.get())) {
+            passthrough_se->SetInputEffect(0, plasmaEffect.get());
+            g_consoleLog += "AUTO-LINK: Programmatically linked Plasma to Passthrough input 0.\n";
+        }
+    }
+
+
     float deltaTime = 0.0f, lastFrameTime = 0.0f;
 
     while(!glfwWindowShouldClose(window)) {
