@@ -196,7 +196,7 @@ void RenderMenuBar() {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Load Shader...")) {
                 // Args: key, title, filters, path, fileName, count, flags, userDatas
-                ImGuiFileDialog::Instance()->OpenDialog("LoadShaderDlgKey", "Choose Shader File", ".frag,.fs,.glsl,.*", ".");
+                ImGuiFileDialog::Instance()->OpenDialog("LoadShaderDlgKey", "Choose Shader File", ".frag,.fs,.glsl,.*", IGFD::FileDialogConfig{ .path = "." });
             }
             bool canSave = (g_selectedEffect && dynamic_cast<ShaderEffect*>(g_selectedEffect));
             if (ImGui::MenuItem("Save Shader", nullptr, false, canSave)) {
@@ -216,12 +216,12 @@ void RenderMenuBar() {
                             g_consoleLog = "Error: Could not open file for saving shader: " + currentPath;
                         }
                     } else { // No valid path, so effectively "Save As"
-                        ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", ".");
+                        ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{ .path = "." });
                     }
                 }
             }
             if (ImGui::MenuItem("Save Shader As...", nullptr, false, canSave)) {
-                 ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", ".");
+                 ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{ .path = "." });
             }
 
             ImGui::Separator();
@@ -356,6 +356,10 @@ void RenderMenuBar() {
 }
 
 void RenderShaderEditorWindow() {
+    static char filePathBuffer_SaveAs[512] = ""; // Buffer for Save As path - MOVED TO FUNCTION SCOPE
+    // static char shadertoyIdBuffer[256] = ""; // Already static at its use point, keep it there or move here too for consistency
+    // static int currentSampleIndex = 0; // Already static at its use point
+
     ImGui::Begin("Shader Editor");
     if (ImGui::Button("Apply (F5)")) {
         if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
@@ -550,7 +554,7 @@ void RenderShaderEditorWindow() {
                         } else { g_consoleLog = "ERROR opening file for saving: " + currentPath; }
                     } else { // No valid path or is untitled, trigger Save As
                         strncpy(filePathBuffer_SaveAs, se->GetSourceFilePath().rfind("Untitled", 0) == 0 ? "" : se->GetSourceFilePath().c_str(), sizeof(filePathBuffer_SaveAs) -1);
-                        ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey_Editor", "Save Shader As...", ".frag,.fs,.glsl", ".");
+                        ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey_Editor", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{ .path = "." });
                     }
                 }
             }
@@ -559,7 +563,7 @@ void RenderShaderEditorWindow() {
             if (ImGui::Button("Save As...##Editor")) { // Identical to File > Save Shader As
                 std::string saveAsPathStr(filePathBuffer_SaveAs);
                 if (saveAsPathStr.empty()) {
-                    ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey_Editor", "Save Shader As...", ".frag,.fs,.glsl", ".");
+                    ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey_Editor", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{ .path = "." });
                 } else {
                     std::ofstream outFile(saveAsPathStr);
                     if (outFile.is_open()) {
