@@ -83,8 +83,9 @@ static bool g_showAudioWindow = false;
 static bool g_enableAudioLink = false; // Changed to false
 static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-static bool g_timeline_paused = true; // Changed to true
+static bool g_timeline_paused = false; // Reverted to false for default playback
 static float g_timeline_time = 0.0f;
+static bool g_timelineControlActive = false; // Added for explicit timeline UI control
 
 // Demo shaders list - moved to global static for access by multiple UI functions
 static const std::vector<std::pair<std::string, std::string>> g_demoShaders = {
@@ -141,6 +142,20 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 
 
 // --- Helper Functions ---
+
+// Helper to display a little (?) mark which shows a tooltip when hovered.
+// In your own code you may want to display an actual icon if you are using a merged icon font.
+static void HelpMarker(const char* desc) {
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 static Effect* FindEffectById(int effect_id) {
     for (const auto& effect_ptr : g_scene) {
         if (effect_ptr && effect_ptr->id == effect_id) {
@@ -640,9 +655,28 @@ void RenderEffectPropertiesWindow() {
 
 void RenderTimelineWindow() {
     ImGui::Begin("Timeline", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    if (ImGui::Button(g_timeline_paused ? "Play" : "Pause")) { g_timeline_paused = !g_timeline_paused; }
+    ImGui::Checkbox("Enable Timeline Keyframe Control", &g_timelineControlActive);
+    ImGui::SameLine(); HelpMarker("When enabled, use Pause/Play/Reset below to control time. Otherwise, time advances continuously.");
+
+    // Disable timeline controls if g_timelineControlActive is false, or handle their input conditionally
+    if (!g_timelineControlActive) {
+        ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+    }
+
+    if (ImGui::Button(g_timeline_paused ? "Play" : "Pause")) {
+        if (g_timelineControlActive) g_timeline_paused = !g_timeline_paused;
+    }
     ImGui::SameLine();
-    if (ImGui::Button("Reset")) { g_timeline_time = 0.0f; }
+    if (ImGui::Button("Reset")) {
+        if (g_timelineControlActive) g_timeline_time = 0.0f;
+    }
+
+    if (!g_timelineControlActive) {
+        ImGui::PopItemFlag();
+        ImGui::PopStyleVar();
+    }
+
     ImGui::SameLine();
     ImGui::Text("Time: %.2f", g_timeline_time);
     ImGui::Separator();
@@ -834,7 +868,14 @@ int main() {
         float currentFrameTime = (float)glfwGetTime();
         deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
-        if (!g_timeline_paused) { g_timeline_time += deltaTime; }
+
+        if (!g_timelineControlActive) { // If explicit timeline control is OFF, time always advances
+            g_timeline_time += deltaTime;
+        } else { // If explicit timeline control is ON, respect the g_timeline_paused flag
+            if (!g_timeline_paused) {
+                g_timeline_time += deltaTime;
+            }
+        }
         float currentTime = g_timeline_time;
 
         processInput(window);
