@@ -227,10 +227,10 @@ void RenderShaderEditorWindow() {
                     g_consoleLog = "Fetched and loaded Shadertoy: " + shadertoyId;
                 }
                 shadertoyIdBuffer[0] = '\0';
-            } else {
-                g_consoleLog = "Error fetching Shadertoy " + shadertoyId + ": " + errorMsg;
             }
-        } else {
+            // The erroneous 'else' block that was here has been removed.
+            // The 'errorMsg' is handled within the 'if (fetchedCode.empty())' block above.
+        } else { // This 'else' correctly pairs with 'if (!shadertoyId.empty())'
             g_consoleLog = "Invalid Shadertoy ID or URL.";
         }
     }
