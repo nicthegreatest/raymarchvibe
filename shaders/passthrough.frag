@@ -3,11 +3,11 @@ out vec4 FragColor;
 
 in vec2 TexCoords; // Assuming this comes from a standard fullscreen vert shader
 
-uniform sampler2D u_inputTexture; // Texture from the previous effect in the chain
+uniform sampler2D iChannel0; // Texture from the previous effect in the chain (RENAMED from u_inputTexture)
 uniform float iTime; // Just to make it do something if no input
 
 void main() {
-    vec4 inputColor = texture(u_inputTexture, TexCoords);
+    vec4 inputColor = texture(iChannel0, TexCoords); // Use iChannel0
 
     // If no input texture is properly bound, texture() might return black or undefined.
     // Let's add a fallback or a slight modification to see if the shader is working.
