@@ -17,7 +17,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_Declare(
   ImGuiColorTextEdit
   GIT_REPOSITORY https://github.com/BalazsJako/ImGuiColorTextEdit.git
-  GIT_TAG v2.1 # Pinned to a specific tag
+  GIT_TAG 0a88824f7de8d0bd11d8419066caa7d3469395c4 # Pinned to latest master commit as v2.1 tag not found
 )
 FetchContent_MakeAvailable(ImGuiColorTextEdit)
 
@@ -57,7 +57,7 @@ FetchContent_MakeAvailable(imgui)
 FetchContent_Declare(
   miniaudio
   GIT_REPOSITORY https://github.com/mackron/miniaudio.git
-  GIT_TAG v0.11.21 # Pinned to a specific tag
+  GIT_TAG 0.11.21 # Pinned to a specific tag, removed 'v' prefix
 )
 FetchContent_MakeAvailable(miniaudio) # This makes miniaudio_SOURCE_DIR available
 
@@ -114,7 +114,7 @@ target_include_directories(RaymarchVibe PRIVATE
 target_link_libraries(RaymarchVibe PRIVATE
   glad_lib
   nlohmann_json::nlohmann_json
-  glfw::glfw # Modern CMake target for GLFW
+  glfw # Modern CMake target for GLFW, trying non-namespaced
   OpenGL::GL
   Threads::Threads
   # imgui::imgui or imgui if provided by FetchContent for ImGui
