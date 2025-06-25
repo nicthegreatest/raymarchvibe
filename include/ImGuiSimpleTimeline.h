@@ -214,13 +214,13 @@ inline bool SimpleTimeline(const char* label, std::vector<TimelineItem>& items, 
         if (IsMouseClicked(0)) {
             if (mouse_over_left_edge) {
                 SetActiveID(item_id_left_edge, window);
-                if (selected_item_index) *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window);
+                if (selected_item_index) { *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window); }
             } else if (mouse_over_right_edge) {
                 SetActiveID(item_id_right_edge, window);
-                if (selected_item_index) *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window);
+                if (selected_item_index) { *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window); }
             } else if (mouse_over_body && IsMouseHoveringRect(item_visual_bb.Min, item_visual_bb.Max)) { // Ensure click was on the item
                 SetActiveID(item_id_body, window);
-                if (selected_item_index) *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window);
+                if (selected_item_index) { *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window); }
             }
         }
 
