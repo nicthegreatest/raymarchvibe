@@ -32,15 +32,19 @@ AudioSystem::~AudioSystem() {
 }
 
 // --- Public Methods ---
-bool AudioSystem::Initialize() { // Changed to bool to match header
+bool AudioSystem::Initialize() {
+    AppendToErrorLog("AudioSystem::Initialize() called.");
     if (ma_context_init(NULL, 0, NULL, &miniaudioContext) != MA_SUCCESS) {
-        AppendToErrorLog("AUDIO ERROR: Failed to initialize Miniaudio context.");
+        AppendToErrorLog("AUDIO ERROR: Failed to initialize Miniaudio context (ma_context_init failed).");
         contextInitialized = false;
-        return false; // Return false on failure
+        return false;
     }
+    AppendToErrorLog("Miniaudio context initialized successfully.");
     contextInitialized = true;
-    EnumerateCaptureDevices(); // Assuming this doesn't indicate overall success/failure for Initialize itself
-    return true; // Added missing return true for success path
+    EnumerateCaptureDevices();
+    // Assuming EnumerateCaptureDevices logs its own success/failure.
+    // Initialize() success primarily depends on context init.
+    return true;
     // Optionally, initialize default capture device here if desired at startup
     // For example, if the default source is Microphone:
     // if (currentAudioSourceIndex == 0) {
@@ -59,13 +63,15 @@ void AudioSystem::Shutdown() {
 }
 
 void AudioSystem::EnumerateCaptureDevices() {
+    AppendToErrorLog("AudioSystem::EnumerateCaptureDevices() called.");
     if (!contextInitialized) {
-        AppendToErrorLog("AUDIO ERROR: Miniaudio context not initialized for enumeration.");
+        AppendToErrorLog("AUDIO ERROR: Cannot enumerate devices, Miniaudio context not initialized.");
         captureDevicesEnumerated = false;
         return;
     }
     // ClearLastError(); // Clear previous errors before new enumeration attempt
 
+    AppendToErrorLog("Attempting to get audio devices from Miniaudio...");
     ma_device_info* pPlaybackDeviceInfos;
     ma_uint32 playbackDeviceCount;
     ma_device_info* pCaptureDeviceInfos;
@@ -85,12 +91,17 @@ void AudioSystem::EnumerateCaptureDevices() {
     miniaudioCaptureDevice_StdString_Names.clear(); 
     miniaudioCaptureDevice_CString_Names.clear();   
 
-    std::cout << "Available Capture Devices:" << std::endl;
+    std::string devicesLog = "Available Capture Devices (via std::cout):\n";
+    AppendToErrorLog("Processing " + std::to_string(captureDeviceCount) + " capture devices found by Miniaudio.");
     for (ma_uint32 i = 0; i < captureDeviceCount; ++i) {
         miniaudioAvailableCaptureDevicesInfo.push_back(pCaptureDeviceInfos[i]);
-        miniaudioCaptureDevice_StdString_Names.push_back(std::string(pCaptureDeviceInfos[i].name)); 
-        std::cout << "  " << i << ": " << pCaptureDeviceInfos[i].name 
-                  << (pCaptureDeviceInfos[i].isDefault ? " (Default)" : "") << std::endl;
+        std::string deviceName = pCaptureDeviceInfos[i].name;
+        miniaudioCaptureDevice_StdString_Names.push_back(deviceName);
+
+        std::string logEntry = "  " + std::to_string(i) + ": " + deviceName + (pCaptureDeviceInfos[i].isDefault ? " (Default)" : "");
+        devicesLog += logEntry + "\n";
+        std::cout << logEntry << std::endl; // Keep std::cout for terminal users
+        AppendToErrorLog("Found Device: " + deviceName + (pCaptureDeviceInfos[i].isDefault ? " (Default)" : ""));
     }
     
     miniaudioCaptureDevice_CString_Names.reserve(miniaudioCaptureDevice_StdString_Names.size()); 
