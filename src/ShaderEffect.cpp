@@ -18,8 +18,9 @@ static void checkGLErrorInEffect(const std::string& label, const std::string& ef
             case GL_INVALID_ENUM: errorStr = "INVALID_ENUM"; break;
             case GL_INVALID_VALUE: errorStr = "INVALID_VALUE"; break;
             case GL_INVALID_OPERATION: errorStr = "INVALID_OPERATION"; break;
-            case GL_STACK_OVERFLOW: errorStr = "STACK_OVERFLOW"; break;
-            case GL_STACK_UNDERFLOW: errorStr = "STACK_UNDERFLOW"; break;
+            // GL_STACK_OVERFLOW and GL_STACK_UNDERFLOW are deprecated and may not be defined
+            // case GL_STACK_OVERFLOW: errorStr = "STACK_OVERFLOW"; break;
+            // case GL_STACK_UNDERFLOW: errorStr = "STACK_UNDERFLOW"; break;
             case GL_OUT_OF_MEMORY: errorStr = "OUT_OF_MEMORY"; break;
             case GL_INVALID_FRAMEBUFFER_OPERATION: errorStr = "INVALID_FRAMEBUFFER_OPERATION"; break;
             default: errorStr = "UNKNOWN_ERROR (" + std::to_string(err) + ")"; break;
