@@ -97,6 +97,8 @@ add_executable(RaymarchVibe
   ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imnodes/imnodes.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog/ImGuiFileDialog.cpp # Corrected path
   src/AudioSystem.cpp # Ensure this file defines MINIAUDIO_IMPLEMENTATION if using miniaudio header-only
+  src/Utils.cpp
+  src/ShadertoyIntegration.cpp
 )
 
 target_include_directories(RaymarchVibe PRIVATE

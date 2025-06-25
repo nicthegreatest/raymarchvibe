@@ -18,47 +18,9 @@ static GLuint CompileShader(const char* source, GLenum type, std::string& errorL
 static GLuint CreateShaderProgram(GLuint vertexShaderID, GLuint fragmentShaderID, std::string& errorLogString); // Already defined below
 static std::string LoadPassthroughVertexShaderSource(std::string& errorMsg); // Already defined below
 
-// Constructor for ShaderToyUniformControl (if not in .h, needed for vector<ShaderToyUniformControl>)
-ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std::string& type_str, const nlohmann::json& meta)
-    : name(n), glslType(type_str), metadata(meta), location(-1), fValue(0.0f), iValue(0), bValue(false), isColor(false) { // Ensure member init order matches declaration
-    std::fill_n(v2Value, 2, 0.0f);
-    std::fill_n(v3Value, 3, 0.0f);
-    std::fill_n(v4Value, 4, 0.0f);
-
-    if (metadata.contains("default")) {
-        try {
-            if (glslType == "float" && metadata["default"].is_number()) {
-                fValue = metadata["default"].get<float>();
-            } else if (glslType == "vec2" && metadata["default"].is_array() && metadata["default"].size() == 2) {
-                for(size_t i=0; i<2; ++i) if(metadata["default"][i].is_number()) v2Value[i] = metadata["default"][i].get<float>();
-            } else if (glslType == "vec3" && metadata["default"].is_array() && metadata["default"].size() == 3) {
-                for(size_t i=0; i<3; ++i) if(metadata["default"][i].is_number()) v3Value[i] = metadata["default"][i].get<float>();
-            } else if (glslType == "vec4" && metadata["default"].is_array() && metadata["default"].size() == 4) {
-                for(size_t i=0; i<4; ++i) if(metadata["default"][i].is_number()) v4Value[i] = metadata["default"][i].get<float>();
-            } else if (glslType == "int" && metadata["default"].is_number_integer()) {
-                iValue = metadata["default"].get<int>();
-            } else if (glslType == "bool" && metadata["default"].is_boolean()) {
-                bValue = metadata["default"].get<bool>();
-            }
-        } catch (const nlohmann::json::exception& e) {
-            std::cerr << "Error accessing 'default' for uniform " << name << " of type " << glslType << ": " << e.what() << std::endl;
-        }
-    }
-    std::string widgetType = metadata.value("widget", "");
-    if ((glslType == "vec3" || glslType == "vec4") && widgetType == "color") {
-        isColor = true;
-    }
-}
-
-// Constructor for ShaderConstControl
-ShaderConstControl::ShaderConstControl(const std::string& n, const std::string& type, int line, const std::string& valStr)
-    : name(n), glslType(type), lineNumber(line), originalValueString(valStr),
-      fValue(0.0f), iValue(0), multiplier(1.0f), isColor(false) {
-    std::fill_n(v2Value, 2, 0.0f);
-    std::fill_n(v3Value, 3, 0.0f);
-    std::fill_n(v4Value, 4, 0.0f);
-    // Value parsing logic will be in ShaderParser or a dedicated method
-}
+// REMOVED: Constructor definitions for ShaderToyUniformControl and ShaderConstControl.
+// These are (and should be) defined in ShaderParser.cpp.
+// ShaderEffect.cpp should include ShaderParser.h for their declarations.
 
 
 ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidth, int initialHeight, bool isShadertoy)
@@ -941,11 +903,15 @@ void ShaderEffect::FetchUniformLocations() {
 void ShaderEffect::ParseShaderControls() {
     if (m_shaderSourceCode.empty()) return;
 
-    m_shaderParser.ScanAndPrepareDefineControls(m_shaderSourceCode, m_defineControls);
-    m_shaderParser.ScanAndPrepareConstControls(m_shaderSourceCode, m_constControls);
+    m_shaderParser.ScanAndPrepareDefineControls(m_shaderSourceCode);
+    m_defineControls = m_shaderParser.GetDefineControls();
+
+    m_shaderParser.ScanAndPrepareConstControls(m_shaderSourceCode);
+    m_constControls = m_shaderParser.GetConstControls();
 
     if (m_isShadertoyMode) {
-        m_shaderParser.ScanAndPrepareUniformControls(m_shaderSourceCode, m_shadertoyUniformControls);
+        m_shaderParser.ScanAndPrepareUniformControls(m_shaderSourceCode);
+        m_shadertoyUniformControls = m_shaderParser.GetUniformControls();
     } else {
         m_shadertoyUniformControls.clear(); // Not applicable in native mode
     }
@@ -1101,7 +1067,7 @@ void ShaderEffect::Deserialize(const nlohmann::json& data) {
     if (data.contains("defineControls")) {
         m_defineControls.clear(); // Or update existing if names match? For simplicity, clear and repopulate.
         for (const auto& dJson : data["defineControls"]) {
-            ShaderDefineControl dc;
+            DefineControl dc; // Changed from ShaderDefineControl
             dc.name = dJson.value("name", "");
             dc.isEnabled = dJson.value("isEnabled", false);
             dc.floatValue = dJson.value("floatValue", 0.0f);
@@ -1132,7 +1098,7 @@ void ShaderEffect::Deserialize(const nlohmann::json& data) {
     if (data.contains("constControls")) {
         m_constControls.clear();
         for (const auto& cJson : data["constControls"]) {
-            ShaderConstControl cc(cJson.value("name",""), cJson.value("glslType","float"), 0, ""); // dummy line/val
+            ConstVariableControl cc(cJson.value("name",""), cJson.value("glslType","float"), 0, ""); // Changed from ShaderConstControl, dummy line/val
             cc.fValue = cJson.value("fValue", 0.0f);
             cc.iValue = cJson.value("iValue", 0);
              if (cJson.contains("v2Value") && cJson["v2Value"].is_array() && cJson["v2Value"].size() == 2) {
