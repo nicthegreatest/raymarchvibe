@@ -32,30 +32,9 @@
 #include "ImGuiSimpleTimeline.h"
 #include "imnodes.h"
 #include "ImGuiFileDialog.h"
+#include "AudioSystem.h" // Added the actual AudioSystem header
 
-// --- Placeholder Audio System ---
-// You should replace this with your actual #include "AudioSystem.h"
-#define AUDIO_FILE_PATH_BUFFER_SIZE 256
-class AudioSystem {
-public:
-    AudioSystem() { audioFilePathInputBuffer[0] = '\0'; }
-    void Init() {}
-    void Shutdown() {}
-    float GetCurrentAmplitude() { return 0.5f + 0.5f * sin((float)glfwGetTime() * 2.0f); }
-    int GetCurrentAudioSourceIndex() { return m_currentSourceIndex; }
-    void SetCurrentAudioSourceIndex(int index) { m_currentSourceIndex = index; }
-    const std::vector<const char*>& GetCaptureDeviceGUINames() { static std::vector<const char*> v = {"Default Mic"}; return v; }
-    int* GetSelectedActualCaptureDeviceIndexPtr() { static int i = 0; return &i; }
-    void SetSelectedActualCaptureDeviceIndex(int) {}
-    void InitializeAndStartSelectedCaptureDevice() {}
-    char* GetAudioFilePathBuffer() { return audioFilePathInputBuffer; }
-    void LoadWavFile(const char*) {}
-    bool IsAudioFileLoaded() { return false; }
-private:
-    char audioFilePathInputBuffer[AUDIO_FILE_PATH_BUFFER_SIZE];
-    int m_currentSourceIndex = 0;
-};
-
+// Placeholder Audio System has been removed.
 
 // --- Window dimensions ---
 const unsigned int SCR_WIDTH = 1280;
@@ -791,7 +770,7 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
-    g_audioSystem.Init();
+    g_audioSystem.Initialize(); // Changed from Init() to Initialize()
     
     auto plasmaEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
     plasmaEffect->name = "Plasma";
