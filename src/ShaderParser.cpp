@@ -37,6 +37,20 @@ ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std
     }
 }
 
+// Constructor for ConstVariableControl
+ConstVariableControl::ConstVariableControl(const std::string& n, const std::string& type, int lIndex, const std::string& valStr)
+    : name(n), glslType(type), originalValueString(valStr), lineIndex(lIndex), charPosition(0),
+      fValue(0.0f), iValue(0), multiplier(1.0f), isColor(false) {
+    // Basic initialization, detailed parsing might be done by ParseConstValueString
+    std::fill_n(v2Value, 2, 0.0f);
+    std::fill_n(v3Value, 3, 0.0f);
+    std::fill_n(v4Value, 4, 0.0f);
+    // Note: ShaderParser::ParseConstValueString(originalValueString, *this); could be called here
+    // if appropriate, but might lead to issues if that function isn't ready for it or if
+    // charPosition is needed first. For now, keep it simple.
+}
+
+
 // --- ShaderParser Implementation ---
 ShaderParser::ShaderParser() {}
 ShaderParser::~ShaderParser() {}
@@ -79,10 +93,10 @@ TextEditor::ErrorMarkers ShaderParser::ParseGlslErrorLog(const std::string& log)
     return markers;
 }
 
-void ShaderParser::ScanAndPrepareDefineControls(const char* shaderCode) {
+void ShaderParser::ScanAndPrepareDefineControls(const std::string& shaderCode) { // Changed to const std::string&
     m_defineControls.clear();
-    std::string code(shaderCode);
-    std::istringstream iss(code);
+    // std::string code(shaderCode); // No longer needed if shaderCode is already std::string
+    std::istringstream iss(shaderCode);
     std::string line;
     int currentLineNumber = 0;
     std::regex defineRegex(R"(^\s*(//)?\s*#define\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\s+([^\n\r]*))?.*)");
@@ -194,10 +208,10 @@ std::string ShaderParser::UpdateDefineValueInString(const std::string& shaderCod
     return oss.str();
 }
 
-void ShaderParser::ScanAndPrepareUniformControls(const char* shaderCode) {
+void ShaderParser::ScanAndPrepareUniformControls(const std::string& shaderCode) { // Changed to const std::string&
     m_uniformControls.clear();
-    std::string code(shaderCode);
-    std::istringstream iss(code);
+    // std::string code(shaderCode); // No longer needed if shaderCode is already std::string
+    std::istringstream iss(shaderCode);
     std::string line;
     std::regex uniformRegex(R"(^\s*uniform\s+(float|vec2|vec3|vec4|int|bool)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;.*\/\/\s*(\{.*\})\s*$)");
     std::smatch match;
