@@ -176,8 +176,9 @@ void checkGLError(const std::string& label, bool logToGlobalConsole = true) {
             case GL_INVALID_ENUM: errorStr = "INVALID_ENUM"; break;
             case GL_INVALID_VALUE: errorStr = "INVALID_VALUE"; break;
             case GL_INVALID_OPERATION: errorStr = "INVALID_OPERATION"; break;
-            case GL_STACK_OVERFLOW: errorStr = "STACK_OVERFLOW"; break; // Should not happen with modern GL
-            case GL_STACK_UNDERFLOW: errorStr = "STACK_UNDERFLOW"; break; // Should not happen with modern GL
+            // GL_STACK_OVERFLOW and GL_STACK_UNDERFLOW are deprecated and may not be defined
+            // case GL_STACK_OVERFLOW: errorStr = "STACK_OVERFLOW"; break;
+            // case GL_STACK_UNDERFLOW: errorStr = "STACK_UNDERFLOW"; break;
             case GL_OUT_OF_MEMORY: errorStr = "OUT_OF_MEMORY"; break;
             case GL_INVALID_FRAMEBUFFER_OPERATION: errorStr = "INVALID_FRAMEBUFFER_OPERATION"; break;
             default: errorStr = "UNKNOWN_ERROR (" + std::to_string(err) + ")"; break;
