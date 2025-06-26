@@ -838,8 +838,13 @@ void RenderNodeEditorWindow() {
         }
     }
 
-    // Context menu for adding nodes
-    if (ImGui::BeginPopupContextWindow("NodeEditorContextMenu")) {
+    // Context menu for adding new nodes, triggered by right-click on the editor canvas
+    // Ensuring this is called within BeginNodeEditor / EndNodeEditor
+    if (ImNodes::IsEditorHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+        ImGui::OpenPopup("AddNodeContextMenu");
+    }
+
+    if (ImGui::BeginPopup("AddNodeContextMenu")) {
         if (ImGui::BeginMenu("Add Effect")) {
             if (ImGui::BeginMenu("Generators")) {
                 if (ImGui::MenuItem("Basic Plasma")) {
@@ -848,6 +853,8 @@ void RenderNodeEditorWindow() {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
                         newEffectRawPtr->Load();
+                        // Defer position setting or ensure it's safe. For now, let's try direct.
+                        // ImNodes::SetNodeEditorSpacePos(newEffectRawPtr->id, ImGui::GetMousePos()); // Alternative
                         ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
                     }
                 }
@@ -917,6 +924,7 @@ void RenderNodeEditorWindow() {
         }
         ImGui::EndPopup();
     }
+
     ImNodes::EndNodeEditor();
     ImGui::EndChild(); // End NodeEditorCanvas
     ImGui::End(); // End Node Editor window
@@ -1025,30 +1033,30 @@ int main() {
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
     g_audioSystem.Initialize();
 
-    // Minimal Startup Node: A single Passthrough Output ShaderEffect
-    auto passthroughEffect = std::make_unique<ShaderEffect>("shaders/passthrough.frag", SCR_WIDTH, SCR_HEIGHT);
-    passthroughEffect->name = PASSTHROUGH_EFFECT_NAME; // Use the constant
-    passthroughEffect->startTime = 0.0f;
-    // Make it span a default total duration, or a very long time if totalDuration is dynamic
-    passthroughEffect->endTime = g_timelineState.totalDuration_seconds;
-    g_scene.push_back(std::move(passthroughEffect));
+    // Load raymarch_v1.frag as the default effect
+    auto defaultEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
+    defaultEffect->name = "Raymarch Plasma v1"; // Or derive from filename
+    defaultEffect->startTime = 0.0f;
+    defaultEffect->endTime = g_timelineState.totalDuration_seconds; // Default duration
+    g_scene.push_back(std::move(defaultEffect));
 
-    // Load all effects in the scene (just the passthrough for now)
+    // Load all effects in the scene (just the default for now)
     for (const auto& effect_ptr : g_scene) {
         effect_ptr->Load();
     }
 
-    // Select the passthrough effect and load its code into the editor
+    // Select the default effect and load its code into the editor
     if (!g_scene.empty()) {
-        g_selectedEffect = g_scene[0].get(); // Should be the passthrough effect
+        g_selectedEffect = g_scene[0].get();
         if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
             g_editor.SetText(se->GetShaderSource());
-            ClearErrorMarkers(); // Clear any previous errors
-            // Log any compile issues with the passthrough shader itself
+            ClearErrorMarkers();
             const std::string& compileLog = se->GetCompileErrorLog();
             if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
                 g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
-                g_consoleLog += "Default passthrough shader issue: " + compileLog + "\n";
+                g_consoleLog += "Default shader (" + se->name + ") issue: " + compileLog + "\n";
+            } else {
+                g_consoleLog += "Default shader (" + se->name + ") loaded successfully.\n";
             }
         }
     }
