@@ -137,13 +137,17 @@ static Renderer g_renderer;
 static TextEditor g_editor;
 static AudioSystem g_audioSystem;
 static bool g_showGui = true;
-static bool g_showHelpWindow = false;
+
+// Window visibility flags
 static bool g_showShaderEditorWindow = true;
 static bool g_showEffectPropertiesWindow = true;
-static bool g_showTimelineWindow = false; // Default to closed
-static bool g_showNodeEditorWindow = false; // Default to closed
 static bool g_showConsoleWindow = true;
+// static bool g_showRenderViewWindow = true; // Render View is not a typical window, handled by main loop's final render pass.
+static bool g_showTimelineWindow = false;
+static bool g_showNodeEditorWindow = false;
 static bool g_showAudioWindow = false;
+static bool g_showHelpWindow = false;
+
 static bool g_enableAudioLink = false; // Changed to false
 static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -351,9 +355,10 @@ void RenderMenuBar() {
         if (ImGui::BeginMenu("View")) {
             ImGui::MenuItem("Shader Editor", nullptr, &g_showShaderEditorWindow);
             ImGui::MenuItem("Effect Properties", nullptr, &g_showEffectPropertiesWindow);
+            ImGui::MenuItem("Console", nullptr, &g_showConsoleWindow);
+            ImGui::Separator();
             ImGui::MenuItem("Timeline", nullptr, &g_showTimelineWindow);
             ImGui::MenuItem("Node Editor", nullptr, &g_showNodeEditorWindow);
-            ImGui::MenuItem("Console", nullptr, &g_showConsoleWindow);
             ImGui::MenuItem("Audio Reactivity", nullptr, &g_showAudioWindow);
             ImGui::Separator();
             ImGui::MenuItem("Toggle All GUI", "Spacebar", &g_showGui);
@@ -884,12 +889,10 @@ int main() {
     ImNodes::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    // Corrected flags based on common ImGui usage for docking and viewports
-    // Commenting these out as they are causing "not declared in scope" errors.
+    // Commenting these out again as they cause "not declared in scope" errors,
+    // suggesting a deeper issue with ImGui version/include paths.
     // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-    //     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-    // }
+    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
 
     ImGui::StyleColorsDark();
@@ -1040,15 +1043,70 @@ int main() {
              ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_None);
         }
         */
+        /*
+        // Create the main dockspace on the first frame
+        static bool first_time_docking = true;
+        if (first_time_docking) {
+            ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(viewport->WorkPos);
+            ImGui::SetNextWindowSize(viewport->WorkSize);
+            ImGui::SetNextWindowViewportId(viewport->ID);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-        // Always render menu bar now, as the condition was tied to docking flags
+            ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+            window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+            window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+            window_flags |= ImGuiWindowFlags_NoBackground;
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            ImGui::Begin("MainDockSpaceViewport", nullptr, window_flags);
+            ImGui::PopStyleVar(3); // For WindowRounding, WindowBorderSize, WindowPadding
+
+            ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+            // Use ImGuiDockNodeFlags_PassthruCentralNode if available and docking is working, otherwise ImGuiDockNodeFlags_None
+            ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+
+            // Programmatic DockBuilder layout
+            // This might fail if ImGuiConfigFlags_DockingEnable was not successfully set or if DockBuilder symbols are not found
+            static bool initial_layout_built = false;
+            if (!initial_layout_built) {
+                ImGui::DockBuilderRemoveNode(dockspace_id);
+                ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+                ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
+
+                ImGuiID dock_main_id = dockspace_id;
+                ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
+                ImGuiID dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.25f, nullptr, &dock_main_id);
+                ImGuiID dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id);
+                ImGuiID dock_bottom_right_id = ImGui::DockBuilderSplitNode(dock_bottom_id, ImGuiDir_Right, 0.50f, nullptr, &dock_bottom_id);
+
+                ImGui::DockBuilderDockWindow("Shader Editor", dock_left_id);
+                // Assuming RenderView is the central node (dock_main_id) or handled differently.
+                // If RenderView is a specific window, it should be docked here.
+                // For now, the central space (dock_main_id after splits) will be the "Render View".
+                ImGui::DockBuilderDockWindow("Console", dock_bottom_id);
+                ImGui::DockBuilderDockWindow("Effect Properties", dock_bottom_right_id);
+
+                ImGui::DockBuilderFinish(dockspace_id);
+                initial_layout_built = true;
+            }
+            ImGui::End();
+            first_time_docking = false;
+        } else {
+            // Fallback or regular frame: ensure a dockspace is available if docking is somehow active.
+            // This might also error if DockingEnable flag wasn't processed.
+            ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_PassthruCentralNode);
+        }
+        */
         RenderMenuBar();
         if (g_showGui) {
             if (g_showShaderEditorWindow) RenderShaderEditorWindow();
             if (g_showEffectPropertiesWindow) RenderEffectPropertiesWindow();
+            if (g_showConsoleWindow) RenderConsoleWindow();
             if (g_showTimelineWindow) RenderTimelineWindow();
             if (g_showNodeEditorWindow) RenderNodeEditorWindow();
-            if (g_showConsoleWindow) RenderConsoleWindow();
             if (g_showAudioWindow) RenderAudioReactivityWindow();
             if (g_showHelpWindow) RenderHelpWindow();
         }
