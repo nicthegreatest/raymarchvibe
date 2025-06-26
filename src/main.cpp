@@ -144,7 +144,7 @@ static bool g_showGui = true;
 
 // Window visibility flags
 static bool g_showShaderEditorWindow = true;
-static bool g_showEffectPropertiesWindow = true;
+// static bool g_showEffectPropertiesWindow = true; // Removed, integrated into Node Editor
 static bool g_showConsoleWindow = true;
 // static bool g_showRenderViewWindow = true; // Render View is not a typical window, handled by main loop's final render pass.
 static bool g_showTimelineWindow = false;
@@ -365,7 +365,7 @@ void RenderMenuBar() {
         }
         if (ImGui::BeginMenu("View")) {
             ImGui::MenuItem("Shader Editor", nullptr, &g_showShaderEditorWindow);
-            ImGui::MenuItem("Effect Properties", nullptr, &g_showEffectPropertiesWindow);
+            // ImGui::MenuItem("Effect Properties", nullptr, &g_showEffectPropertiesWindow); // Removed
             ImGui::MenuItem("Console", nullptr, &g_showConsoleWindow);
             ImGui::Separator();
             ImGui::MenuItem("Timeline", nullptr, &g_showTimelineWindow);
@@ -711,24 +711,24 @@ void RenderShaderEditorWindow() {
     ImGui::End();
 }
 
-void RenderEffectPropertiesWindow() {
-    ImGui::Begin("Effect Properties");
-    if (g_selectedEffect) {
-        if (ImGui::Button("Reset Parameters")) {
-            g_selectedEffect->ResetParameters();
-            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                g_editor.SetText(se->GetShaderSource());
-                ClearErrorMarkers();
-            }
-            g_consoleLog = "Parameters reset successfully.";
-        }
-        ImGui::Separator();
-        g_selectedEffect->RenderUI();
-    } else {
-        ImGui::Text("No effect selected.");
-    }
-    ImGui::End();
-}
+// void RenderEffectPropertiesWindow() { // Function removed as properties are now in Node Editor
+//     ImGui::Begin("Effect Properties");
+//     if (g_selectedEffect) {
+//         if (ImGui::Button("Reset Parameters")) {
+//             g_selectedEffect->ResetParameters();
+//             if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+//                 g_editor.SetText(se->GetShaderSource());
+//                 ClearErrorMarkers();
+//             }
+//             g_consoleLog = "Parameters reset successfully.";
+//         }
+//         ImGui::Separator();
+//         g_selectedEffect->RenderUI();
+//     } else {
+//         ImGui::Text("No effect selected.");
+//     }
+//     ImGui::End();
+// }
 
 void RenderTimelineWindow() {
     ImGui::Begin("Timeline", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -816,8 +816,11 @@ void RenderTimelineWindow() {
 void RenderNodeEditorWindow() {
     ImGui::Begin("Node Editor");
 
-    // Use a child window to make the empty space context-clickable
-    ImGui::BeginChild("NodeEditorCanvas", ImVec2(0,0), false, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    const float sidebar_width = 300.0f;
+    const float canvas_width = ImGui::GetContentRegionAvail().x - sidebar_width;
+
+    // Node Editor Canvas (Left Side)
+    ImGui::BeginChild("NodeEditorCanvas", ImVec2(canvas_width > 0 ? canvas_width : 1, 0), false, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImNodes::BeginNodeEditor();
     for (const auto& effect_ptr : g_scene) {
         if (!effect_ptr) continue;
@@ -950,32 +953,148 @@ void RenderNodeEditorWindow() {
 
     ImNodes::EndNodeEditor();
 
-    // Handle link creation outside the Begin/EndNodeEditor scope
+    // Handle link creation (should remain associated with the canvas where interaction happens)
     int start_attr, end_attr;
     if (ImNodes::IsLinkCreated(&start_attr, &end_attr)) {
+        // ... (link creation logic remains the same) ...
         int start_node_id = start_attr / 10;
         int end_node_id = end_attr / 10;
         Effect* start_effect = FindEffectById(start_node_id);
         Effect* end_effect = FindEffectById(end_node_id);
-        bool start_is_output = (start_attr % 10 == 0); // Output pins have attribute ID like node_id * 10
-        bool end_is_input = (end_attr % 10 != 0);    // Input pins have attribute ID like node_id * 10 + 1 + pin_index
+        bool start_is_output = (start_attr % 10 == 0);
+        bool end_is_input = (end_attr % 10 != 0);
 
         if (start_effect && end_effect && start_node_id != end_node_id) {
-            // Ensure correct direction: output from start_effect to input of end_effect
             if (start_is_output && end_is_input) {
                 int input_pin_index = (end_attr % 10) - 1;
                 end_effect->SetInputEffect(input_pin_index, start_effect);
-            }
-            // Allow reverse connection if user drags from input to output
-            else if (!start_is_output && !end_is_input) { // This condition might be more complex depending on how pin IDs are structured for output vs input
-                 // Assuming start_attr is an input pin and end_attr is an output pin
+            } else if (!start_is_output && !end_is_input) {
                 int input_pin_index = (start_attr % 10) - 1;
                 start_effect->SetInputEffect(input_pin_index, end_effect);
             }
         }
     }
 
+    // Handle Ctrl+Click on node to break links
+    // Check if the main node editor canvas (where nodes are) is hovered.
+    // Using IsWindowHovered with RootAndChildWindows might be more robust if popups interfere.
+    // However, GetHoveredNode should only return a valid ID if a node (not empty canvas) is truly under mouse.
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) && ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        int hovered_node_id = -1;
+        // ImNodes::GetHoveredNode() might be what we need, or iterate nodes and check ImGui::IsItemHovered()
+        // For ImNodes, it's better to use its API if available for "which node is under mouse"
+        // Let's assume we need to iterate if GetHoveredNode isn't directly what we need for this specific check,
+        // or if it refers to a different kind of hover state.
+        // A simpler way for ImNodes:
+        ImNodes::IsNodeHovered(&hovered_node_id); // This updates hovered_node_id if a node is hovered by mouse
+
+        if (hovered_node_id != -1) {
+            Effect* clicked_effect = FindEffectById(hovered_node_id);
+            if (clicked_effect) {
+                g_consoleLog += "Ctrl+Clicked on node ID: " + std::to_string(clicked_effect->id) + " Name: " + clicked_effect->GetEffectName() + ". Breaking links.\n";
+                // 1. Clear inputs OF the clicked node
+                if (auto* se_clicked = dynamic_cast<ShaderEffect*>(clicked_effect)) {
+                    for (int i = 0; i < se_clicked->GetInputPinCount(); ++i) {
+                        se_clicked->SetInputEffect(i, nullptr);
+                    }
+                }
+
+                // 2. Clear inputs TO the clicked node from other nodes
+                for (const auto& effect_ptr_unique : g_scene) {
+                    if (auto* se_target = dynamic_cast<ShaderEffect*>(effect_ptr_unique.get())) {
+                        if (se_target == clicked_effect) continue; // Already handled its own inputs
+
+                        const auto& inputs = se_target->GetInputs(); // Need to ensure GetInputs provides enough info or direct access
+                        for (size_t i = 0; i < inputs.size(); ++i) {
+                            if (inputs[i] && inputs[i]->id == clicked_effect->id) {
+                                se_target->SetInputEffect(i, nullptr);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     ImGui::EndChild(); // End NodeEditorCanvas
+
+    ImGui::SameLine();
+
+    // Sidebar (Right Side) - will contain Properties and Instructions
+    ImGui::BeginChild("SidebarChild", ImVec2(sidebar_width, 0), true); // true for border
+
+    // --- Node Properties Panel ---
+    ImGui::Text("Node Properties");
+    ImGui::Separator();
+
+    std::vector<int> selected_node_ids;
+    ImNodes::GetSelectedNodes(selected_node_ids);
+
+    if (selected_node_ids.size() == 1) {
+        int node_id = selected_node_ids[0];
+        Effect* current_effect = FindEffectById(node_id);
+        if (current_effect) {
+            // Update global selected effect if it's different
+            if (g_selectedEffect != current_effect) {
+                g_selectedEffect = current_effect;
+                // If it's a ShaderEffect, update the editor text
+                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                    g_editor.SetText(se->GetShaderSource());
+                    ClearErrorMarkers(); // Clear previous errors
+                    // Optionally, display compile errors if any for this shader
+                    const std::string& compileLog = se->GetCompileErrorLog();
+                    if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
+                        g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
+                    }
+                }
+            }
+
+            // Display editable name
+            char name_buffer[128];
+            strncpy(name_buffer, current_effect->GetEffectName().c_str(), sizeof(name_buffer) - 1);
+            name_buffer[sizeof(name_buffer) - 1] = '\0'; // Ensure null termination
+            if (ImGui::InputText("Name", name_buffer, sizeof(name_buffer))) {
+                current_effect->SetEffectName(name_buffer);
+            }
+
+            // Display ID (read-only)
+            ImGui::Text("ID: %d", current_effect->id);
+            ImGui::Separator();
+
+            // Render specific UI for the effect
+            current_effect->RenderUI();
+
+        } else {
+            ImGui::Text("Error: Selected node ID %d not found.", node_id);
+            g_selectedEffect = nullptr; // Clear global selection if node not found
+        }
+    } else if (selected_node_ids.size() > 1) {
+        ImGui::Text("%d nodes selected.", selected_node_ids.size());
+        ImGui::TextWrapped("Multi-selection actions not yet implemented. Please select a single node to view/edit properties.");
+        // Consider clearing g_selectedEffect or setting it to a primary if ImNodes supports that
+        // For now, let's clear it to avoid confusion with shader editor
+        if (g_selectedEffect != nullptr && std::find(selected_node_ids.begin(), selected_node_ids.end(), g_selectedEffect->id) == selected_node_ids.end()){
+             g_selectedEffect = nullptr; // Clear if current g_selectedEffect is not in multi-selection
+        }
+    } else {
+        ImGui::Text("No node selected.");
+        if (g_selectedEffect != nullptr) { // If a node was previously selected
+             g_selectedEffect = nullptr;
+        }
+    }
+    ImGui::Separator(); // Separator after Node Properties section
+
+    // --- Instructions Panel ---
+    ImGui::Text("Instructions");
+    ImGui::Separator();
+    ImGui::TextWrapped("Right-click canvas: Add Node");
+    ImGui::TextWrapped("Drag pin to pin: Create Link");
+    ImGui::TextWrapped("Select Node: Edit Properties (above)");
+    ImGui::TextWrapped("Shift+Click Node: Add to selection");
+    ImGui::TextWrapped("Ctrl+Click Node: Break all links to/from node");
+
+    ImGui::EndChild(); // End SidebarChild
+
     ImGui::End(); // End Node Editor window
 }
 
@@ -1283,7 +1402,7 @@ int main() {
         RenderMenuBar();
         if (g_showGui) {
             if (g_showShaderEditorWindow) RenderShaderEditorWindow();
-            if (g_showEffectPropertiesWindow) RenderEffectPropertiesWindow();
+            // if (g_showEffectPropertiesWindow) RenderEffectPropertiesWindow(); // Call removed
             if (g_showConsoleWindow) RenderConsoleWindow();
             if (g_showTimelineWindow) RenderTimelineWindow();
             if (g_showNodeEditorWindow) RenderNodeEditorWindow();
