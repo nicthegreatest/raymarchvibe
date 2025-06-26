@@ -2,6 +2,13 @@
 
 out vec4 FragColor;
 
+// --- UI Controls (metadata for C++ app) ---
+//#control color u_objectColor "Object Color" {"default":[0.8, 0.5, 0.3]}
+//#control color u_lightColor "Light Color" {"default":[1.0, 0.9, 0.8]}
+//#control float u_smoothness "Smooth Union" {"default":0.1, "min":0.0, "max":1.0}
+//#define_control ENABLE_AO 1
+//#define_control ENABLE_SOFT_SHADOWS 1
+
 // --- Standard Uniforms (from your C++ app) ---
 uniform vec2 iResolution;
 uniform float iTime;
@@ -12,6 +19,7 @@ uniform float u_scale;        // Overall scale of the dodecahedron
 uniform float u_timeSpeed;    // Speed of rotation
 uniform vec3 u_colorMod;      // For color effects (can be used for psychedelic patterns)
 uniform float u_patternScale; // Can be repurposed (e.g., for surface pattern frequency)
+uniform float u_smoothness;   // Controls the smoothness of the union between shapes
 
 // Camera Uniforms
 uniform vec3 u_camPos;
@@ -25,6 +33,12 @@ uniform vec3 u_lightColor;
 // --- Helper Functions ---
 float radians(float degrees) {
     return degrees * 3.14159265358979323846 / 180.0;
+}
+
+// Smooth minimum function - for smooth union of SDFs
+float opSmoothUnion( float d1, float d2, float k ) {
+    float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
+    return mix( d2, d1, h ) - k*h*(1.0-h);
 }
 
 // Rotation matrix for Y-axis
@@ -79,11 +93,6 @@ float mapScene(vec3 p, float time) {
     float effectiveTime = time * u_timeSpeed * 0.2; // Slow down overall animation/rotation
 
     // Dodecahedron properties
-    // The 'r_inradius' for sdDodecahedron is the distance from center to face.
-    // If u_scale is meant to be an overall "outer" radius, we need a conversion.
-    // For a dodecahedron, outer_radius (center to vertex) = r_inradius * phi * sqrt(3) / 2
-    // Or, if u_scale is approx outer radius: r_inradius approx u_scale / (phi * sqrt(3)/2 * some_factor)
-    // Let's make u_scale directly control the inradius for simplicity here, and adjust visually.
     float dodecaInradius = 0.5 * u_scale;
 
     // Animation: simple floating or fixed position
@@ -101,8 +110,8 @@ float mapScene(vec3 p, float time) {
     // Optional ground plane for context
     float planeDist = p.y + 0.0; // Plane at y = 0
 
-    return min(dodecaDist, planeDist);
-    // return dodecaDist; // Uncomment to see only the dodecahedron
+    // Use smooth union instead of min()
+    return opSmoothUnion(dodecaDist, planeDist, u_smoothness);
 }
 
 // --- Normal Calculation (using the scene map) ---
@@ -133,6 +142,24 @@ float rayMarch(vec3 ro, vec3 rd, float time) {
     }
     return -1.0; // No hit / hit too far
 }
+
+// --- Soft Shadow Calculation ---
+// Marches a ray from a point towards the light source to check for occlusion.
+// 'k' is a softness parameter.
+float getSoftShadow(vec3 ro, vec3 rd, float tmin, float tmax, float k, float time) {
+    float res = 1.0;
+    float t = tmin;
+    for(int i=0; i<32; i++) { // Fewer steps for shadow rays
+        if(t < tmax) {
+            float h = mapScene(ro + rd * t, time);
+            if(h < 0.001) return 0.0; // Hard shadow if we hit something
+            res = min(res, k * h / t);
+            t += h * 0.8;
+        }
+    }
+    return clamp(res, 0.0, 1.0);
+}
+
 
 // --- Camera Setup ---
 mat3 setCamera(vec3 ro, vec3 ta, vec3 worldUp) {
@@ -167,6 +194,7 @@ void main() {
         vec3 lightDir = normalize(u_lightPosition - hitPos);
         float diffuse = max(0.0, dot(normal, lightDir));
         
+        #ifdef ENABLE_AO
         // Ambient Occlusion (simple)
         float ao = 0.0;
         float aoStep = 0.01 * u_scale;
@@ -178,7 +206,15 @@ void main() {
             aoStep *= 1.8;
         }
         ao = 1.0 - clamp(ao * (0.15 / (u_scale*u_scale) ), 0.0, 1.0);
+        #else
+        float ao = 1.0; // AO is disabled, so full ambient light
+        #endif
 
+        float shadow = 1.0; // Default to no shadow
+        #ifdef ENABLE_SOFT_SHADOWS
+        // Soft Shadows
+        shadow = getSoftShadow(hitPos + normal * 0.002, lightDir, 0.001, 5.0, 16.0, iTime);
+        #endif
 
         // Specular
         vec3 viewDir = normalize(ro - hitPos);
@@ -192,8 +228,9 @@ void main() {
         baseColor = clamp(baseColor, 0.0, 1.0);
 
         // Combine lighting components
+        diffuse *= shadow; // Apply shadow to diffuse light
         col = baseColor * (diffuse * 0.6 + 0.3 * ao) * u_lightColor; // Adjusted ambient/AO contribution
-        col += u_lightColor * specular * 0.35; // Adjusted specular
+        col += u_lightColor * specular * 0.35 * shadow; // Shadow affects specular too
 
         // Fog
         float fogFactor = smoothstep(u_scale * 1.5, u_scale * 10.0, t);
