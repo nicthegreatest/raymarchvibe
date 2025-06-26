@@ -4,6 +4,7 @@
 #include <vector>
 #include <glad/glad.h> // For GLuint in GetOutputTexture
 #include <nlohmann/json.hpp> // Added for nlohmann::json serialization
+#include <iostream> // Required for std::cout (for temporary debugging ID assignment)
 
 // Forward declaration for ImGui (if RenderUI directly uses ImGui types)
 // For now, assuming RenderUI doesn't need specific ImGui types in its signature.
@@ -56,5 +57,15 @@ private:
 
 protected:
     // Protected constructor to ensure ID assignment
-    Effect() : id(nextId++) {}
+    Effect() : id(nextId++) {
+        // Debugging log removed
+    }
+
+public:
+    // Static method to update nextId, typically after loading a scene
+    static void UpdateNextId(int potential_next_id) {
+        if (potential_next_id > nextId) {
+            nextId = potential_next_id;
+        }
+    }
 };
