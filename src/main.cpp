@@ -1027,8 +1027,12 @@ void RenderNodeEditorWindow() {
     ImGui::Text("Node Properties");
     ImGui::Separator();
 
+    const int num_selected_nodes = ImNodes::NumSelectedNodes();
     std::vector<int> selected_node_ids;
-    ImNodes::GetSelectedNodes(selected_node_ids);
+    if (num_selected_nodes > 0) {
+        selected_node_ids.resize(num_selected_nodes);
+        ImNodes::GetSelectedNodes(selected_node_ids.data());
+    }
 
     if (selected_node_ids.size() == 1) {
         int node_id = selected_node_ids[0];
@@ -1069,7 +1073,7 @@ void RenderNodeEditorWindow() {
             g_selectedEffect = nullptr; // Clear global selection if node not found
         }
     } else if (selected_node_ids.size() > 1) {
-        ImGui::Text("%d nodes selected.", selected_node_ids.size());
+        ImGui::Text("%zu nodes selected.", selected_node_ids.size()); // Use %zu for size_t
         ImGui::TextWrapped("Multi-selection actions not yet implemented. Please select a single node to view/edit properties.");
         // Consider clearing g_selectedEffect or setting it to a primary if ImNodes supports that
         // For now, let's clear it to avoid confusion with shader editor
@@ -1092,6 +1096,9 @@ void RenderNodeEditorWindow() {
     ImGui::TextWrapped("Select Node: Edit Properties (above)");
     ImGui::TextWrapped("Shift+Click Node: Add to selection");
     ImGui::TextWrapped("Ctrl+Click Node: Break all links to/from node");
+    ImGui::Separator();
+    ImGui::TextWrapped("Middle-mouse drag: Pan canvas");
+    ImGui::TextWrapped("Mouse wheel: Zoom canvas");
 
     ImGui::EndChild(); // End SidebarChild
 
@@ -1187,7 +1194,7 @@ int main() {
 
     ImGui::StyleColorsDark();
     // When viewports are enabled we tweak WindowRounding/WindowBg to make them look like main window.
-    ImGuiStyle& style = ImGui::GetStyle();
+    // ImGuiStyle& style = ImGui::GetStyle(); // Unused variable
     // Commenting out viewport-specific style changes as ViewportsEnable flag is causing issues
     // if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
     // {
@@ -1232,7 +1239,7 @@ int main() {
     // No auto-linking needed for a single node setup
 
     float deltaTime = 0.0f, lastFrameTime = 0.0f;
-    static bool first_time_docking = true;
+    // static bool first_time_docking = true; // Unused variable
 
     while(!glfwWindowShouldClose(window)) {
         float currentFrameTime = (float)glfwGetTime();
