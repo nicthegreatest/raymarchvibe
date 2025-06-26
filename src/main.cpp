@@ -38,6 +38,7 @@
 #include "imnodes.h"
 #include "ImGuiFileDialog.h"
 #include "AudioSystem.h" // Added the actual AudioSystem header
+#include "NodeTemplates.h" // For node template factory functions
 
 // Placeholder Audio System has been removed.
 
@@ -826,21 +827,44 @@ void RenderNodeEditorWindow() {
     if (ImGui::BeginPopupContextWindow("NodeEditorContextMenu")) {
         if (ImGui::BeginMenu("Add Effect")) {
             if (ImGui::BeginMenu("Generators")) {
-                if (ImGui::MenuItem("Plasma (nyi)")) { /* Placeholder */ }
-                if (ImGui::MenuItem("Noise (nyi)")) { /* Placeholder */ }
+                if (ImGui::MenuItem("Basic Plasma")) {
+                    auto newEffect = RaymarchVibe::NodeTemplates::CreatePlasmaBasicEffect();
+                    if (newEffect) {
+                        newEffect->Load(); // Important: Load after creation
+                        ImNodes::SetNodeScreenSpacePos(newEffect->id, ImGui::GetMousePos()); // Position near mouse
+                        g_scene.push_back(std::move(newEffect));
+                    }
+                }
+                if (ImGui::MenuItem("Simple Color")) {
+                    auto newEffect = RaymarchVibe::NodeTemplates::CreateSimpleColorEffect();
+                    if (newEffect) {
+                        newEffect->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffect->id, ImGui::GetMousePos());
+                        g_scene.push_back(std::move(newEffect));
+                    }
+                }
+                // if (ImGui::MenuItem("Noise (nyi)")) { /* Placeholder */ }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Filters")) {
-                if (ImGui::MenuItem("Blur (nyi)")) { /* Placeholder */ }
-                if (ImGui::MenuItem("Vignette (nyi)")) { /* Placeholder */ }
+                if (ImGui::MenuItem("Invert Color")) {
+                     auto newEffect = RaymarchVibe::NodeTemplates::CreateInvertColorEffect();
+                    if (newEffect) {
+                        newEffect->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffect->id, ImGui::GetMousePos());
+                        g_scene.push_back(std::move(newEffect));
+                    }
+                }
+                // if (ImGui::MenuItem("Blur (nyi)")) { /* Placeholder */ }
+                // if (ImGui::MenuItem("Vignette (nyi)")) { /* Placeholder */ }
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Image Operations")) {
-                if (ImGui::MenuItem("Load Image (nyi)")) { /* Placeholder */ }
-                ImGui::EndMenu();
-            }
-            ImGui::Separator();
-            if (ImGui::MenuItem("Passthrough Shader (nyi)")) { /* Placeholder for basic ShaderEffect */ }
+            // if (ImGui::BeginMenu("Image Operations")) {
+            //     if (ImGui::MenuItem("Load Image (nyi)")) { /* Placeholder */ }
+            //     ImGui::EndMenu();
+            // }
+            // ImGui::Separator();
+            // if (ImGui::MenuItem("Passthrough Shader (nyi)")) { /* Placeholder for basic ShaderEffect */ }
             ImGui::EndMenu();
         }
         ImGui::EndPopup();

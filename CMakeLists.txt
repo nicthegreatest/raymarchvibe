@@ -99,6 +99,7 @@ add_executable(RaymarchVibe
   src/AudioSystem.cpp # Ensure this file defines MINIAUDIO_IMPLEMENTATION if using miniaudio header-only
   src/Utils.cpp
   src/ShadertoyIntegration.cpp
+  src/NodeTemplates.cpp
 )
 
 target_include_directories(RaymarchVibe PRIVATE
