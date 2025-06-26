@@ -6,6 +6,7 @@
 #include "ShaderParser.h"
 #include "AudioSystem.h"
 #include "TextEditor.h"
+#include "Bess/Config/Themes.h" // Added Themes header
 #include <string>
 #include <vector>
 
@@ -129,6 +130,7 @@ private:
 
     // Internal state for UI
     bool m_snapWindows = false;
+    Bess::Config::Themes m_themes; // Added Themes object
 
     // --- Find Functionality State ---
     char m_findText[256];

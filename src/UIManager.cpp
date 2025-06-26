@@ -58,6 +58,7 @@ void UIManager::Initialize() {
     auto lang = TextEditor::LanguageDefinition::GLSL();
     m_editor_ref.SetLanguageDefinition(lang);
     m_editor_ref.SetShowWhitespaces(false);
+    m_themes.applyTheme("Bess Dark"); // Apply a default theme
 }
 
 void UIManager::SetupInitialEditorAndShader() {
@@ -167,6 +168,20 @@ void UIManager::RenderMenuBar(GLFWwindow* window) {
             if (ImGui::MenuItem("Snap Windows to Default Layout")) { RequestWindowSnap(); }
             if (ImGui::MenuItem("Toggle Fullscreen", "F12")) { requestFullscreenToggle(); }
             if (ImGui::MenuItem("Toggle GUI", "Spacebar")) { m_showGui_ref = !m_showGui_ref; }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Settings")) { // New Settings Menu
+            if (ImGui::BeginMenu("Themes")) {
+                const auto& availableThemes = m_themes.getThemes();
+                // TODO: Get current theme to show a checkmark next to it. For now, just list them.
+                for (const auto& pair : availableThemes) {
+                    if (ImGui::MenuItem(pair.first.c_str())) {
+                        m_themes.applyTheme(pair.first);
+                    }
+                }
+                ImGui::EndMenu();
+            }
             ImGui::EndMenu();
         }
 
