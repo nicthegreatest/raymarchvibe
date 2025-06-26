@@ -1034,7 +1034,7 @@ int main() {
     g_audioSystem.Initialize();
 
     // Load raymarch_v1.frag as the default effect
-    auto defaultEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
+    auto defaultEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v2.frag", SCR_WIDTH, SCR_HEIGHT);
     defaultEffect->name = "Raymarch Plasma v1"; // Or derive from filename
     defaultEffect->startTime = 0.0f;
     defaultEffect->endTime = g_timelineState.totalDuration_seconds; // Default duration
