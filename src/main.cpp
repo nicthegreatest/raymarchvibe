@@ -1,5 +1,6 @@
 // RaymarchVibe - Real-time Shader Exploration
 // main.cpp - FINAL BUILD VERSION
+#define IMGUI_DEFINE_MATH_OPERATORS // Ensure this is defined before any ImGui header is included
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -18,6 +19,7 @@
 #include <memory>
 #include <queue>
 #include <nlohmann/json.hpp> // For scene save/load
+#include <filesystem> // For std::filesystem::path
 
 // --- Core App Headers ---
 #include "Effect.h"
@@ -26,8 +28,8 @@
 #include "ShadertoyIntegration.h"
 
 // --- ImGui and Widget Headers ---
+// #define IMGUI_DEFINE_MATH_OPERATORS // Moved to top of file
 #include "imgui.h"
-#define IMGUI_DEFINE_MATH_OPERATORS // Optional: access to ImVec2 operators
 #include "imgui_internal.h"      // For DockBuilder API
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -36,6 +38,7 @@
 #include "imnodes.h"
 #include "ImGuiFileDialog.h"
 #include "AudioSystem.h" // Added the actual AudioSystem header
+#include "NodeTemplates.h" // For node template factory functions
 
 // Placeholder Audio System has been removed.
 
@@ -136,18 +139,22 @@ static Renderer g_renderer;
 static TextEditor g_editor;
 static AudioSystem g_audioSystem;
 static bool g_showGui = true;
-static bool g_showHelpWindow = false;
+
+// Window visibility flags
 static bool g_showShaderEditorWindow = true;
 static bool g_showEffectPropertiesWindow = true;
-static bool g_showTimelineWindow = false; // Default to closed
-static bool g_showNodeEditorWindow = false; // Default to closed
 static bool g_showConsoleWindow = true;
+// static bool g_showRenderViewWindow = true; // Render View is not a typical window, handled by main loop's final render pass.
+static bool g_showTimelineWindow = false;
+static bool g_showNodeEditorWindow = false;
 static bool g_showAudioWindow = false;
+static bool g_showHelpWindow = false;
+
 static bool g_enableAudioLink = false; // Changed to false
 static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 static bool g_timeline_paused = false; // Reverted to false for default playback
-static float g_timeline_time = 0.0f; // This will be g_timelineState.currentTime_seconds
+// static float g_timeline_time = 0.0f; // This will be g_timelineState.currentTime_seconds // Unused variable
 static bool g_timelineControlActive = false; // Added for explicit timeline UI control
 
 // --- Timeline State (New) ---
@@ -281,7 +288,7 @@ void RenderMenuBar() {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Load Shader...")) {
                 // Args: key, title, filters, path, fileName, count, flags, userDatas
-                ImGuiFileDialog::Instance()->OpenDialog("LoadShaderDlgKey", "Choose Shader File", ".frag,.fs,.glsl,.*", IGFD::FileDialogConfig{ .path = "." });
+                ImGuiFileDialog::Instance()->OpenDialog("LoadShaderDlgKey", "Choose Shader File", ".frag,.fs,.glsl,.*", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
             }
             bool canSave = (g_selectedEffect && dynamic_cast<ShaderEffect*>(g_selectedEffect));
             if (ImGui::MenuItem("Save Shader", nullptr, false, canSave)) {
@@ -290,12 +297,12 @@ void RenderMenuBar() {
                     if (!currentPath.empty() && currentPath.find("shadertoy://") == std::string::npos && currentPath != "dynamic_source" && currentPath.rfind("Untitled", 0) != 0) {
                         SaveEditorContentToFile(currentPath, g_editor, se, g_consoleLog);
                     } else { // No valid path or is an "Untitled" default, so effectively "Save As"
-                        ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{ .path = "." });
+                        ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
                     }
                 }
             }
             if (ImGui::MenuItem("Save Shader As...", nullptr, false, canSave)) {
-                 ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{ .path = "." });
+                 ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
             }
 
             ImGui::Separator();
@@ -350,9 +357,10 @@ void RenderMenuBar() {
         if (ImGui::BeginMenu("View")) {
             ImGui::MenuItem("Shader Editor", nullptr, &g_showShaderEditorWindow);
             ImGui::MenuItem("Effect Properties", nullptr, &g_showEffectPropertiesWindow);
+            ImGui::MenuItem("Console", nullptr, &g_showConsoleWindow);
+            ImGui::Separator();
             ImGui::MenuItem("Timeline", nullptr, &g_showTimelineWindow);
             ImGui::MenuItem("Node Editor", nullptr, &g_showNodeEditorWindow);
-            ImGui::MenuItem("Console", nullptr, &g_showConsoleWindow);
             ImGui::MenuItem("Audio Reactivity", nullptr, &g_showAudioWindow);
             ImGui::Separator();
             ImGui::MenuItem("Toggle All GUI", "Spacebar", &g_showGui);
@@ -369,12 +377,24 @@ void RenderMenuBar() {
     if (ImGuiFileDialog::Instance()->Display("LoadShaderDlgKey")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
-            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+            std::string justFileName = std::filesystem::path(filePathName).filename().string();
+
+            ShaderEffect* se = dynamic_cast<ShaderEffect*>(g_selectedEffect);
+            if (!se) { // If no ShaderEffect is selected, or if current is not a ShaderEffect
+                g_consoleLog = "No ShaderEffect selected. Creating a new one for: " + justFileName + "\n";
+                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT); // Path will be set by LoadShaderFromFileToEditor
+                newEffect->name = justFileName.empty() ? "Untitled Shader" : justFileName;
+
+                g_scene.push_back(std::move(newEffect));
+                g_selectedEffect = g_scene.back().get();
+                se = dynamic_cast<ShaderEffect*>(g_selectedEffect);
+            }
+
+            if (se) { // se can be the initially selected one or the newly created one
                 LoadShaderFromFileToEditor(filePathName, se, g_editor, g_consoleLog);
             } else {
-                g_consoleLog = "No ShaderEffect selected. Please select or create one to load the shader into.";
-                // Optionally, could implement logic here to create a new ShaderEffect if none is selected.
-                // For now, matching existing behavior of requiring a selected effect.
+                // This should not happen if the logic above is correct
+                g_consoleLog = "Critical error: Failed to get/create a ShaderEffect for loading.\n";
             }
         }
         ImGuiFileDialog::Instance()->Close();
@@ -393,6 +413,7 @@ void RenderShaderEditorWindow() {
     static char filePathBuffer_SaveAs[512] = ""; // Buffer for Save As path - MOVED TO FUNCTION SCOPE
     // static char shadertoyIdBuffer[256] = ""; // Already static at its use point, keep it there or move here too for consistency
     // static int currentSampleIndex = 0; // Already static at its use point
+    static int lineToGo = 1; // Declaration for Go To Line functionality
 
     ImGui::Begin("Shader Editor");
 
@@ -420,7 +441,7 @@ void RenderShaderEditorWindow() {
     ImGui::SameLine();
     if (ImGui::Button("Go")) {
         if (lineToGo > 0) {
-            g_editor.SetCursorPosition({lineToGo - 1, 0}); // Line numbers are 0-indexed in SetCursorPosition
+            g_editor.SetCursorPosition(TextEditor::Coordinates(lineToGo - 1, 0)); // Line numbers are 0-indexed in SetCursorPosition
         }
     }
     ImGui::SameLine();
@@ -606,7 +627,7 @@ void RenderShaderEditorWindow() {
                         } else { g_consoleLog = "ERROR opening file for saving: " + currentPath; }
                     } else { // No valid path or is untitled, trigger Save As
                         strncpy(filePathBuffer_SaveAs, se->GetSourceFilePath().rfind("Untitled", 0) == 0 ? "" : se->GetSourceFilePath().c_str(), sizeof(filePathBuffer_SaveAs) -1);
-                        ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey_Editor", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{ .path = "." });
+                        ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey_Editor", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
                     }
                 }
             }
@@ -615,7 +636,7 @@ void RenderShaderEditorWindow() {
             if (ImGui::Button("Save As...##Editor")) { // Identical to File > Save Shader As
                 std::string saveAsPathStr(filePathBuffer_SaveAs);
                 if (saveAsPathStr.empty()) {
-                    ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey_Editor", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{ .path = "." });
+                    ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey_Editor", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
                 } else {
                     std::ofstream outFile(saveAsPathStr);
                     if (outFile.is_open()) {
@@ -759,6 +780,9 @@ void RenderTimelineWindow() {
 
 void RenderNodeEditorWindow() {
     ImGui::Begin("Node Editor");
+
+    // Use a child window to make the empty space context-clickable
+    ImGui::BeginChild("NodeEditorCanvas", ImVec2(0,0), false, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImNodes::BeginNodeEditor();
     for (const auto& effect_ptr : g_scene) {
         if (!effect_ptr) continue;
@@ -798,7 +822,89 @@ void RenderNodeEditorWindow() {
             else if (!start_is_output && !end_is_input) { start_effect->SetInputEffect((start_attr % 10) - 1, end_effect); }
         }
     }
-    ImGui::End();
+
+    // Context menu for adding nodes
+    if (ImGui::BeginPopupContextWindow("NodeEditorContextMenu")) {
+        if (ImGui::BeginMenu("Add Effect")) {
+            if (ImGui::BeginMenu("Generators")) {
+                if (ImGui::MenuItem("Basic Plasma")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreatePlasmaBasicEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                if (ImGui::MenuItem("Simple Color")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateSimpleColorEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                if (ImGui::MenuItem("Value Noise")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateValueNoiseEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                if (ImGui::MenuItem("Circle Shape")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateCircleShapeEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Filters")) {
+                if (ImGui::MenuItem("Invert Color")) {
+                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateInvertColorEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                if (ImGui::MenuItem("Brightness/Contrast")) {
+                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateBrightnessContrastEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Image")) { // Changed from "Image Operations"
+                if (ImGui::MenuItem("Texture Passthrough")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateTexturePassthroughEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::EndPopup();
+    }
+    ImNodes::EndNodeEditor(); // End node editor before ending child window
+    ImGui::EndChild(); // End NodeEditorCanvas
+    ImGui::End(); // End Node Editor window
 }
 
 void RenderConsoleWindow() {
@@ -882,17 +988,21 @@ int main() {
     ImNodes::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    // Commenting these out again as they cause "not declared in scope" errors,
+    // suggesting a deeper issue with ImGui version/include paths.
+    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
 
     ImGui::StyleColorsDark();
     // When viewports are enabled we tweak WindowRounding/WindowBg to make them look like main window.
     ImGuiStyle& style = ImGui::GetStyle();
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-    {
-        style.WindowRounding = 0.0f;
-        style.Colors[ImGuiCol_WindowBg].w = 1.0f;
-    }
+    // Commenting out viewport-specific style changes as ViewportsEnable flag is causing issues
+    // if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    // {
+    //     style.WindowRounding = 0.0f;
+    //     style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+    // }
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -998,71 +1108,104 @@ int main() {
         ImGui::NewFrame();
 
         // Create the main dockspace on the first frame
+        // Commenting out the entire docking setup due to persistent compilation errors with ImGui docking/viewport flags and functions.
+        /*
         if (first_time_docking) {
             first_time_docking = false;
             ImGuiViewport* viewport = ImGui::GetMainViewport();
             ImGui::SetNextWindowPos(viewport->WorkPos);
             ImGui::SetNextWindowSize(viewport->WorkSize);
-            ImGui::SetNextWindowViewport(viewport->ID);
+            ImGui::SetNextWindowViewportId(viewport->ID); // Corrected function name
             ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-            ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
+
+            ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
             window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
             window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-            window_flags |= ImGuiWindowFlags_NoBackground; // Important for main viewport
+            window_flags |= ImGuiWindowFlags_NoBackground;
 
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
             ImGui::Begin("MainDockSpaceViewport", nullptr, window_flags);
             ImGui::PopStyleVar(3);
 
             ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+            ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+
+            // Programmatic DockBuilder layout was already commented out.
+            // static bool initial_layout_built = false;
+            // if (!initial_layout_built && (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)) {
+            //     ...
+            // }
+            ImGui::End();
+        } else if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
+            ImGuiViewport* viewport = ImGui::GetMainViewport();
+             ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_None);
+        }
+        */
+        /*
+        // Create the main dockspace on the first frame
+        static bool first_time_docking = true;
+        if (first_time_docking) {
+            ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(viewport->WorkPos);
+            ImGui::SetNextWindowSize(viewport->WorkSize);
+            ImGui::SetNextWindowViewportId(viewport->ID);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+            ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+            window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+            window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+            window_flags |= ImGuiWindowFlags_NoBackground;
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            ImGui::Begin("MainDockSpaceViewport", nullptr, window_flags);
+            ImGui::PopStyleVar(3); // For WindowRounding, WindowBorderSize, WindowPadding
+
+            ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+            // Use ImGuiDockNodeFlags_PassthruCentralNode if available and docking is working, otherwise ImGuiDockNodeFlags_None
             ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
 
-            // If it's the first time, programmatically set up the layout
-            // This check is now inside the first_time_docking block
-            static bool initial_layout_built = false; // Use a separate flag for building the layout once
+            // Programmatic DockBuilder layout
+            // This might fail if ImGuiConfigFlags_DockingEnable was not successfully set or if DockBuilder symbols are not found
+            static bool initial_layout_built = false;
             if (!initial_layout_built) {
-                 // Clear out any existing layout
                 ImGui::DockBuilderRemoveNode(dockspace_id);
-                ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace); // Add back the main node
-                ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+                ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+                ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
 
-                ImGuiID dock_main_id = dockspace_id; // This is the central node
+                ImGuiID dock_main_id = dockspace_id;
+                ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
                 ImGuiID dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.25f, nullptr, &dock_main_id);
-                ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id); // Split from the remaining central space
-                ImGuiID dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id); // Split from the remaining central space
+                ImGuiID dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id);
                 ImGuiID dock_bottom_right_id = ImGui::DockBuilderSplitNode(dock_bottom_id, ImGuiDir_Right, 0.50f, nullptr, &dock_bottom_id);
 
-
                 ImGui::DockBuilderDockWindow("Shader Editor", dock_left_id);
-                ImGui::DockBuilderDockWindow("Effect Properties", dock_right_id); // "Controls"
+                // Assuming RenderView is the central node (dock_main_id) or handled differently.
+                // If RenderView is a specific window, it should be docked here.
+                // For now, the central space (dock_main_id after splits) will be the "Render View".
                 ImGui::DockBuilderDockWindow("Console", dock_bottom_id);
-                // ImGui::DockBuilderDockWindow("Uniforms/Controls", dock_bottom_right_id); // This was the plan, "Effect Properties" is on the right. Let's use the bottom_right for something else or leave it.
-                                                                                        // For now, let's assume "Effect Properties" covers "Uniforms/Controls"
-                                                                                        // and "Console" is distinct from "Logs"
-                // The "Render View" is implicitly the central node (dock_main_id) after splits.
-                // No need to explicitly dock a window there if it's the main application background.
+                ImGui::DockBuilderDockWindow("Effect Properties", dock_bottom_right_id);
 
                 ImGui::DockBuilderFinish(dockspace_id);
                 initial_layout_built = true;
             }
-            ImGui::End(); // End of "MainDockSpaceViewport"
+            ImGui::End();
+            first_time_docking = false;
         } else {
-            // On subsequent frames, just ensure the dockspace is active over the viewport
-            // This allows windows to be docked into the space created by DockBuilder
+            // Fallback or regular frame: ensure a dockspace is available if docking is somehow active.
+            // This might also error if DockingEnable flag wasn't processed.
             ImGuiViewport* viewport = ImGui::GetMainViewport();
             ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_PassthruCentralNode);
         }
-
+        */
         RenderMenuBar();
         if (g_showGui) {
-            // Ensure windows are rendered so they can be docked.
-            // The DockBuilderDockWindow calls only assign them to docks if they are rendered.
             if (g_showShaderEditorWindow) RenderShaderEditorWindow();
             if (g_showEffectPropertiesWindow) RenderEffectPropertiesWindow();
+            if (g_showConsoleWindow) RenderConsoleWindow();
             if (g_showTimelineWindow) RenderTimelineWindow();
             if (g_showNodeEditorWindow) RenderNodeEditorWindow();
-            if (g_showConsoleWindow) RenderConsoleWindow();
             if (g_showAudioWindow) RenderAudioReactivityWindow();
             if (g_showHelpWindow) RenderHelpWindow();
         }

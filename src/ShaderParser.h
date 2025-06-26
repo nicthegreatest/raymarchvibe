@@ -50,8 +50,8 @@ struct ConstVariableControl {
     float v2Value[2] = {0.0f, 0.0f};
     float v3Value[3] = {0.0f, 0.0f, 0.0f};
     float v4Value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-    bool isColor = false; 
     float multiplier = 1.0f; 
+    bool isColor = false;
 
     ConstVariableControl() = default; // Add default constructor if needed elsewhere
     ConstVariableControl(const std::string& name, const std::string& glslType, int lineIndex, const std::string& originalValueString);
