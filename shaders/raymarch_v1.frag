@@ -20,6 +20,8 @@ uniform float u_camFOV = 60.0;
 uniform vec3 u_lightPosition = vec3(3.0, 2.0, -4.0);
 uniform vec3 u_lightColor = vec3(1.0, 0.95, 0.9);
 
+uniform float iAudioAmp = 0.0; // Audio amplitude, 0 to 1
+
 // Constants
 const float PI = 3.14159265359;
 const float PHI = 1.618033988749895; // Golden ratio
@@ -87,7 +89,8 @@ float mapScene(vec3 p, float time) {
     float effectiveTime = time * u_timeSpeed;
 
     // Dodecahedron properties
-    float dodecaInradius = 0.5 * u_scale; // u_scale controls the inradius
+    float audioEffect = 1.0 + iAudioAmp * 2.5; // Scale boost from audio
+    float dodecaInradius = 0.5 * u_scale * audioEffect; // u_scale controls the inradius
 
     // Center the dodecahedron
     vec3 objectOffset = vec3(0.0, dodecaInradius * 0.8, 0.0); // Lift it slightly so it's not cut by a plane at y=0
