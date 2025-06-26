@@ -1054,7 +1054,7 @@ int main() {
 
     ImGui::StyleColorsDark();
     // When viewports are enabled we tweak WindowRounding/WindowBg to make them look like main window.
-    ImGuiStyle& style = ImGui::GetStyle();
+    // ImGuiStyle& style = ImGui::GetStyle(); // Unused due to docking code being commented out
     // Commenting out viewport-specific style changes as ViewportsEnable flag is causing issues
     // if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
     // {
@@ -1098,7 +1098,7 @@ int main() {
     // No auto-linking needed for a single node setup
 
     float deltaTime = 0.0f, lastFrameTime = 0.0f;
-    static bool first_time_docking = true;
+    // static bool first_time_docking = true; // Unused due to docking code being commented out
 
     while(!glfwWindowShouldClose(window)) {
         float currentFrameTime = (float)glfwGetTime();
