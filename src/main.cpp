@@ -764,12 +764,26 @@ void RenderTimelineWindow() {
 
     ImGui::Separator();
     std::vector<ImGui::TimelineItem> timelineItems;
-    std::vector<int> tracks;
-    tracks.resize(g_scene.size());
+    // Make tracks_storage static so pointers to its elements remain valid
+    static std::vector<int> track_indices_storage;
+
+    // Resize tracks_storage only if necessary to avoid frequent reallocations
+    // and to ensure it's large enough for all items in g_scene.
+    if (track_indices_storage.size() < g_scene.size()) {
+        track_indices_storage.resize(g_scene.size());
+    }
+
     for (size_t i = 0; i < g_scene.size(); ++i) {
         if (!g_scene[i]) { continue; }
-        tracks[i] = i % 4; // Simple track assignment
-        timelineItems.push_back({ g_scene[i]->name, &g_scene[i]->startTime, &g_scene[i]->endTime, &tracks[i] });
+        // Assign a track index (0-3) and store it in the persistent storage.
+        // The pointer to this storage location will be passed to the timeline item.
+        track_indices_storage[i] = i % 4;
+        timelineItems.push_back({
+            g_scene[i]->name,
+            &g_scene[i]->startTime,
+            &g_scene[i]->endTime,
+            &track_indices_storage[i] // Pointer to persistent storage
+        });
     }
 
     // TODO: Update this call with new parameters for zoom and scroll
@@ -1112,10 +1126,18 @@ int main() {
         processInput(window);
 
         std::vector<Effect*> activeEffects;
-        for(const auto& effect_ptr : g_scene) {
-            // Use currentTimeForEffects to determine if an effect is active on the timeline
-            if(effect_ptr && currentTimeForEffects >= effect_ptr->startTime && currentTimeForEffects < effect_ptr->endTime) {
-                activeEffects.push_back(effect_ptr.get());
+        if (g_timelineState.isEnabled) {
+            for(const auto& effect_ptr : g_scene) {
+                if(effect_ptr && currentTimeForEffects >= effect_ptr->startTime && currentTimeForEffects < effect_ptr->endTime) {
+                    activeEffects.push_back(effect_ptr.get());
+                }
+            }
+        } else {
+            // If timeline master control is not enabled, all effects are considered active
+            for(const auto& effect_ptr : g_scene) {
+                if(effect_ptr) {
+                    activeEffects.push_back(effect_ptr.get());
+                }
             }
         }
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
