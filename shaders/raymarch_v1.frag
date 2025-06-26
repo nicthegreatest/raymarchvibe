@@ -89,7 +89,7 @@ float mapScene(vec3 p, float time) {
     float effectiveTime = time * u_timeSpeed;
 
     // Dodecahedron properties
-    float audioEffect = 1.0 + iAudioAmp * 2.5; // Scale boost from audio
+    float audioEffect = 1.0 + iAudioAmp * 4.2; // Scale boost from audio
     float dodecaInradius = 0.5 * u_scale * audioEffect; // u_scale controls the inradius
 
     // Center the dodecahedron
