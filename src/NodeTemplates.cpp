@@ -43,7 +43,45 @@ std::unique_ptr<Effect> CreatePlasmaBasicEffect(int initial_width, int initial_h
     return effect;
 }
 
-// Implement other factory functions here
+std::unique_ptr<Effect> CreateTexturePassthroughEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/texture_passthrough.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Texture Passthrough";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateCircleShapeEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/shape_circle.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Circle Shape";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateValueNoiseEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/noise_value.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Value Noise";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateBrightnessContrastEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/filter_brightness_contrast.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Brightness/Contrast";
+    return effect;
+}
 
 } // namespace NodeTemplates
 } // namespace RaymarchVibe

@@ -828,6 +828,41 @@ void RenderNodeEditorWindow() {
         if (ImGui::BeginMenu("Add Effect")) {
             if (ImGui::BeginMenu("Generators")) {
                 if (ImGui::MenuItem("Basic Plasma")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreatePlasmaBasicEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                if (ImGui::MenuItem("Simple Color")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateSimpleColorEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                if (ImGui::MenuItem("Value Noise")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateValueNoiseEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                if (ImGui::MenuItem("Circle Shape")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateCircleShapeEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
                     auto newEffect = RaymarchVibe::NodeTemplates::CreatePlasmaBasicEffect();
                     if (newEffect) {
                         newEffect->Load(); // Important: Load after creation
@@ -848,6 +883,38 @@ void RenderNodeEditorWindow() {
             }
             if (ImGui::BeginMenu("Filters")) {
                 if (ImGui::MenuItem("Invert Color")) {
+
+                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateInvertColorEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                if (ImGui::MenuItem("Brightness/Contrast")) {
+                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateBrightnessContrastEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Image")) { // Changed from "Image Operations"
+                if (ImGui::MenuItem("Texture Passthrough")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateTexturePassthroughEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                    }
+                }
+                ImGui::EndMenu();
+            }
                      auto newEffect = RaymarchVibe::NodeTemplates::CreateInvertColorEffect();
                     if (newEffect) {
                         newEffect->Load();
@@ -865,6 +932,7 @@ void RenderNodeEditorWindow() {
             // }
             // ImGui::Separator();
             // if (ImGui::MenuItem("Passthrough Shader (nyi)")) { /* Placeholder for basic ShaderEffect */ }
+
             ImGui::EndMenu();
         }
         ImGui::EndPopup();
