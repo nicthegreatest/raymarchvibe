@@ -19,6 +19,7 @@
 #include <memory>
 #include <queue>
 #include <nlohmann/json.hpp> // For scene save/load
+#include <filesystem> // For std::filesystem::path
 
 // --- Core App Headers ---
 #include "Effect.h"
@@ -375,12 +376,24 @@ void RenderMenuBar() {
     if (ImGuiFileDialog::Instance()->Display("LoadShaderDlgKey")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
-            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+            std::string justFileName = std::filesystem::path(filePathName).filename().string();
+
+            ShaderEffect* se = dynamic_cast<ShaderEffect*>(g_selectedEffect);
+            if (!se) { // If no ShaderEffect is selected, or if current is not a ShaderEffect
+                g_consoleLog = "No ShaderEffect selected. Creating a new one for: " + justFileName + "\n";
+                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT); // Path will be set by LoadShaderFromFileToEditor
+                newEffect->name = justFileName.empty() ? "Untitled Shader" : justFileName;
+
+                g_scene.push_back(std::move(newEffect));
+                g_selectedEffect = g_scene.back().get();
+                se = dynamic_cast<ShaderEffect*>(g_selectedEffect);
+            }
+
+            if (se) { // se can be the initially selected one or the newly created one
                 LoadShaderFromFileToEditor(filePathName, se, g_editor, g_consoleLog);
             } else {
-                g_consoleLog = "No ShaderEffect selected. Please select or create one to load the shader into.";
-                // Optionally, could implement logic here to create a new ShaderEffect if none is selected.
-                // For now, matching existing behavior of requiring a selected effect.
+                // This should not happen if the logic above is correct
+                g_consoleLog = "Critical error: Failed to get/create a ShaderEffect for loading.\n";
             }
         }
         ImGuiFileDialog::Instance()->Close();
