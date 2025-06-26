@@ -779,6 +779,9 @@ void RenderTimelineWindow() {
 
 void RenderNodeEditorWindow() {
     ImGui::Begin("Node Editor");
+
+    // Use a child window to make the empty space context-clickable
+    ImGui::BeginChild("NodeEditorCanvas", ImVec2(0,0), false, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImNodes::BeginNodeEditor();
     for (const auto& effect_ptr : g_scene) {
         if (!effect_ptr) continue;
@@ -818,7 +821,33 @@ void RenderNodeEditorWindow() {
             else if (!start_is_output && !end_is_input) { start_effect->SetInputEffect((start_attr % 10) - 1, end_effect); }
         }
     }
-    ImGui::End();
+
+    // Context menu for adding nodes
+    if (ImGui::BeginPopupContextWindow("NodeEditorContextMenu")) {
+        if (ImGui::BeginMenu("Add Effect")) {
+            if (ImGui::BeginMenu("Generators")) {
+                if (ImGui::MenuItem("Plasma (nyi)")) { /* Placeholder */ }
+                if (ImGui::MenuItem("Noise (nyi)")) { /* Placeholder */ }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Filters")) {
+                if (ImGui::MenuItem("Blur (nyi)")) { /* Placeholder */ }
+                if (ImGui::MenuItem("Vignette (nyi)")) { /* Placeholder */ }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Image Operations")) {
+                if (ImGui::MenuItem("Load Image (nyi)")) { /* Placeholder */ }
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Passthrough Shader (nyi)")) { /* Placeholder for basic ShaderEffect */ }
+            ImGui::EndMenu();
+        }
+        ImGui::EndPopup();
+    }
+    ImNodes::EndNodeEditor(); // End node editor before ending child window
+    ImGui::EndChild(); // End NodeEditorCanvas
+    ImGui::End(); // End Node Editor window
 }
 
 void RenderConsoleWindow() {
