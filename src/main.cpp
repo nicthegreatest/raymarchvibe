@@ -159,6 +159,13 @@ static bool g_timeline_paused = false; // Reverted to false for default playback
 // static float g_timeline_time = 0.0f; // This will be g_timelineState.currentTime_seconds // Unused variable
 static bool g_timelineControlActive = false; // Added for explicit timeline UI control
 
+// --- Node Editor State for Delayed Positioning ---
+#include <set> // Required for std::set
+// static std::map<int, ImVec2> g_new_node_initial_positions; // Already included by ImGui
+static std::set<int> g_nodes_requiring_initial_position;
+static std::map<int, ImVec2> g_new_node_initial_positions;
+
+
 // --- Timeline State (New) ---
 #include "Timeline.h" // For TimelineState struct
 static TimelineState g_timelineState;
@@ -818,6 +825,17 @@ void RenderNodeEditorWindow() {
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(effect_ptr->name.c_str());
         ImNodes::EndNodeTitleBar();
+
+        // Delayed positioning for newly added nodes
+        if (g_nodes_requiring_initial_position.count(effect_ptr->id)) {
+            ImVec2 initial_pos = g_new_node_initial_positions[effect_ptr->id];
+            ImNodes::SetNodeScreenSpacePos(effect_ptr->id, initial_pos);
+            ImNodes::EditorContextMoveToNode(effect_ptr->id); // Optional: centers view on new node
+
+            g_nodes_requiring_initial_position.erase(effect_ptr->id);
+            g_new_node_initial_positions.erase(effect_ptr->id);
+        }
+
         if (effect_ptr->GetOutputPinCount() > 0) {
             ImNodes::BeginOutputAttribute(effect_ptr->id * 10); ImGui::Text("out"); ImNodes::EndOutputAttribute();
         }
@@ -853,9 +871,8 @@ void RenderNodeEditorWindow() {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
                         newEffectRawPtr->Load();
-                        // Defer position setting or ensure it's safe. For now, let's try direct.
-                        // ImNodes::SetNodeEditorSpacePos(newEffectRawPtr->id, ImGui::GetMousePos()); // Alternative
-                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
                 if (ImGui::MenuItem("Simple Color")) {
@@ -864,7 +881,8 @@ void RenderNodeEditorWindow() {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
                         newEffectRawPtr->Load();
-                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
                 if (ImGui::MenuItem("Value Noise")) {
@@ -873,7 +891,8 @@ void RenderNodeEditorWindow() {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
                         newEffectRawPtr->Load();
-                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
                 if (ImGui::MenuItem("Circle Shape")) {
@@ -882,7 +901,8 @@ void RenderNodeEditorWindow() {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
                         newEffectRawPtr->Load();
-                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
                 ImGui::EndMenu();
@@ -894,7 +914,8 @@ void RenderNodeEditorWindow() {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
                         newEffectRawPtr->Load();
-                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
                 if (ImGui::MenuItem("Brightness/Contrast")) {
@@ -903,7 +924,8 @@ void RenderNodeEditorWindow() {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
                         newEffectRawPtr->Load();
-                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
                 ImGui::EndMenu();
@@ -915,7 +937,8 @@ void RenderNodeEditorWindow() {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
                         newEffectRawPtr->Load();
-                        ImNodes::SetNodeScreenSpacePos(newEffectRawPtr->id, ImGui::GetMousePos());
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
                 ImGui::EndMenu();
@@ -1521,4 +1544,14 @@ void LoadScene(const std::string& filePath) {
     // UI should refresh automatically as it reads from g_scene and g_timelineState.
     // Explicit refresh call might be needed if ImGui doesn't pick up all changes,
     // but usually not for data changes that its widgets are bound to.
+
+    // Update Effect::nextId to prevent ID collisions
+    int max_id = 0;
+    for (const auto& effect_ptr : g_scene) {
+        if (effect_ptr && effect_ptr->id > max_id) {
+            max_id = effect_ptr->id;
+        }
+    }
+    Effect::UpdateNextId(max_id + 1);
+    g_consoleLog += "Effect::nextId updated to " + std::to_string(max_id + 1) + " after loading scene.\n";
 }
