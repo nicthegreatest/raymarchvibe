@@ -764,46 +764,45 @@ void RenderTimelineWindow() {
 
     ImGui::Separator();
     std::vector<ImGui::TimelineItem> timelineItems;
-    // Make tracks_storage static so pointers to its elements remain valid
     static std::vector<int> track_indices_storage;
 
-    // Resize tracks_storage only if necessary to avoid frequent reallocations
-    // and to ensure it's large enough for all items in g_scene.
     if (track_indices_storage.size() < g_scene.size()) {
         track_indices_storage.resize(g_scene.size());
     }
 
     for (size_t i = 0; i < g_scene.size(); ++i) {
-        if (!g_scene[i]) { continue; }
-        // Assign a track index (0-3) and store it in the persistent storage.
-        // The pointer to this storage location will be passed to the timeline item.
+        if (!g_scene[i]) {
+            continue;
+        }
         track_indices_storage[i] = i % 4;
         timelineItems.push_back({
-            g_scene[i]->name,
+            g_scene[i]->name.c_str(),
             &g_scene[i]->startTime,
             &g_scene[i]->endTime,
-            &track_indices_storage[i] // Pointer to persistent storage
+            &track_indices_storage[i]
         });
     }
 
-    // TODO: Update this call with new parameters for zoom and scroll
-    // For now, the timeline's total view is 0 to g_timelineState.totalDuration_seconds
-    // The ImGuiSimpleTimeline will be modified to use these implicitly or explicitly
-    if (ImGui::SimpleTimeline("Scene", timelineItems, &g_timelineState.currentTime_seconds, &g_selectedTimelineItem,
+    bool timeline_event = ImGui::SimpleTimeline("Scene", timelineItems, &g_timelineState.currentTime_seconds, &g_selectedTimelineItem,
                                4, // num_tracks
                                0.0f, // sequence_total_start_time_seconds
                                g_timelineState.totalDuration_seconds, // sequence_total_end_time_seconds
                                g_timelineState.horizontalScroll_seconds, // Pass scroll
                                g_timelineState.zoomLevel                 // Pass zoom
-                               )) {
+                               );
+
+    if (timeline_event) {
         if (g_selectedTimelineItem >= 0 && static_cast<size_t>(g_selectedTimelineItem) < g_scene.size()) {
-            g_selectedEffect = g_scene[g_selectedTimelineItem].get();
-            if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                g_editor.SetText(se->GetShaderSource());
-                ClearErrorMarkers();
+            if (g_scene[g_selectedTimelineItem]) {
+                g_selectedEffect = g_scene[g_selectedTimelineItem].get();
+                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                    g_editor.SetText(se->GetShaderSource());
+                    ClearErrorMarkers();
+                }
             }
         }
     }
+
     ImGui::End();
 }
 
