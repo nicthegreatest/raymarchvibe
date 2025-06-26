@@ -825,19 +825,6 @@ void RenderNodeEditorWindow() {
         }
     }
 
-    int start_attr, end_attr;
-    if (ImNodes::IsLinkCreated(&start_attr, &end_attr)) {
-        int start_node_id = start_attr / 10; int end_node_id = end_attr / 10;
-        Effect* start_effect = FindEffectById(start_node_id);
-        Effect* end_effect = FindEffectById(end_node_id);
-        bool start_is_output = (start_attr % 10 == 0);
-        bool end_is_input = (end_attr % 10 != 0);
-        if (start_effect && end_effect && start_node_id != end_node_id) {
-            if (start_is_output && end_is_input) { end_effect->SetInputEffect((end_attr % 10) - 1, start_effect); }
-            else if (!start_is_output && !end_is_input) { start_effect->SetInputEffect((start_attr % 10) - 1, end_effect); }
-        }
-    }
-
     // Context menu for adding new nodes, triggered by right-click on the editor canvas
     // Ensuring this is called within BeginNodeEditor / EndNodeEditor
     if (ImNodes::IsEditorHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
@@ -926,6 +913,32 @@ void RenderNodeEditorWindow() {
     }
 
     ImNodes::EndNodeEditor();
+
+    // Handle link creation outside the Begin/EndNodeEditor scope
+    int start_attr, end_attr;
+    if (ImNodes::IsLinkCreated(&start_attr, &end_attr)) {
+        int start_node_id = start_attr / 10;
+        int end_node_id = end_attr / 10;
+        Effect* start_effect = FindEffectById(start_node_id);
+        Effect* end_effect = FindEffectById(end_node_id);
+        bool start_is_output = (start_attr % 10 == 0); // Output pins have attribute ID like node_id * 10
+        bool end_is_input = (end_attr % 10 != 0);    // Input pins have attribute ID like node_id * 10 + 1 + pin_index
+
+        if (start_effect && end_effect && start_node_id != end_node_id) {
+            // Ensure correct direction: output from start_effect to input of end_effect
+            if (start_is_output && end_is_input) {
+                int input_pin_index = (end_attr % 10) - 1;
+                end_effect->SetInputEffect(input_pin_index, start_effect);
+            }
+            // Allow reverse connection if user drags from input to output
+            else if (!start_is_output && !end_is_input) { // This condition might be more complex depending on how pin IDs are structured for output vs input
+                 // Assuming start_attr is an input pin and end_attr is an output pin
+                int input_pin_index = (start_attr % 10) - 1;
+                start_effect->SetInputEffect(input_pin_index, end_effect);
+            }
+        }
+    }
+
     ImGui::EndChild(); // End NodeEditorCanvas
     ImGui::End(); // End Node Editor window
 }
