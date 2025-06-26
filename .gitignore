@@ -1,73 +1,49 @@
-# CMake / Build files
-CMakeCache.txt
-CMakeFiles/
-CMakeScripts/
-cmake_install.cmake
-compile_commands.json
-Makefile
-*.cbp
-*.xcodeproj/
-*.xcworkspace/
+# Build artifacts
+/build/
+/libglad_lib.a
+/RaymarchVibe
+/CMakeCache.txt
+/CMakeFiles/
+/Makefile
+/cmake_install.cmake
+/install_manifest.txt
+*.o
+*.d
+*.bin
+*.a
+*.lib
+*.vcxproj
 *.sln
-*.suo
-*.vcxproj*
-# Common build directory names
-[Bb]uild/
-[Bb]uild*/
-build/
-build-*/
-Build/
-Build-*/
-out/
-Out/
-# Executables
+*.filters
+*.user
 *.exe
-*.out
-*.app
 *.dll
 *.so
 *.dylib
-# Object files
-*.o
-*.obj
-*.ko
-*.lo
-*.elf
-# Libraries
-*.a
-*.lib
-# Precompiled Headers
-*.gch
-*.pch
-# OS-generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-# Editor / IDE specific files
-# VS Code
-.vscode/
-# CLion
-.idea/
-# Vim
-*.swp
-*~
-# Emacs
-*#
-.#*
-# Cpp-httplib fetched content (if you don't want to track the fetched source, though FetchContent usually puts it in build dir)
-# _deps/ # If FetchContent downloads outside the build directory (uncommon for default setup)
-# User-specific files (if any)
-# *.user
-# Log files
-*.log
-# Temporary files
-*.tmp
-*.temp
-# Add any other project-specific files or directories you want to ignore below
-# For example, if you have a local config file not meant for sharing:
-# local_config.ini
 
+# CMake specific files
+CMakeConfigureLog.yaml
+CTestTestfile.cmake
+
+# Editor/IDE specific files (common examples)
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+
+# MacOS specific files
+.DS_Store
+
+# Windows specific files
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# User-specific configuration (if any exist that shouldn't be version controlled)
+imgui.ini # If this is a user-specific config and not project essential
+main (Copy).cpp # This looks like a temporary copy
