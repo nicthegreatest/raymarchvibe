@@ -74,73 +74,110 @@ inline bool SimpleTimeline(const char* label, std::vector<TimelineItem>& items, 
     const float tick_area_y_end = canvas_pos.y + timeline_ruler_height;
     window->DrawList->AddRectFilled(ImVec2(canvas_pos.x, ruler_y_start), ImVec2(canvas_pos.x + actual_canvas_width, tick_area_y_end), 0xFF222222, 2.0f);
 
-    float major_tick_interval_seconds = 10.0f;
-    float minor_tick_interval_seconds = 1.0f;
-    int min_pixels_between_labels = 60;
-    float min_pixels_per_minor_tick = 5.0f;
-    float min_pixels_per_major_tick_for_label = 20.0f;
+    // --- Dynamic Tick Calculation ---
+    const float min_pixels_per_tick_label = 50.0f; // Min horizontal space for a label like "10.0s"
+    const float min_pixels_per_minor_tick = 5.0f;
 
-    if (pixels_per_second * 1.0f < min_pixels_per_minor_tick) minor_tick_interval_seconds = 5.0f;
-    if (pixels_per_second * 5.0f < min_pixels_per_minor_tick) minor_tick_interval_seconds = 10.0f;
-    if (pixels_per_second * 10.0f < min_pixels_per_minor_tick) minor_tick_interval_seconds = 30.0f;
-    if (pixels_per_second * 30.0f < min_pixels_per_minor_tick) minor_tick_interval_seconds = 60.0f;
+    // Determine suitable minor tick interval based on zoom
+    float minor_tick_interval_seconds = 0.1f; // Start with a small interval
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 0.2f;
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 0.5f;
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 1.0f;
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 2.0f;
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 5.0f;
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 10.0f;
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 30.0f;
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 60.0f; // 1 minute
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 5 * 60.0f; // 5 minutes
+    if (pixels_per_second * minor_tick_interval_seconds < min_pixels_per_minor_tick) minor_tick_interval_seconds = 10 * 60.0f; // 10 minutes
 
-    major_tick_interval_seconds = minor_tick_interval_seconds;
-    if (pixels_per_second * major_tick_interval_seconds < min_pixels_per_major_tick_for_label) major_tick_interval_seconds *= 2.0f;
-    if (pixels_per_second * major_tick_interval_seconds < min_pixels_per_major_tick_for_label) major_tick_interval_seconds = ImMax(major_tick_interval_seconds, minor_tick_interval_seconds * 2.5f); // from 2 to 5
-    if (pixels_per_second * major_tick_interval_seconds < min_pixels_per_major_tick_for_label) major_tick_interval_seconds = ImMax(major_tick_interval_seconds, minor_tick_interval_seconds * 2.0f); // from 5 to 10
+    // Determine major tick interval (usually a multiple of minor ticks)
+    // Major ticks should have labels, so they need more space
+    float major_tick_interval_seconds = minor_tick_interval_seconds;
+    while (pixels_per_second * major_tick_interval_seconds < min_pixels_per_tick_label) {
+        if (major_tick_interval_seconds < 1.0f) major_tick_interval_seconds *= 2.0f; // 0.1 -> 0.2 -> 0.4 (approx 0.5) -> 0.8 (approx 1.0)
+        else if (major_tick_interval_seconds < 5.0f) major_tick_interval_seconds = ceil(major_tick_interval_seconds / 1.0f) * 1.0f + 1.0f; // 1->2, 2->3 etc
+        else if (major_tick_interval_seconds < 10.0f) major_tick_interval_seconds = 5.0f;
+        else if (major_tick_interval_seconds < 30.0f) major_tick_interval_seconds = 10.0f;
+        else if (major_tick_interval_seconds < 60.0f) major_tick_interval_seconds = 30.0f;
+        else if (major_tick_interval_seconds < 5*60.0f) major_tick_interval_seconds = 60.0f;
+        else major_tick_interval_seconds *= 2.0f; // For larger intervals
 
+        // Safety break for extremely zoomed out cases
+        if (major_tick_interval_seconds > overall_sequence_duration / 2.0f && overall_sequence_duration > 0) {
+             major_tick_interval_seconds = overall_sequence_duration / 2.0f;
+             if (pixels_per_second * major_tick_interval_seconds < min_pixels_per_tick_label) break; // Still too small, give up trying to make it larger
+        }
+        if (major_tick_interval_seconds <= 0.0f) { // Safety break for invalid interval
+            major_tick_interval_seconds = overall_sequence_duration > 0 ? overall_sequence_duration : 1.0f; break;
+        }
+    }
+     // Ensure major is at least minor and a sensible multiple if possible
     if (major_tick_interval_seconds < minor_tick_interval_seconds) major_tick_interval_seconds = minor_tick_interval_seconds;
-
-    if (major_tick_interval_seconds > 5.0f && fmod(major_tick_interval_seconds, 5.0f) != 0.0f && major_tick_interval_seconds <= 60.0f) { // try to make it a multiple of 5 if reasonable
-        major_tick_interval_seconds = floor(major_tick_interval_seconds / 5.0f) * 5.0f;
+    if (fmod(major_tick_interval_seconds, minor_tick_interval_seconds) > 0.0001f && major_tick_interval_seconds > minor_tick_interval_seconds) {
+        major_tick_interval_seconds = floor(major_tick_interval_seconds / minor_tick_interval_seconds) * minor_tick_interval_seconds;
         if (major_tick_interval_seconds < minor_tick_interval_seconds) major_tick_interval_seconds = minor_tick_interval_seconds;
     }
-     if (major_tick_interval_seconds == 0) major_tick_interval_seconds = minor_tick_interval_seconds > 0 ? minor_tick_interval_seconds : 1.0f;
-     if (minor_tick_interval_seconds == 0) minor_tick_interval_seconds = 1.0f;
+    if (major_tick_interval_seconds <= 0.0f) major_tick_interval_seconds = 1.0f; // Final safety
+    if (minor_tick_interval_seconds <= 0.0f) minor_tick_interval_seconds = 1.0f; // Final safety
 
 
-    float last_label_x = -FLT_MAX;
-    float first_tick_time = floor(current_view_start_time_on_ruler / minor_tick_interval_seconds) * minor_tick_interval_seconds;
+    float first_visible_time = current_view_start_time_on_ruler;
+    float last_visible_time = current_view_end_time_on_ruler;
 
-    for (float t_world = first_tick_time; t_world < current_view_end_time_on_ruler + minor_tick_interval_seconds; t_world += minor_tick_interval_seconds) {
-        if (t_world < sequence_total_start_time_seconds - minor_tick_interval_seconds*0.5f || t_world > sequence_total_end_time_seconds + minor_tick_interval_seconds*0.5f) continue;
+    float current_tick_time = floor(first_visible_time / minor_tick_interval_seconds) * minor_tick_interval_seconds;
+    if (current_tick_time < sequence_total_start_time_seconds) current_tick_time = sequence_total_start_time_seconds;
 
-        float x_on_canvas = canvas_pos.x + (t_world - current_view_start_time_on_ruler) * pixels_per_second;
 
-        if (x_on_canvas >= canvas_pos.x -1.0f && x_on_canvas <= canvas_pos.x + actual_canvas_width +1.0f) {
-            bool is_major_tick_candidate = (fmod(t_world + minor_tick_interval_seconds * 0.5f, major_tick_interval_seconds) < minor_tick_interval_seconds);
+    float last_label_x_end_pos = -FLT_MAX; // To prevent label overlap
 
-            float tick_height_px = is_major_tick_candidate ? 10.0f : 5.0f;
+    for (float t_world = current_tick_time; t_world <= last_visible_time + minor_tick_interval_seconds * 0.5f; t_world += minor_tick_interval_seconds) {
+        if (t_world > sequence_total_end_time_seconds + minor_tick_interval_seconds * 0.5f) break;
+        if (t_world < sequence_total_start_time_seconds - minor_tick_interval_seconds * 0.5f && t_world < first_visible_time - minor_tick_interval_seconds * 0.5f) continue;
+
+
+        float x_on_canvas = canvas_pos.x + (t_world - first_visible_time) * pixels_per_second;
+
+        if (x_on_canvas >= canvas_pos.x -1.0f && x_on_canvas <= canvas_pos.x + actual_canvas_width + 1.0f) {
+            bool is_major_tick = (fmod(t_world + minor_tick_interval_seconds * 0.001f, major_tick_interval_seconds) < minor_tick_interval_seconds * 0.01f || major_tick_interval_seconds <= minor_tick_interval_seconds);
+
+            float tick_height_px = is_major_tick ? 10.0f : 5.0f;
             window->DrawList->AddLine(
-                ImVec2(x_on_canvas, ruler_y_start + (timeline_ruler_height - tick_height_px - 5.0f)),
-                ImVec2(x_on_canvas, ruler_y_start + timeline_ruler_height - 5.0f),
+                ImVec2(x_on_canvas, tick_area_y_end - tick_height_px),
+                ImVec2(x_on_canvas, tick_area_y_end -1.0f), // Draw up to the bottom of the ruler
                 0xFF888888);
 
-            if (is_major_tick_candidate) {
-                if (x_on_canvas - last_label_x > min_pixels_between_labels || last_label_x == -FLT_MAX) {
-                    char time_str[32];
+            if (is_major_tick) {
+                char time_str[32];
+                if (major_tick_interval_seconds < 1.0f) {
+                    snprintf(time_str, sizeof(time_str), "%.1fs", t_world);
+                } else if (major_tick_interval_seconds < 10.0f && fmod(t_world, 1.0f) > 0.001f) {
+                     snprintf(time_str, sizeof(time_str), "%.1fs", t_world);
+                }
+                else {
                     snprintf(time_str, sizeof(time_str), "%.0fs", t_world);
-                    ImVec2 text_size = CalcTextSize(time_str);
+                }
+                ImVec2 text_size = CalcTextSize(time_str);
 
-                    float text_x_pos = x_on_canvas + 3;
-                    if (pixels_per_second * major_tick_interval_seconds > text_size.x * 1.5f) {
-                         text_x_pos = x_on_canvas - text_size.x / 2.0f;
-                    }
+                // Attempt to center label on major tick, ensure it doesn't overlap previous label
+                float text_x_pos = x_on_canvas - text_size.x / 2.0f;
 
+                if (text_x_pos > last_label_x_end_pos + 5.0f) { // 5px padding between labels
+                     // Clamp text position to be within canvas bounds
                     if (text_x_pos < canvas_pos.x + 3.0f) text_x_pos = canvas_pos.x + 3.0f;
                     if (text_x_pos + text_size.x > canvas_pos.x + actual_canvas_width - 3.0f) {
                         text_x_pos = canvas_pos.x + actual_canvas_width - text_size.x - 3.0f;
                     }
-
-                    if (text_x_pos >= canvas_pos.x && (text_x_pos + text_size.x) <= (canvas_pos.x + actual_canvas_width)) {
-                         window->DrawList->AddText(ImVec2(text_x_pos, ruler_y_start + 2), 0xFFBBBBBB, time_str);
-                         last_label_x = x_on_canvas + text_size.x / 2.0f; // Consider text width for next label placement
+                    // Final check to ensure it's still within reasonable bounds after clamping and doesn't overlap
+                    if (text_x_pos > last_label_x_end_pos + 5.0f && (text_x_pos + text_size.x < canvas_pos.x + actual_canvas_width)) {
+                        window->DrawList->AddText(ImVec2(text_x_pos, ruler_y_start + 2), 0xFFBBBBBB, time_str);
+                        last_label_x_end_pos = text_x_pos + text_size.x;
                     }
                 }
             }
         }
     }
+
 
     for (int i = 0; i < (int)items.size(); ++i) {
         TimelineItem& item = items[i];
@@ -214,13 +251,13 @@ inline bool SimpleTimeline(const char* label, std::vector<TimelineItem>& items, 
         if (IsMouseClicked(0)) {
             if (mouse_over_left_edge) {
                 SetActiveID(item_id_left_edge, window);
-                if (selected_item_index) *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window);
+                if (selected_item_index) { *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window); }
             } else if (mouse_over_right_edge) {
                 SetActiveID(item_id_right_edge, window);
-                if (selected_item_index) *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window);
+                if (selected_item_index) { *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window); }
             } else if (mouse_over_body && IsMouseHoveringRect(item_visual_bb.Min, item_visual_bb.Max)) { // Ensure click was on the item
                 SetActiveID(item_id_body, window);
-                if (selected_item_index) *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window);
+                if (selected_item_index) { *selected_item_index = i; item_selected_this_frame = true; FocusWindow(window); }
             }
         }
 
