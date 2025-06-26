@@ -39,6 +39,7 @@
 #include "ImGuiFileDialog.h"
 #include "AudioSystem.h" // Added the actual AudioSystem header
 #include "NodeTemplates.h" // For node template factory functions
+#include "Bess/Config/Themes.h" // Added Themes header
 
 // Placeholder Audio System has been removed.
 
@@ -138,6 +139,7 @@ static int g_selectedTimelineItem = -1;
 static Renderer g_renderer;
 static TextEditor g_editor;
 static AudioSystem g_audioSystem;
+static Bess::Config::Themes g_themes; // Global Themes object
 static bool g_showGui = true;
 
 // Window visibility flags
@@ -364,6 +366,19 @@ void RenderMenuBar() {
             ImGui::MenuItem("Audio Reactivity", nullptr, &g_showAudioWindow);
             ImGui::Separator();
             ImGui::MenuItem("Toggle All GUI", "Spacebar", &g_showGui);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Settings")) { // New Settings Menu
+            if (ImGui::BeginMenu("Themes")) {
+                const auto& availableThemes = g_themes.getThemes();
+                // TODO: Get current theme to show a checkmark next to it.
+                for (const auto& pair : availableThemes) {
+                    if (ImGui::MenuItem(pair.first.c_str())) {
+                        g_themes.applyTheme(pair.first);
+                    }
+                }
+                ImGui::EndMenu();
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Help")) {
@@ -1006,6 +1021,7 @@ int main() {
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
+    g_themes.applyTheme("Bess Dark"); // Apply default theme
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
     g_audioSystem.Initialize();
 
