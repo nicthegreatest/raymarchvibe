@@ -95,13 +95,22 @@ inline bool SimpleTimeline(const char* label, std::vector<TimelineItem>& items, 
     // Major ticks should have labels, so they need more space
     float major_tick_interval_seconds = minor_tick_interval_seconds;
     while (pixels_per_second * major_tick_interval_seconds < min_pixels_per_tick_label) {
-        if (major_tick_interval_seconds < 1.0f) major_tick_interval_seconds *= 2.0f; // 0.1 -> 0.2 -> 0.4 (approx 0.5) -> 0.8 (approx 1.0)
-        else if (major_tick_interval_seconds < 5.0f) major_tick_interval_seconds = ceil(major_tick_interval_seconds / 1.0f) * 1.0f + 1.0f; // 1->2, 2->3 etc
-        else if (major_tick_interval_seconds < 10.0f) major_tick_interval_seconds = 5.0f;
-        else if (major_tick_interval_seconds < 30.0f) major_tick_interval_seconds = 10.0f;
-        else if (major_tick_interval_seconds < 60.0f) major_tick_interval_seconds = 30.0f;
-        else if (major_tick_interval_seconds < 5*60.0f) major_tick_interval_seconds = 60.0f;
-        else major_tick_interval_seconds *= 2.0f; // For larger intervals
+        if (major_tick_interval_seconds < 1.0f) {
+            major_tick_interval_seconds *= 2.0f;
+            if (major_tick_interval_seconds == 0.0f) major_tick_interval_seconds = 0.01f; // Prevent getting stuck at 0 if initial was 0
+        } else if (major_tick_interval_seconds < 5.0f) {
+            major_tick_interval_seconds = 5.0f;
+        } else if (major_tick_interval_seconds < 10.0f) {
+            major_tick_interval_seconds = 10.0f;
+        } else if (major_tick_interval_seconds < 30.0f) {
+            major_tick_interval_seconds = 30.0f;
+        } else if (major_tick_interval_seconds < 60.0f) { // Less than 1 minute
+            major_tick_interval_seconds = 60.0f; // Jump to 1 minute
+        } else if (major_tick_interval_seconds < 5 * 60.0f) { // Less than 5 minutes
+            major_tick_interval_seconds = 5 * 60.0f; // Jump to 5 minutes
+        } else { // For larger intervals, double it
+            major_tick_interval_seconds *= 2.0f;
+        }
 
         // Safety break for extremely zoomed out cases
         if (major_tick_interval_seconds > overall_sequence_duration / 2.0f && overall_sequence_duration > 0) {
