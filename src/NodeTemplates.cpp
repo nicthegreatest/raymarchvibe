@@ -83,5 +83,15 @@ std::unique_ptr<Effect> CreateBrightnessContrastEffect(int initial_width, int in
     return effect;
 }
 
+std::unique_ptr<Effect> CreateVignetteEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/filter_vignette.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Vignette";
+    return effect;
+}
+
 } // namespace NodeTemplates
 } // namespace RaymarchVibe

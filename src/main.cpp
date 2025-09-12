@@ -164,6 +164,7 @@ static bool g_timelineControlActive = false; // Added for explicit timeline UI c
 // static std::map<int, ImVec2> g_new_node_initial_positions; // Already included by ImGui
 static std::set<int> g_nodes_requiring_initial_position;
 static std::map<int, ImVec2> g_new_node_initial_positions;
+static std::vector<int> g_nodes_to_delete;
 
 
 // --- Timeline State (New) ---
@@ -246,6 +247,14 @@ static Effect* FindEffectById(int effect_id) {
         }
     }
     return nullptr;
+}
+
+void MarkNodeForDeletion(int node_id) {
+    // Add node to the deletion queue if it's not already there
+    if (std::find(g_nodes_to_delete.begin(), g_nodes_to_delete.end(), node_id) == g_nodes_to_delete.end())
+    {
+        g_nodes_to_delete.push_back(node_id);
+    }
 }
 
 // Helper to load file content
@@ -829,6 +838,15 @@ void RenderNodeEditorWindow() {
         ImGui::TextUnformatted(effect_ptr->name.c_str());
         ImNodes::EndNodeTitleBar();
 
+        if (ImGui::BeginPopupContextItem("Node Context Menu"))
+        {
+            if (ImGui::MenuItem("Delete"))
+            {
+                MarkNodeForDeletion(effect_ptr->id);
+            }
+            ImGui::EndPopup();
+        }
+
         // Delayed positioning for newly added nodes
         if (g_nodes_requiring_initial_position.count(effect_ptr->id)) {
             ImVec2 initial_pos = g_new_node_initial_positions[effect_ptr->id];
@@ -908,6 +926,16 @@ void RenderNodeEditorWindow() {
                         g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
+                if (ImGui::MenuItem("Vignette")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateVignetteEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
+                    }
+                }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Filters")) {
@@ -953,42 +981,17 @@ void RenderNodeEditorWindow() {
 
     ImNodes::EndNodeEditor();
 
-    // Handle deletion of nodes
-    const int num_deleted_nodes = ImNodes::NumDestroyedNodes();
-    if (num_deleted_nodes > 0)
+    // Handle deletion of nodes via Delete key
+    if (ImGui::IsKeyReleased(ImGuiKey_Delete))
     {
-        std::vector<int> deleted_node_ids(num_deleted_nodes);
-        ImNodes::GetDestroyedNodes(deleted_node_ids.data());
-        for (const int node_id : deleted_node_ids)
+        const int num_selected_nodes = ImNodes::NumSelectedNodes();
+        if (num_selected_nodes > 0)
         {
-            // First, remove any connections to this node
-            for (const auto& effect : g_scene)
+            std::vector<int> selected_node_ids(num_selected_nodes);
+            ImNodes::GetSelectedNodes(selected_node_ids.data());
+            for (const int node_id : selected_node_ids)
             {
-                if (auto* se = dynamic_cast<ShaderEffect*>(effect.get()))
-                {
-                    const auto& inputs = se->GetInputs();
-                    for (size_t i = 0; i < inputs.size(); ++i)
-                    {
-                        if (inputs[i] && inputs[i]->id == node_id)
-                        {
-                            se->SetInputEffect(i, nullptr);
-                        }
-                    }
-                }
-            }
-
-            // If the deleted node was selected, deselect it
-            if (g_selectedEffect && g_selectedEffect->id == node_id)
-            {
-                g_selectedEffect = nullptr;
-            }
-
-            // Now, find and remove the node from the scene
-            auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
-                return effect->id == node_id;
-            });
-            if (it != g_scene.end()) {
-                g_scene.erase(it, g_scene.end());
+                MarkNodeForDeletion(node_id);
             }
         }
     }
@@ -1282,6 +1285,37 @@ int main() {
     // static bool first_time_docking = true; // Unused variable
 
     while(!glfwWindowShouldClose(window)) {
+        // Process deferred deletions at the start of the frame
+        if (!g_nodes_to_delete.empty()) {
+            for (int node_id : g_nodes_to_delete) {
+                // First, remove any connections to this node
+                for (const auto& effect : g_scene) {
+                    if (auto* se = dynamic_cast<ShaderEffect*>(effect.get())) {
+                        const auto& inputs = se->GetInputs();
+                        for (size_t i = 0; i < inputs.size(); ++i) {
+                            if (inputs[i] && inputs[i]->id == node_id) {
+                                se->SetInputEffect(i, nullptr);
+                            }
+                        }
+                    }
+                }
+
+                // If the deleted node was selected, deselect it
+                if (g_selectedEffect && g_selectedEffect->id == node_id) {
+                    g_selectedEffect = nullptr;
+                }
+
+                // Now, find and remove the node from the scene
+                auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
+                    return effect->id == node_id;
+                });
+                if (it != g_scene.end()) {
+                    g_scene.erase(it, g_scene.end());
+                }
+            }
+            g_nodes_to_delete.clear();
+        }
+
         float currentFrameTime = (float)glfwGetTime();
         deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
