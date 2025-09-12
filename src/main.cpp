@@ -248,6 +248,8 @@ static Effect* FindEffectById(int effect_id) {
     }
     return nullptr;
 }
+    }
+}
 
 void MarkNodeForDeletion(int node_id) {
     // Add node to the deletion queue if it's not already there
@@ -842,7 +844,6 @@ void RenderNodeEditorWindow() {
         {
             if (ImGui::MenuItem("Delete"))
             {
-                MarkNodeForDeletion(effect_ptr->id);
             }
             ImGui::EndPopup();
         }
@@ -991,7 +992,6 @@ void RenderNodeEditorWindow() {
             ImNodes::GetSelectedNodes(selected_node_ids.data());
             for (const int node_id : selected_node_ids)
             {
-                MarkNodeForDeletion(node_id);
             }
         }
     }
@@ -1307,7 +1307,6 @@ int main() {
 
                 // Now, find and remove the node from the scene
                 auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
-                    return effect->id == node_id;
                 });
                 if (it != g_scene.end()) {
                     g_scene.erase(it, g_scene.end());
