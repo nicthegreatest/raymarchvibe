@@ -3,7 +3,7 @@ out vec4 FragColor;
 
 in vec2 TexCoords;
 
-uniform sampler2D screenTexture;
+uniform sampler2D iChannel0;
 uniform float iTime;
 
 uniform float u_intensity; // {"default": 0.1, "min": 0.0, "max": 1.0, "step": 0.01, "label": "Intensity"}
@@ -16,7 +16,7 @@ float rand(vec2 co){
 
 void main()
 {
-    vec4 color = texture(screenTexture, TexCoords);
+    vec4 color = texture(iChannel0, TexCoords);
 
     vec2 uv = TexCoords * u_size;
     float noise = rand(uv + iTime) * 2.0 - 1.0; // centered noise
