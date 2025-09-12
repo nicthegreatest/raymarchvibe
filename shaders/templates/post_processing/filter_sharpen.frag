@@ -6,8 +6,7 @@ in vec2 TexCoords;
 uniform sampler2D screenTexture;
 uniform vec2 iResolution;
 
-// @control float _Amount "Amount" "min=0.0 max=5.0 step=0.1"
-uniform float _Amount = 1.0;
+uniform float u_amount; // {"default": 1.0, "min": 0.0, "max": 5.0, "step": 0.1, "label": "Amount"}
 
 void main()
 {
@@ -22,7 +21,7 @@ void main()
     blur *= 0.25;
 
     // Unsharp masking: sharpened = original + (original - blurred) * amount
-    vec4 sharpened = originalColor + (originalColor - blur) * _Amount;
+    vec4 sharpened = originalColor + (originalColor - blur) * u_amount;
 
     FragColor = vec4(sharpened.rgb, originalColor.a);
 }
