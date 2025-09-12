@@ -251,6 +251,14 @@ static Effect* FindEffectById(int effect_id) {
     }
 }
 
+void MarkNodeForDeletion(int node_id) {
+    // Add node to the deletion queue if it's not already there
+    if (std::find(g_nodes_to_delete.begin(), g_nodes_to_delete.end(), node_id) == g_nodes_to_delete.end())
+    {
+        g_nodes_to_delete.push_back(node_id);
+    }
+}
+
 // Helper to load file content
 static std::string LoadFileContent(const std::string& path, std::string& errorMsg) {
     std::ifstream file(path);
@@ -919,6 +927,16 @@ void RenderNodeEditorWindow() {
                         g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
+                if (ImGui::MenuItem("Vignette")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateVignetteEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
+                    }
+                }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Filters")) {
@@ -1289,7 +1307,6 @@ int main() {
 
                 // Now, find and remove the node from the scene
                 auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
-                    return effect && effect->id == node_id;
                 });
                 if (it != g_scene.end()) {
                     g_scene.erase(it, g_scene.end());
