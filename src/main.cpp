@@ -164,6 +164,7 @@ static bool g_timelineControlActive = false; // Added for explicit timeline UI c
 // static std::map<int, ImVec2> g_new_node_initial_positions; // Already included by ImGui
 static std::set<int> g_nodes_requiring_initial_position;
 static std::map<int, ImVec2> g_new_node_initial_positions;
+static std::vector<int> g_nodes_to_delete;
 
 
 // --- Timeline State (New) ---
@@ -247,36 +248,6 @@ static Effect* FindEffectById(int effect_id) {
     }
     return nullptr;
 }
-
-void DeleteNode(int node_id) {
-    // First, remove any connections to this node
-    for (const auto& effect : g_scene)
-    {
-        if (auto* se = dynamic_cast<ShaderEffect*>(effect.get()))
-        {
-            const auto& inputs = se->GetInputs();
-            for (size_t i = 0; i < inputs.size(); ++i)
-            {
-                if (inputs[i] && inputs[i]->id == node_id)
-                {
-                    se->SetInputEffect(i, nullptr);
-                }
-            }
-        }
-    }
-
-    // If the deleted node was selected, deselect it
-    if (g_selectedEffect && g_selectedEffect->id == node_id)
-    {
-        g_selectedEffect = nullptr;
-    }
-
-    // Now, find and remove the node from the scene
-    auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
-        return effect->id == node_id;
-    });
-    if (it != g_scene.end()) {
-        g_scene.erase(it, g_scene.end());
     }
 }
 
@@ -865,7 +836,6 @@ void RenderNodeEditorWindow() {
         {
             if (ImGui::MenuItem("Delete"))
             {
-                DeleteNode(effect_ptr->id);
             }
             ImGui::EndPopup();
         }
@@ -1004,7 +974,6 @@ void RenderNodeEditorWindow() {
             ImNodes::GetSelectedNodes(selected_node_ids.data());
             for (const int node_id : selected_node_ids)
             {
-                DeleteNode(node_id);
             }
         }
     }
@@ -1298,6 +1267,37 @@ int main() {
     // static bool first_time_docking = true; // Unused variable
 
     while(!glfwWindowShouldClose(window)) {
+        // Process deferred deletions at the start of the frame
+        if (!g_nodes_to_delete.empty()) {
+            for (int node_id : g_nodes_to_delete) {
+                // First, remove any connections to this node
+                for (const auto& effect : g_scene) {
+                    if (auto* se = dynamic_cast<ShaderEffect*>(effect.get())) {
+                        const auto& inputs = se->GetInputs();
+                        for (size_t i = 0; i < inputs.size(); ++i) {
+                            if (inputs[i] && inputs[i]->id == node_id) {
+                                se->SetInputEffect(i, nullptr);
+                            }
+                        }
+                    }
+                }
+
+                // If the deleted node was selected, deselect it
+                if (g_selectedEffect && g_selectedEffect->id == node_id) {
+                    g_selectedEffect = nullptr;
+                }
+
+                // Now, find and remove the node from the scene
+                auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
+                    return effect && effect->id == node_id;
+                });
+                if (it != g_scene.end()) {
+                    g_scene.erase(it, g_scene.end());
+                }
+            }
+            g_nodes_to_delete.clear();
+        }
+
         float currentFrameTime = (float)glfwGetTime();
         deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
