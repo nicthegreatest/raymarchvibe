@@ -47,3 +47,11 @@ Thumbs.db
 # User-specific configuration (if any exist that shouldn't be version controlled)
 imgui.ini # If this is a user-specific config and not project essential
 main (Copy).cpp # This looks like a temporary copy
+
+# Ignore copied files
+* (Copy).cpp
+* (copy).cpp
+
+# Ignore screenshots in source directories
+app-screenshot.png
+shaders/app-screenshot.png
