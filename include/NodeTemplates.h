@@ -50,6 +50,34 @@ std::unique_ptr<Effect> CreateVignetteEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
+std::unique_ptr<Effect> CreateSharpenEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateColorCorrectionEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateGrainEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateChromaticAberrationEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateBloomEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateToneMappingEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateNoiseEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
 
 } // namespace NodeTemplates
 } // namespace RaymarchVibe

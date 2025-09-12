@@ -43,6 +43,7 @@ FetchContent_Declare(
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # Don't build examples
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)  # Don't build tests
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)   # Don't build docs
+set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE) # Disable Wayland support
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW) # Policy for FetchContent with modern GLFW
 FetchContent_MakeAvailable(glfw)
 
