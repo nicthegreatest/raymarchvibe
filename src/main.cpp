@@ -953,42 +953,45 @@ void RenderNodeEditorWindow() {
 
     ImNodes::EndNodeEditor();
 
-    // Handle deletion of nodes
-    const int num_deleted_nodes = ImNodes::NumDestroyedNodes();
-    if (num_deleted_nodes > 0)
+    // Handle deletion of nodes via Delete key
+    if (ImGui::IsKeyReleased(ImGuiKey_Delete))
     {
-        std::vector<int> deleted_node_ids(num_deleted_nodes);
-        ImNodes::GetDestroyedNodes(deleted_node_ids.data());
-        for (const int node_id : deleted_node_ids)
+        const int num_selected_nodes = ImNodes::NumSelectedNodes();
+        if (num_selected_nodes > 0)
         {
-            // First, remove any connections to this node
-            for (const auto& effect : g_scene)
+            std::vector<int> selected_node_ids(num_selected_nodes);
+            ImNodes::GetSelectedNodes(selected_node_ids.data());
+            for (const int node_id : selected_node_ids)
             {
-                if (auto* se = dynamic_cast<ShaderEffect*>(effect.get()))
+                // First, remove any connections to this node
+                for (const auto& effect : g_scene)
                 {
-                    const auto& inputs = se->GetInputs();
-                    for (size_t i = 0; i < inputs.size(); ++i)
+                    if (auto* se = dynamic_cast<ShaderEffect*>(effect.get()))
                     {
-                        if (inputs[i] && inputs[i]->id == node_id)
+                        const auto& inputs = se->GetInputs();
+                        for (size_t i = 0; i < inputs.size(); ++i)
                         {
-                            se->SetInputEffect(i, nullptr);
+                            if (inputs[i] && inputs[i]->id == node_id)
+                            {
+                                se->SetInputEffect(i, nullptr);
+                            }
                         }
                     }
                 }
-            }
 
-            // If the deleted node was selected, deselect it
-            if (g_selectedEffect && g_selectedEffect->id == node_id)
-            {
-                g_selectedEffect = nullptr;
-            }
+                // If the deleted node was selected, deselect it
+                if (g_selectedEffect && g_selectedEffect->id == node_id)
+                {
+                    g_selectedEffect = nullptr;
+                }
 
-            // Now, find and remove the node from the scene
-            auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
-                return effect->id == node_id;
-            });
-            if (it != g_scene.end()) {
-                g_scene.erase(it, g_scene.end());
+                // Now, find and remove the node from the scene
+                auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
+                    return effect->id == node_id;
+                });
+                if (it != g_scene.end()) {
+                    g_scene.erase(it, g_scene.end());
+                }
             }
         }
     }
