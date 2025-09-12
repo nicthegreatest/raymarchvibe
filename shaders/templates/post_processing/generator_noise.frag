@@ -1,8 +1,6 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec2 TexCoords;
-
 uniform vec2 iResolution;
 uniform float iTime;
 
@@ -156,7 +154,7 @@ float perlin(vec2 P)
 
 void main()
 {
-    vec2 uv = TexCoords * u_scale;
+    vec2 uv = (gl_FragCoord.xy / iResolution.xy) * u_scale;
 
     float noise_val = 0.0;
     if (u_mode == 0) { // Worley

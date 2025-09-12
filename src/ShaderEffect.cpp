@@ -111,9 +111,11 @@ void ShaderEffect::ResizeFrameBuffer(int width, int height) {
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer for " << name << " is not complete!" << std::endl;
-        glDeleteFramebuffers(1, &m_fboID); m_fboID = 0;
-        glDeleteTextures(1, &m_fboTextureID); m_fboTextureID = 0;
-        glDeleteRenderbuffers(1, &m_rboID); m_rboID = 0;
+        m_fboID = 0;
+        m_fboTextureID = 0;
+        m_rboID = 0;
+    } else {
+        std::cout << "SUCCESS::FRAMEBUFFER:: Framebuffer for '" << name << "' (ID: " << m_fboID << ") is complete. Texture ID: " << m_fboTextureID << std::endl;
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -232,14 +234,15 @@ void ShaderEffect::Render() {
     glUseProgram(m_shaderProgram);
 
     if (!m_inputs.empty() && m_inputs[0] != nullptr) {
-        if (auto* inputSE = dynamic_cast<ShaderEffect*>(m_inputs[0])) {
-            GLuint inputTextureID = inputSE->GetOutputTexture();
-            if (inputTextureID != 0 && m_iChannel0SamplerLoc != -1) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, inputTextureID);
-                glUniform1i(m_iChannel0SamplerLoc, 0);
-            }
+        GLuint inputTextureID = m_inputs[0]->GetOutputTexture();
+        if (inputTextureID != 0 && m_iChannel0SamplerLoc != -1) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, inputTextureID);
+            glUniform1i(m_iChannel0SamplerLoc, 0);
+            if (m_iChannel0ActiveLoc != -1) glUniform1i(m_iChannel0ActiveLoc, 1);
         }
+    } else {
+        if (m_iChannel0ActiveLoc != -1) glUniform1i(m_iChannel0ActiveLoc, 0);
     }
 
     // Set uniforms from parsed controls
@@ -594,6 +597,7 @@ void ShaderEffect::CompileAndLinkShader() {
 void ShaderEffect::FetchUniformLocations() {
     if (m_shaderProgram == 0) return;
     m_iChannel0SamplerLoc = glGetUniformLocation(m_shaderProgram, "iChannel0");
+    m_iChannel0ActiveLoc = glGetUniformLocation(m_shaderProgram, "iChannel0_active");
 
     if (m_isShadertoyMode) {
         m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution");
@@ -634,6 +638,27 @@ void ShaderEffect::ParseShaderControls() {
     m_constControls = m_shaderParser.GetConstControls();
     m_shaderParser.ScanAndPrepareUniformControls(m_shaderSourceCode);
     m_shadertoyUniformControls = m_shaderParser.GetUniformControls();
+
+    // Apply any deserialized control values
+    if (!m_deserialized_controls.is_null()) {
+        for (auto& control : m_shadertoyUniformControls) {
+            if (m_deserialized_controls.contains(control.name)) {
+                if (control.glslType == "float") {
+                    control.fValue = m_deserialized_controls[control.name];
+                } else if (control.glslType == "int" || control.glslType == "bool") {
+                    control.iValue = m_deserialized_controls[control.name];
+                } else if (control.glslType == "vec3") {
+                    std::vector<float> v = m_deserialized_controls[control.name];
+                    if (v.size() >= 3) {
+                        control.v3Value[0] = v[0];
+                        control.v3Value[1] = v[1];
+                        control.v3Value[2] = v[2];
+                    }
+                }
+            }
+        }
+        m_deserialized_controls.clear(); // Clear after applying
+    }
 }
 
 void ShaderEffect::SetSourceFilePath(const std::string& path) {
@@ -647,6 +672,7 @@ const std::string& ShaderEffect::GetSourceFilePath() const {
 nlohmann::json ShaderEffect::Serialize() const {
     nlohmann::json j;
     j["type"] = "ShaderEffect";
+    j["id"] = id;
     j["name"] = name;
     j["startTime"] = startTime;
     j["endTime"] = endTime;
@@ -655,11 +681,32 @@ nlohmann::json ShaderEffect::Serialize() const {
         j["sourceCode"] = m_shaderSourceCode;
     }
     j["isShadertoyMode"] = m_isShadertoyMode;
-    j["colorCycleState"] = m_colorCycleState;
 
-    j["nativeParams"]["objectColor"] = {m_objectColor[0], m_objectColor[1], m_objectColor[2]};
-    // ... serialize other native params
-    
+    // Serialize controllable uniforms
+    nlohmann::json uniform_values;
+    for (const auto& control : m_shadertoyUniformControls) {
+        if (control.glslType == "float") {
+            uniform_values[control.name] = control.fValue;
+        } else if (control.glslType == "int" || control.glslType == "bool") {
+            uniform_values[control.name] = control.iValue;
+        } else if (control.glslType == "vec3") {
+            uniform_values[control.name] = {control.v3Value[0], control.v3Value[1], control.v3Value[2]};
+        }
+        // Add other types as needed
+    }
+    j["control_values"] = uniform_values;
+
+    // Serialize input connections
+    nlohmann::json input_ids = nlohmann::json::array();
+    for (const auto& input_effect : m_inputs) {
+        if (input_effect) {
+            input_ids.push_back(input_effect->id);
+        } else {
+            input_ids.push_back(nullptr); // Use null for empty input slots
+        }
+    }
+    j["input_ids"] = input_ids;
+
     return j;
 }
 
@@ -672,16 +719,13 @@ void ShaderEffect::Deserialize(const nlohmann::json& data) {
         m_shaderSourceCode = data.at("sourceCode").get<std::string>();
     }
     m_isShadertoyMode = data.value("isShadertoyMode", false);
-    if (data.contains("colorCycleState")) {
-        m_colorCycleState = data["colorCycleState"].get<ColorCycleState>();
-    }
 
-    if (data.contains("nativeParams")) {
-        const auto& np = data["nativeParams"];
-        if (np.contains("objectColor")) {
-            np.at("objectColor").get_to(m_objectColor);
-        }
-        // ... deserialize other native params
+    // Cache control values and input IDs for later application
+    if (data.contains("control_values")) {
+        m_deserialized_controls = data["control_values"];
+    }
+    if (data.contains("input_ids")) {
+        m_deserialized_input_ids = data["input_ids"].get<std::vector<int>>();
     }
 }
 

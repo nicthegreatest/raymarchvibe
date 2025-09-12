@@ -1,5 +1,5 @@
 #include "ShaderParser.h"
-#include "Utils.h" // <<< This include is necessary
+#include "Utils.h"
 
 #include <sstream>
 #include <regex>
@@ -7,7 +7,6 @@
 #include <iomanip>   
 #include <iostream>
 
-// --- ShaderToyUniformControl Constructor Definition ---
 ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std::string& type_str, const json& meta)
     : name(n), glslType(type_str), metadata(meta) {
     location = -1; 
@@ -37,65 +36,19 @@ ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std
     }
 }
 
-// Constructor for ConstVariableControl
 ConstVariableControl::ConstVariableControl(const std::string& n, const std::string& type, int lIndex, const std::string& valStr)
     : name(n), glslType(type), originalValueString(valStr), lineIndex(lIndex), charPosition(0),
       fValue(0.0f), iValue(0), multiplier(1.0f), isColor(false) {
-    // Basic initialization, detailed parsing might be done by ParseConstValueString
     std::fill_n(v2Value, 2, 0.0f);
     std::fill_n(v3Value, 3, 0.0f);
     std::fill_n(v4Value, 4, 0.0f);
-    // Note: ShaderParser::ParseConstValueString(originalValueString, *this); could be called here
-    // if appropriate, but might lead to issues if that function isn't ready for it or if
-    // charPosition is needed first. For now, keep it simple.
 }
 
-
-// --- ShaderParser Implementation ---
 ShaderParser::ShaderParser() {}
 ShaderParser::~ShaderParser() {}
 
-// <<< The old definition of ShaderParser::trim is REMOVED from here. >>>
-
-TextEditor::ErrorMarkers ShaderParser::ParseGlslErrorLog(const std::string& log) {
-    TextEditor::ErrorMarkers markers;
-    std::regex errorRegex1(R"(ERROR:\s*(\d+):(\d+):\s*(.*))"); 
-    std::regex errorRegex2(R"((\d+):(\d+):\s*(?:error|warning):\s*(.*))"); 
-    std::regex errorRegex3(R"(WARNING:\s*(\d+):(\d+):\s*(.*))"); 
-    std::regex errorRegex4(R"((\d+)\((\d+)\)\s*:\s*(?:error|warning)\s*C\d+:\s*(.*))"); 
-
-    std::istringstream iss(log);
-    std::string line;
-    std::smatch match;
-
-    while (std::getline(iss, line)) {
-        int errorLine = -1;
-        std::string errorMessage;
-
-        if (std::regex_search(line, match, errorRegex1)) { 
-            try { errorLine = std::stoi(match[2].str()); } catch (const std::exception&) {} 
-            errorMessage = Utils::Trim(match[3].str()); // <<< USING Utils::Trim
-        } else if (std::regex_search(line, match, errorRegex2)) { 
-            try { errorLine = std::stoi(match[1].str()); } catch (const std::exception&) {}
-            errorMessage = Utils::Trim(match[3].str()); // <<< USING Utils::Trim
-        } else if (std::regex_search(line, match, errorRegex3)) { 
-             try { errorLine = std::stoi(match[2].str()); } catch (const std::exception&) {}
-            errorMessage = Utils::Trim(match[3].str()); // <<< USING Utils::Trim
-        } else if (std::regex_search(line, match, errorRegex4)) { 
-            try { errorLine = std::stoi(match[2].str()); } catch (const std::exception&) {}
-            errorMessage = Utils::Trim(match[3].str()); // <<< USING Utils::Trim
-        }
-
-        if (errorLine > 0 && !errorMessage.empty()) {
-            markers[errorLine] = errorMessage;
-        }
-    }
-    return markers;
-}
-
-void ShaderParser::ScanAndPrepareDefineControls(const std::string& shaderCode) { // Changed to const std::string&
+void ShaderParser::ScanAndPrepareDefineControls(const std::string& shaderCode) { 
     m_defineControls.clear();
-    // std::string code(shaderCode); // No longer needed if shaderCode is already std::string
     std::istringstream iss(shaderCode);
     std::string line;
     int currentLineNumber = 0;
@@ -104,7 +57,7 @@ void ShaderParser::ScanAndPrepareDefineControls(const std::string& shaderCode) {
 
     while (std::getline(iss, line)) {
         currentLineNumber++;
-        std::string trimmedLine = Utils::Trim(line); // <<< USING Utils::Trim
+        std::string trimmedLine = Utils::Trim(line);
 
         if (std::regex_match(trimmedLine, match, defineRegex)) {
             DefineControl dc;
@@ -113,13 +66,12 @@ void ShaderParser::ScanAndPrepareDefineControls(const std::string& shaderCode) {
             dc.originalLine = currentLineNumber;
 
             if (match[3].matched) { 
-                dc.originalValueString = Utils::Trim(match[3].str()); // <<< USING Utils::Trim
+                dc.originalValueString = Utils::Trim(match[3].str());
                 dc.hasValue = !dc.originalValueString.empty();
                 if (dc.hasValue) {
                     try {
                         dc.floatValue = std::stof(dc.originalValueString);
                     } catch (const std::exception&) {
-                        // Not a simple float
                     }
                 }
             } else {
@@ -143,7 +95,7 @@ std::string ShaderParser::ToggleDefineInString(const std::string& shaderCode, co
 
     bool found = false;
     for (size_t i = 0; i < lines.size(); ++i) {
-        std::string trimmedLine = Utils::Trim(lines[i]); // <<< USING Utils::Trim
+        std::string trimmedLine = Utils::Trim(lines[i]);
         std::regex defineLineRegex(R"(^\s*(//)?\s*#define\s+)" + defineName + R"((?:\s+[^\n\r]*)?.*)");
         std::smatch match;
 
@@ -153,7 +105,7 @@ std::string ShaderParser::ToggleDefineInString(const std::string& shaderCode, co
                 size_t commentPos = lines[i].find("//");
                 if (commentPos != std::string::npos) {
                     lines[i].erase(commentPos, 2); 
-                    lines[i] = Utils::Trim(lines[i]); // <<< USING Utils::Trim
+                    lines[i] = Utils::Trim(lines[i]);
                 }
             } else if (!enable && currentlyEnabled) { 
                 lines[i] = "//" + lines[i];
@@ -177,196 +129,78 @@ std::string ShaderParser::ToggleDefineInString(const std::string& shaderCode, co
     return oss.str();
 }
 
-std::string ShaderParser::UpdateDefineValueInString(const std::string& shaderCode, const std::string& defineName, float newValue) {
-    std::vector<std::string> lines;
-    std::istringstream iss(shaderCode);
-    std::string line;
-    while (std::getline(iss, line)) {
-        lines.push_back(line);
-    }
-
-    std::ostringstream ossValue;
-    ossValue << std::fixed << std::setprecision(3) << newValue; 
-    std::string newValueStr = ossValue.str();
-
-    for (size_t i = 0; i < lines.size(); ++i) {
-        std::string trimmedLine = Utils::Trim(lines[i]); // <<< USING Utils::Trim
-        std::regex activeDefineRegex(R"(^\s*#define\s+)" + defineName + R"((?:\s+[^\n\r]*)?.*)");
-        std::smatch match;
-
-        if (std::regex_match(trimmedLine, match, activeDefineRegex)) {
-            size_t defineKeywordPos = lines[i].find("#define");
-            std::string leadingWhitespace = lines[i].substr(0, defineKeywordPos);
-            lines[i] = leadingWhitespace + "#define " + defineName + " " + newValueStr;
-        }
-    }
-
-    std::ostringstream oss;
-    for (const auto& l : lines) {
-        oss << l << '\n';
-    }
-    return oss.str();
-}
-
-void ShaderParser::ScanAndPrepareUniformControls(const std::string& shaderCode) { // Changed to const std::string&
+void ShaderParser::ScanAndPrepareUniformControls(const std::string& shaderCode) {
     m_uniformControls.clear();
-    // std::string code(shaderCode); // No longer needed if shaderCode is already std::string
     std::istringstream iss(shaderCode);
     std::string line;
-    std::regex uniformRegex(R"(^\s*uniform\s+(float|vec2|vec3|vec4|int|bool)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;.*\/\/\s*(\{.*\})\s*$)");
-    std::smatch match;
+    std::string pending_control_line;
 
     while (std::getline(iss, line)) {
-        std::string trimmedLine = Utils::Trim(line); // <<< USING Utils::Trim
-        if (std::regex_match(trimmedLine, match, uniformRegex)) {
-            std::string typeStr = match[1].str();
-            std::string nameStr = match[2].str();
-            std::string jsonStr = match[3].str();
-            try {
-                json metadataJson = json::parse(jsonStr);
-                m_uniformControls.emplace_back(nameStr, typeStr, metadataJson);
-            } catch (const json::parse_error& e) {
-                // Handle or log JSON parsing error
+        std::string trimmed_line = Utils::Trim(line);
+        std::regex control_regex(R"(^//\s*#control\s+(color|float|vec2|vec3|vec4|int|bool)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+\"([^\"]*)\"\s+(\{.*\}))");
+        std::smatch control_match;
+
+        if (std::regex_search(trimmed_line, control_match, control_regex)) {
+            pending_control_line = trimmed_line;
+            continue; 
+        }
+
+        if (!pending_control_line.empty()) {
+            std::regex_search(pending_control_line, control_match, control_regex);
+            
+            std::string control_type = control_match[1].str();
+            std::string name_str = control_match[2].str();
+            std::string label_str = control_match[3].str();
+            std::string json_str = control_match[4].str();
+
+            std::string expected_glsl_type = control_type;
+            if (control_type == "color") {
+                expected_glsl_type = "vec3";
             }
+
+            std::regex uniform_regex(R"(^\s*uniform\s+)" + expected_glsl_type + R"(\s+)" + name_str);
+            if (std::regex_search(trimmed_line, uniform_regex)) {
+                try {
+                    json metadata = json::parse(json_str);
+                    metadata["label"] = label_str;
+                    if (control_type == "color") {
+                        metadata["widget"] = "color";
+                    }
+                    m_uniformControls.emplace_back(name_str, expected_glsl_type, metadata);
+                } catch (const json::parse_error& e) {
+                    std::cerr << "[ShaderParser] JSON parse error for control '" << name_str << "': " << e.what() << std::endl;
+                }
+            }
+            pending_control_line.clear();
         }
     }
-     std::sort(m_uniformControls.begin(), m_uniformControls.end(),
+
+    std::sort(m_uniformControls.begin(), m_uniformControls.end(),
               [](const ShaderToyUniformControl& a, const ShaderToyUniformControl& b) { return a.name < b.name; });
 }
 
-void ShaderParser::ClearAllControls() {
-    m_defineControls.clear();
-    m_uniformControls.clear();
-    m_constControls.clear();
+const std::vector<DefineControl>& ShaderParser::GetDefineControls() const {
+    return m_defineControls;
 }
 
-void ShaderParser::ParseConstValueString(const std::string& valueStr, ConstVariableControl& control) {
-    std::string valToParse = Utils::Trim(valueStr); // <<< USING Utils::Trim
-    control.isColor = false; 
-    control.multiplier = 1.0f;
-
-    try {
-        if (control.glslType == "float") {
-            control.fValue = std::stof(valToParse);
-        } else if (control.glslType == "int") {
-            control.iValue = std::stoi(valToParse);
-        } else if (control.glslType == "vec2" || control.glslType == "vec3" || control.glslType == "vec4") {
-            std::regex vecRegex(R"(vec([234])\s*\((.*)\))");
-            std::smatch vecMatch;
-            if (std::regex_match(valToParse, vecMatch, vecRegex)) {
-                std::string argsStr = Utils::Trim(vecMatch[2].str()); // <<< USING Utils::Trim
-                std::stringstream ss(argsStr);
-                std::string segment;
-                std::vector<float> components;
-                while(std::getline(ss, segment, ',')) {
-                    components.push_back(std::stof(Utils::Trim(segment))); // <<< USING Utils::Trim
-                }
-                if (control.glslType == "vec2") {
-                    if (components.size() == 1) { control.v2Value[0] = control.v2Value[1] = components[0]; }
-                    else if (components.size() >= 2) { control.v2Value[0] = components[0]; control.v2Value[1] = components[1]; }
-                } else if (control.glslType == "vec3") {
-                    if (components.size() == 1) { control.v3Value[0] = control.v3Value[1] = control.v3Value[2] = components[0]; }
-                    else if (components.size() >= 3) { for(int k=0; k<3; ++k) control.v3Value[k] = components[k]; }
-                } else if (control.glslType == "vec4") {
-                     if (components.size() == 1) { for(int k=0; k<4; ++k) control.v4Value[k] = components[0]; }
-                    else if (components.size() >= 4) { for(int k=0; k<4; ++k) control.v4Value[k] = components[k]; }
-                }
-            } else {
-                std::regex vecMulRegex(R"((vec[234]\s*\([^)]*\))\s*\*\s*([+-]?\d*\.?\d+f?))");
-                std::smatch mulMatch;
-                if (std::regex_match(valToParse, mulMatch, vecMulRegex)) {
-                    std::string vecPart = mulMatch[1].str();
-                    float multiplier = std::stof(mulMatch[2].str());
-                    control.multiplier = multiplier; 
-                    ParseConstValueString(vecPart, control); 
-                } else {
-                    float single_val = std::stof(valToParse);
-                     if (control.glslType == "vec2") { control.v2Value[0] = control.v2Value[1] = single_val; }
-                     else if (control.glslType == "vec3") { control.v3Value[0] = control.v3Value[1] = control.v3Value[2] = single_val; }
-                     else if (control.glslType == "vec4") { for(int k=0; k<4; ++k) control.v4Value[k] = single_val; }
-                }
-            }
-            bool allUnit = true;
-            if(control.glslType == "vec3") for(int k=0; k<3; ++k) if(control.v3Value[k]<0.f || control.v3Value[k]>1.0001f) allUnit=false;
-            if(control.glslType == "vec4") for(int k=0; k<4; ++k) if(control.v4Value[k]<0.f || control.v4Value[k]>1.0001f) allUnit=false;
-            if(allUnit && (control.glslType == "vec3" || control.glslType == "vec4")) control.isColor = true;
-        }
-    } catch (const std::exception& e) {
-        // Handle or log parsing failure
-    }
+std::vector<DefineControl>& ShaderParser::GetDefineControls() {
+    return m_defineControls;
 }
 
-std::string ShaderParser::ReconstructConstValueString(const ConstVariableControl& control) const {
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(4); 
-
-    if (control.glslType == "float") {
-        oss << control.fValue << "f";
-    } else if (control.glslType == "int") {
-        oss << control.iValue;
-    } else if (control.glslType == "vec2") {
-        oss << "vec2(" << control.v2Value[0] << "f, " << control.v2Value[1] << "f)";
-    } else if (control.glslType == "vec3") {
-        oss << "vec3(" << control.v3Value[0] << "f, " << control.v3Value[1] << "f, " << control.v3Value[2] << "f)";
-    } else if (control.glslType == "vec4") {
-        oss << "vec4(" << control.v4Value[0] << "f, " << control.v4Value[1] << "f, " << control.v3Value[2] << "f, " << control.v4Value[3] << "f)";
-    } else {
-        return control.originalValueString; 
-    }
-    return oss.str();
+const std::vector<ShaderToyUniformControl>& ShaderParser::GetUniformControls() const {
+    return m_uniformControls;
 }
 
-std::string ShaderParser::UpdateConstValueInString(const std::string& shaderCode, const ConstVariableControl& control) {
-    if (control.lineIndex < 0) return ""; 
+std::vector<ShaderToyUniformControl>& ShaderParser::GetUniformControls() {
+    return m_uniformControls;
+}
 
-    std::vector<std::string> lines;
-    std::istringstream iss(shaderCode);
-    std::string lineContent;
-    while (std::getline(iss, lineContent)) {
-        lines.push_back(lineContent);
-    }
+const std::vector<ConstVariableControl>& ShaderParser::GetConstControls() const {
+    return m_constControls;
+}
 
-    if (static_cast<size_t>(control.lineIndex) >= lines.size()) return ""; 
-
-    std::string& targetLine = lines[control.lineIndex];
-    std::string newValueStr = ReconstructConstValueString(control);
-
-    size_t equalsPos = targetLine.find('=', control.charPosition > 20 ? control.charPosition - 20 : 0); 
-    if (equalsPos == std::string::npos) { 
-         equalsPos = targetLine.find('=');
-    }
-
-    if (equalsPos != std::string::npos) {
-        size_t valueStartPos = equalsPos + 1;
-        while (valueStartPos < targetLine.length() && std::isspace(targetLine[valueStartPos])) {
-            valueStartPos++;
-        }
-        size_t valueEndPos = targetLine.find(';', valueStartPos);
-        if (valueEndPos == std::string::npos) {
-            valueEndPos = targetLine.length();
-        }
-        std::string postSemicolon = "";
-        size_t semicolonPos = targetLine.find(';', valueStartPos);
-        if (semicolonPos != std::string::npos) {
-            postSemicolon = targetLine.substr(semicolonPos);
-        } else {
-            postSemicolon = ";"; 
-        }
-
-        targetLine.replace(valueStartPos, (semicolonPos != std::string::npos ? semicolonPos : targetLine.length()) - valueStartPos, " " + newValueStr);
-        size_t checkSemi = targetLine.rfind(';');
-        if (checkSemi == std::string::npos || checkSemi < targetLine.find(newValueStr)) {
-             targetLine += ";";
-        }
-    } else {
-        return ""; 
-    }
-
-    std::ostringstream oss;
-    for (size_t i = 0; i < lines.size(); ++i) {
-        oss << lines[i] << (i == lines.size() - 1 ? "" : "\n");
-    }
-    return oss.str();
+std::vector<ConstVariableControl>& ShaderParser::GetConstControls() {
+    return m_constControls;
 }
 
 void ShaderParser::ScanAndPrepareConstControls(const std::string& shaderCode) {
@@ -379,13 +213,13 @@ void ShaderParser::ScanAndPrepareConstControls(const std::string& shaderCode) {
 
     while (std::getline(iss, line)) {
         currentLineNumber++;
-        std::string trimmedLine = Utils::Trim(line); // <<< USING Utils::Trim
+        std::string trimmedLine = Utils::Trim(line);
 
         if (std::regex_search(trimmedLine, match, constRegex)) {
             ConstVariableControl control;
             control.glslType = match[1].str();
             control.name = match[2].str();
-            control.originalValueString = Utils::Trim(match[3].str()); // <<< USING Utils::Trim
+            control.originalValueString = Utils::Trim(match[3].str());
             control.lineIndex = currentLineNumber;
             
             size_t equalsPos = line.find('=');
@@ -395,32 +229,9 @@ void ShaderParser::ScanAndPrepareConstControls(const std::string& shaderCode) {
                     control.charPosition++;
                 }
             }
-            ParseConstValueString(control.originalValueString, control);
             m_constControls.push_back(control);
         }
     }
     std::sort(m_constControls.begin(), m_constControls.end(),
               [](const ConstVariableControl& a, const ConstVariableControl& b) { return a.name < b.name; });
-}
-
-// --- Getter Definitions ---
-const std::vector<DefineControl>& ShaderParser::GetDefineControls() const {
-    return m_defineControls;
-}
-std::vector<DefineControl>& ShaderParser::GetDefineControls() {
-    return m_defineControls;
-}
-
-const std::vector<ShaderToyUniformControl>& ShaderParser::GetUniformControls() const {
-    return m_uniformControls;
-}
-std::vector<ShaderToyUniformControl>& ShaderParser::GetUniformControls() {
-    return m_uniformControls;
-}
-
-const std::vector<ConstVariableControl>& ShaderParser::GetConstControls() const {
-    return m_constControls;
-}
-std::vector<ConstVariableControl>& ShaderParser::GetConstControls() {
-    return m_constControls;
 }
