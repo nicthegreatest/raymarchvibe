@@ -242,6 +242,25 @@ void ShaderEffect::Render() {
         }
     }
 
+    // Set uniforms from parsed controls
+    for (const auto& control : m_shadertoyUniformControls) {
+        if (control.location != -1) {
+            if (control.glslType == "float") {
+                glUniform1f(control.location, control.fValue);
+            } else if (control.glslType == "int") {
+                glUniform1i(control.location, control.iValue);
+            } else if (control.glslType == "vec2") {
+                glUniform2fv(control.location, 1, control.v2Value);
+            } else if (control.glslType == "vec3") {
+                glUniform3fv(control.location, 1, control.v3Value);
+            } else if (control.glslType == "vec4") {
+                glUniform4fv(control.location, 1, control.v4Value);
+            } else if (control.glslType == "bool") {
+                glUniform1i(control.location, control.bValue);
+            }
+        }
+    }
+
     if (m_isShadertoyMode) {
         if (m_iResolutionLocation != -1) glUniform3f(m_iResolutionLocation, (float)m_fboWidth, (float)m_fboHeight, (float)m_fboWidth / (float)m_fboHeight);
         if (m_iTimeLocation != -1) glUniform1f(m_iTimeLocation, m_time);
@@ -390,11 +409,12 @@ void ShaderEffect::RenderUI() {
 
     if (m_isShadertoyMode) {
         RenderShadertoyParamsUI();
-        if (ImGui::CollapsingHeader("Shader Uniforms (from metadata)##EffectSTUniforms")) {
-            RenderMetadataUniformsUI();
-        }
     } else {
         RenderNativeParamsUI();
+    }
+
+    if (ImGui::CollapsingHeader("Parsed Uniforms##EffectParsedUniforms", ImGuiTreeNodeFlags_DefaultOpen)) {
+        RenderParsedUniformsUI();
     }
 
     if (ImGui::CollapsingHeader("Shader Defines##EffectDefines")) {
@@ -443,7 +463,12 @@ void ShaderEffect::RenderShadertoyParamsUI() {
     ImGui::ColorEdit3("iUserColour1##Effect", m_iUserColor1);
 }
 
-void ShaderEffect::RenderMetadataUniformsUI() {
+void ShaderEffect::RenderParsedUniformsUI() {
+    if (m_shadertoyUniformControls.empty()) {
+        ImGui::TextDisabled(" (No parsed uniforms detected)");
+        return;
+    }
+
     for (size_t i = 0; i < m_shadertoyUniformControls.size(); ++i) {
         auto& control = m_shadertoyUniformControls[i];
         std::string label = control.metadata.value("label", control.name);
@@ -451,9 +476,12 @@ void ShaderEffect::RenderMetadataUniformsUI() {
 
         if (control.glslType == "float") {
             ImGui::SliderFloat(label.c_str(), &control.fValue, control.metadata.value("min", 0.0f), control.metadata.value("max", 1.0f));
+        } else if (control.glslType == "int") {
+            ImGui::SliderInt(label.c_str(), &control.iValue, control.metadata.value("min", 0), control.metadata.value("max", 1));
         } else if (control.glslType == "vec3" && control.isColor) {
             ImGui::ColorEdit3(label.c_str(), control.v3Value);
-        } // ... other types
+        } // ... other types can be added here
+
         ImGui::PopID();
     }
 }
@@ -575,9 +603,6 @@ void ShaderEffect::FetchUniformLocations() {
         m_iMouseLocation = glGetUniformLocation(m_shaderProgram, "iMouse");
         m_iUserFloat1Loc = glGetUniformLocation(m_shaderProgram, "iUserFloat1");
         m_iUserColor1Loc = glGetUniformLocation(m_shaderProgram, "iUserColor1");
-        for (auto& control : m_shadertoyUniformControls) {
-            control.location = glGetUniformLocation(m_shaderProgram, control.name.c_str());
-        }
     } else {
         m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution");
         m_iTimeLocation = glGetUniformLocation(m_shaderProgram, "iTime");
@@ -592,6 +617,12 @@ void ShaderEffect::FetchUniformLocations() {
         m_uLightPosLoc = glGetUniformLocation(m_shaderProgram, "u_lightPosition");
         m_uLightColorLoc = glGetUniformLocation(m_shaderProgram, "u_lightColor");
     }
+
+    // This now runs for ALL effects
+    for (auto& control : m_shadertoyUniformControls) {
+        control.location = glGetUniformLocation(m_shaderProgram, control.name.c_str());
+    }
+
     m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
 }
 
@@ -601,12 +632,8 @@ void ShaderEffect::ParseShaderControls() {
     m_defineControls = m_shaderParser.GetDefineControls();
     m_shaderParser.ScanAndPrepareConstControls(m_shaderSourceCode);
     m_constControls = m_shaderParser.GetConstControls();
-    if (m_isShadertoyMode) {
-        m_shaderParser.ScanAndPrepareUniformControls(m_shaderSourceCode);
-        m_shadertoyUniformControls = m_shaderParser.GetUniformControls();
-    } else {
-        m_shadertoyUniformControls.clear();
-    }
+    m_shaderParser.ScanAndPrepareUniformControls(m_shaderSourceCode);
+    m_shadertoyUniformControls = m_shaderParser.GetUniformControls();
 }
 
 void ShaderEffect::SetSourceFilePath(const std::string& path) {
