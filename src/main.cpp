@@ -248,6 +248,38 @@ static Effect* FindEffectById(int effect_id) {
     return nullptr;
 }
 
+void DeleteNode(int node_id) {
+    // First, remove any connections to this node
+    for (const auto& effect : g_scene)
+    {
+        if (auto* se = dynamic_cast<ShaderEffect*>(effect.get()))
+        {
+            const auto& inputs = se->GetInputs();
+            for (size_t i = 0; i < inputs.size(); ++i)
+            {
+                if (inputs[i] && inputs[i]->id == node_id)
+                {
+                    se->SetInputEffect(i, nullptr);
+                }
+            }
+        }
+    }
+
+    // If the deleted node was selected, deselect it
+    if (g_selectedEffect && g_selectedEffect->id == node_id)
+    {
+        g_selectedEffect = nullptr;
+    }
+
+    // Now, find and remove the node from the scene
+    auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
+        return effect->id == node_id;
+    });
+    if (it != g_scene.end()) {
+        g_scene.erase(it, g_scene.end());
+    }
+}
+
 // Helper to load file content
 static std::string LoadFileContent(const std::string& path, std::string& errorMsg) {
     std::ifstream file(path);
@@ -829,6 +861,15 @@ void RenderNodeEditorWindow() {
         ImGui::TextUnformatted(effect_ptr->name.c_str());
         ImNodes::EndNodeTitleBar();
 
+        if (ImGui::BeginPopupContextItem("Node Context Menu"))
+        {
+            if (ImGui::MenuItem("Delete"))
+            {
+                DeleteNode(effect_ptr->id);
+            }
+            ImGui::EndPopup();
+        }
+
         // Delayed positioning for newly added nodes
         if (g_nodes_requiring_initial_position.count(effect_ptr->id)) {
             ImVec2 initial_pos = g_new_node_initial_positions[effect_ptr->id];
@@ -963,35 +1004,7 @@ void RenderNodeEditorWindow() {
             ImNodes::GetSelectedNodes(selected_node_ids.data());
             for (const int node_id : selected_node_ids)
             {
-                // First, remove any connections to this node
-                for (const auto& effect : g_scene)
-                {
-                    if (auto* se = dynamic_cast<ShaderEffect*>(effect.get()))
-                    {
-                        const auto& inputs = se->GetInputs();
-                        for (size_t i = 0; i < inputs.size(); ++i)
-                        {
-                            if (inputs[i] && inputs[i]->id == node_id)
-                            {
-                                se->SetInputEffect(i, nullptr);
-                            }
-                        }
-                    }
-                }
-
-                // If the deleted node was selected, deselect it
-                if (g_selectedEffect && g_selectedEffect->id == node_id)
-                {
-                    g_selectedEffect = nullptr;
-                }
-
-                // Now, find and remove the node from the scene
-                auto it = std::remove_if(g_scene.begin(), g_scene.end(), [node_id](const std::unique_ptr<Effect>& effect) {
-                    return effect->id == node_id;
-                });
-                if (it != g_scene.end()) {
-                    g_scene.erase(it, g_scene.end());
-                }
+                DeleteNode(node_id);
             }
         }
     }
