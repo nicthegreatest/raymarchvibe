@@ -3,7 +3,7 @@ out vec4 FragColor;
 
 in vec2 TexCoords;
 
-uniform sampler2D screenTexture;
+uniform sampler2D iChannel0;
 uniform vec2 iResolution;
 
 uniform float u_aberration;   // {"default": 0.01, "min": -0.1, "max": 0.1, "step": 0.001, "label": "Aberration"}
@@ -22,10 +22,10 @@ void main()
     aberration_amount *= smoothness_factor;
 
     vec4 color;
-    color.r = texture(screenTexture, uv - vec2(aberration_amount, 0.0)).r;
-    color.g = texture(screenTexture, uv).g; // Green channel is the reference
-    color.b = texture(screenTexture, uv + vec2(aberration_amount, 0.0)).b;
-    color.a = texture(screenTexture, uv).a;
+    color.r = texture(iChannel0, uv - vec2(aberration_amount, 0.0)).r;
+    color.g = texture(iChannel0, uv).g; // Green channel is the reference
+    color.b = texture(iChannel0, uv + vec2(aberration_amount, 0.0)).b;
+    color.a = texture(iChannel0, uv).a;
 
     FragColor = color;
 }

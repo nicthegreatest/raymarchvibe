@@ -39,6 +39,7 @@
 #include "ImGuiFileDialog.h"
 #include "AudioSystem.h" // Added the actual AudioSystem header
 #include "NodeTemplates.h" // For node template factory functions
+#include "OutputNode.h" // For the Scene Output node
 #include "Bess/Config/Themes.h" // Added Themes header
 
 // Placeholder Audio System has been removed.
@@ -391,6 +392,19 @@ void RenderMenuBar() {
                 for (const auto& pair : availableThemes) {
                     if (ImGui::MenuItem(pair.first.c_str())) {
                         g_themes.applyTheme(pair.first);
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Output")) {
+                if (ImGui::MenuItem("Scene Output")) {
+                    auto newEffectUniquePtr = std::make_unique<OutputNode>();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
                 ImGui::EndMenu();
@@ -1573,15 +1587,24 @@ int main() {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         Effect* finalOutputEffect = nullptr;
-        // --- ORIGINAL LOGIC FOR finalOutputEffect ---
-        for (Effect* effect : renderQueue) {
-            if (effect->name == PASSTHROUGH_EFFECT_NAME) { // Used constant
-                finalOutputEffect = effect;
+        // --- NEW LOGIC FOR finalOutputEffect ---
+        OutputNode* outputNode = nullptr;
+        for (Effect* effect : activeEffects) {
+            if (auto* on = dynamic_cast<OutputNode*>(effect)) {
+                outputNode = on;
                 break;
             }
         }
-        if (!finalOutputEffect && !renderQueue.empty()) { finalOutputEffect = renderQueue.back(); }
-        // --- END ORIGINAL LOGIC ---
+
+        if (outputNode) {
+            finalOutputEffect = outputNode->GetInputEffect();
+        } else {
+            // Fallback behavior if no output node exists
+            if (!renderQueue.empty()) {
+                finalOutputEffect = renderQueue.back();
+            }
+        }
+        // --- END NEW LOGIC ---
 
         if (finalOutputEffect) {
             if (auto* se = dynamic_cast<ShaderEffect*>(finalOutputEffect)) {
