@@ -3,7 +3,7 @@ out vec4 FragColor;
 
 in vec2 TexCoords;
 
-uniform sampler2D screenTexture;
+uniform sampler2D iChannel0;
 uniform vec2 iResolution;
 
 uniform float u_amount; // {"default": 1.0, "min": 0.0, "max": 5.0, "step": 0.1, "label": "Amount"}
@@ -11,13 +11,13 @@ uniform float u_amount; // {"default": 1.0, "min": 0.0, "max": 5.0, "step": 0.1,
 void main()
 {
     vec2 texel = 1.0 / iResolution.xy;
-    vec4 originalColor = texture(screenTexture, TexCoords);
+    vec4 originalColor = texture(iChannel0, TexCoords);
 
     // Simplified box blur for the "unsharp" part
-    vec4 blur = texture(screenTexture, TexCoords + vec2( texel.x, 0.0)) +
-                texture(screenTexture, TexCoords + vec2(-texel.x, 0.0)) +
-                texture(screenTexture, TexCoords + vec2(0.0,  texel.y)) +
-                texture(screenTexture, TexCoords + vec2(0.0, -texel.y));
+    vec4 blur = texture(iChannel0, TexCoords + vec2( texel.x, 0.0)) +
+                texture(iChannel0, TexCoords + vec2(-texel.x, 0.0)) +
+                texture(iChannel0, TexCoords + vec2(0.0,  texel.y)) +
+                texture(iChannel0, TexCoords + vec2(0.0, -texel.y));
     blur *= 0.25;
 
     // Unsharp masking: sharpened = original + (original - blurred) * amount
