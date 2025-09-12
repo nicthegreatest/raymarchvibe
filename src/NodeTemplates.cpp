@@ -93,5 +93,75 @@ std::unique_ptr<Effect> CreateVignetteEffect(int initial_width, int initial_heig
     return effect;
 }
 
+std::unique_ptr<Effect> CreateSharpenEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_sharpen.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Sharpen";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateColorCorrectionEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_color_correction.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Color Correction";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateGrainEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_grain.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Grain";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateChromaticAberrationEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_chromatic_aberration.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Chromatic Aberration";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateBloomEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_bloom.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Bloom";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateToneMappingEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_tonemapping.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Tone Mapping";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateNoiseEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/generator_noise.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Noise Generator";
+    return effect;
+}
+
 } // namespace NodeTemplates
 } // namespace RaymarchVibe
