@@ -1,9 +1,8 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec2 TexCoords;
-
 uniform sampler2D iChannel0;
+uniform vec2 iResolution;
 
 // #control float u_brightness "Brightness" {"default":0.0, "min":-1.0, "max":1.0}
 // #control float u_contrast "Contrast" {"default":1.0, "min":0.0, "max":3.0}
@@ -11,7 +10,8 @@ uniform float u_brightness = 0.0;
 uniform float u_contrast = 1.0;
 
 void main() {
-    vec4 color = texture(iChannel0, TexCoords);
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    vec4 color = texture(iChannel0, uv);
 
     // Apply brightness
     color.rgb += u_brightness;

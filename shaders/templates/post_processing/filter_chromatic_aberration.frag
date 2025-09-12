@@ -1,8 +1,6 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec2 TexCoords;
-
 uniform sampler2D iChannel0;
 uniform vec2 iResolution;
 
@@ -11,7 +9,7 @@ uniform float u_smoothness;   // {"default": 0.5, "min": 0.0, "max": 1.0, "step"
 
 void main()
 {
-    vec2 uv = TexCoords;
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
     vec2 center_dist = uv - 0.5;
     float dist = length(center_dist);
 

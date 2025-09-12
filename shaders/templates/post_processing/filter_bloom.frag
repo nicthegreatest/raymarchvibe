@@ -1,8 +1,6 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec2 TexCoords;
-
 uniform sampler2D iChannel0;
 uniform vec2 iResolution;
 
@@ -11,7 +9,8 @@ uniform float u_intensity; // {"default": 1.0, "min": 0.0, "max": 5.0, "step": 0
 
 void main()
 {
-    vec4 originalColor = texture(iChannel0, TexCoords);
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    vec4 originalColor = texture(iChannel0, uv);
 
     vec2 texel = 1.0 / iResolution.xy;
     vec3 bloom_color = vec3(0.0);
@@ -19,7 +18,7 @@ void main()
     for (int x = -4; x <= 4; x++) {
         for (int y = -4; y <= 4; y++) {
             vec2 offset = vec2(x, y) * texel * 2.0; // wider blur
-            vec4 sample_color = texture(iChannel0, TexCoords + offset);
+            vec4 sample_color = texture(iChannel0, uv + offset);
             // We only add the contribution of bright pixels to the bloom
             bloom_color += max(sample_color.rgb - u_threshold, 0.0);
             samples++;

@@ -24,6 +24,13 @@ void OutputNode::RenderUI() {
     ImGui::Text("to see it on the main screen.");
 }
 
+GLuint OutputNode::GetOutputTexture() const {
+    if (m_inputEffect) {
+        return m_inputEffect->GetOutputTexture();
+    }
+    return 0; // Return 0 if no input is connected
+}
+
 int OutputNode::GetInputPinCount() const {
     return 1;
 }
@@ -41,14 +48,19 @@ Effect* OutputNode::GetInputEffect() const {
 nlohmann::json OutputNode::Serialize() const {
     nlohmann::json j;
     j["type"] = "OutputNode";
+    j["id"] = id;
     j["name"] = name;
-    j["id"] = id; // Important for linking
+    if (m_inputEffect) {
+        j["input_id"] = m_inputEffect->id;
+    }
     return j;
 }
 
 void OutputNode::Deserialize(const nlohmann::json& data) {
     name = data.value("name", "Scene Output");
-    // ID is const, set in constructor. We rely on linking happening after all nodes are created.
+    if (data.contains("input_id")) {
+        m_deserialized_input_id = data["input_id"];
+    }
 }
 
 void OutputNode::ResetParameters() {

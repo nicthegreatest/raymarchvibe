@@ -1,9 +1,8 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec2 TexCoords;
-
 uniform sampler2D iChannel0;
+uniform vec2 iResolution;
 
 uniform int u_mode; // {"default": 0, "min": 0, "max": 2, "step": 1, "label": "Mode (0=ACES, 1=Reinhard, 2=Filmic)"}
 
@@ -42,7 +41,8 @@ vec3 filmic(vec3 color) {
 
 void main()
 {
-    vec4 color = texture(iChannel0, TexCoords);
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    vec4 color = texture(iChannel0, uv);
     vec3 final_color = color.rgb;
 
     if (u_mode == 0) { // ACES

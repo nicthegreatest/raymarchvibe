@@ -12,6 +12,8 @@ out vec4 FragColor;
 // --- Standard Uniforms (from your C++ app) ---
 uniform vec2 iResolution;
 uniform float iTime;
+uniform sampler2D iChannel0; // Input texture from another effect
+uniform bool iChannel0_active;
 
 // --- Native Controls (from your C++ app) ---
 uniform vec3 u_objectColor;   // Base color of the dodecahedron
@@ -238,6 +240,13 @@ void main() {
     } else {
         // Background gradient
         col = vec3(0.1, 0.1, 0.3) + vec3(0.2, 0.1, 0.0) * pow(1.0 - abs(p_ndc.y), 2.0);
+    }
+
+    // Conditionally apply the input from iChannel0
+    if (iChannel0_active) { // Check if the texture is valid
+        vec2 uv = gl_FragCoord.xy / iResolution.xy;
+        vec4 inputColor = texture(iChannel0, uv);
+        col = mix(col, inputColor.rgb, inputColor.a); // Blend with input
     }
 
     FragColor = vec4(col, 1.0);

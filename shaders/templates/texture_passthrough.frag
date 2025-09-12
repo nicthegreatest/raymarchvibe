@@ -1,10 +1,10 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec2 TexCoords;
-
 uniform sampler2D iChannel0;
+uniform vec2 iResolution;
 
 void main() {
-    FragColor = texture(iChannel0, TexCoords);
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    FragColor = texture(iChannel0, uv);
 }

@@ -396,19 +396,6 @@ void RenderMenuBar() {
                 }
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Output")) {
-                if (ImGui::MenuItem("Scene Output")) {
-                    auto newEffectUniquePtr = std::make_unique<OutputNode>();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                ImGui::EndMenu();
-            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Help")) {
@@ -880,12 +867,21 @@ void RenderNodeEditorWindow() {
     }
     int link_id_counter = 1;
     for (const auto& effect_ptr : g_scene) {
+        if (!effect_ptr) continue;
+
+        // Handle ShaderEffect inputs
         if (auto* se = dynamic_cast<ShaderEffect*>(effect_ptr.get())) {
             const auto& inputs = se->GetInputs();
             for (size_t i = 0; i < inputs.size(); ++i) {
                 if (inputs[i]) {
                     ImNodes::Link(link_id_counter++, inputs[i]->id * 10, se->id * 10 + 1 + i);
                 }
+            }
+        }
+        // Handle OutputNode input
+        else if (auto* on = dynamic_cast<OutputNode*>(effect_ptr.get())) {
+            if (on->GetInputEffect()) {
+                ImNodes::Link(link_id_counter++, on->GetInputEffect()->id * 10, on->id * 10 + 1);
             }
         }
     }
@@ -1059,6 +1055,14 @@ void RenderNodeEditorWindow() {
                     }
                 }
                 ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Output")) {
+            if (ImGui::MenuItem("Scene Output")) {
+                auto newEffect = std::make_unique<OutputNode>();
+                newEffect->Load();
+                g_scene.push_back(std::move(newEffect));
             }
             ImGui::EndMenu();
         }
@@ -1373,14 +1377,23 @@ int main() {
         // Process deferred deletions at the start of the frame
         if (!g_nodes_to_delete.empty()) {
             for (int node_id : g_nodes_to_delete) {
-                // First, remove any connections to this node
+                // First, remove any connections TO this node from other nodes
                 for (const auto& effect : g_scene) {
+                    if (!effect) continue;
+
+                    // Handle ShaderEffect inputs
                     if (auto* se = dynamic_cast<ShaderEffect*>(effect.get())) {
                         const auto& inputs = se->GetInputs();
                         for (size_t i = 0; i < inputs.size(); ++i) {
                             if (inputs[i] && inputs[i]->id == node_id) {
                                 se->SetInputEffect(i, nullptr);
                             }
+                        }
+                    }
+                    // Handle OutputNode input
+                    else if (auto* on = dynamic_cast<OutputNode*>(effect.get())) {
+                        if (on->GetInputEffect() && on->GetInputEffect()->id == node_id) {
+                            on->SetInputEffect(0, nullptr);
                         }
                     }
                 }
@@ -1450,10 +1463,10 @@ int main() {
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
         float audioAmp = g_enableAudioLink ? g_audioSystem.GetCurrentAmplitude() : 0.0f;
 
-        // g_consoleLog += "MainLoop: renderQueue size: " + std::to_string(renderQueue.size()) + "\n"; // Can be verbose
-
+        checkGLError("Before Effect Render Loop");
+        checkGLError("Before Effect Render Loop");
+        checkGLError("Before Effect Render Loop");
         for (Effect* effect_ptr : renderQueue) {
-            // g_consoleLog += "MainLoop: Processing effect: " + effect_ptr->name + "\n"; // Can be verbose
             if(auto* se = dynamic_cast<ShaderEffect*>(effect_ptr)) {
                 se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT);
                 se->SetMouseState(g_mouseState[0], g_mouseState[1], g_mouseState[2], g_mouseState[3]);
@@ -1461,110 +1474,19 @@ int main() {
                 se->IncrementFrameCount();
                 se->SetAudioAmplitude(audioAmp);
             }
-            effect_ptr->Update(currentTimeForEffects); // Use the correctly determined time
+            effect_ptr->Update(currentTimeForEffects); 
             effect_ptr->Render();
-            checkGLError("After Effect->Render for " + effect_ptr->name);
-            // g_renderer.RenderQuad(); // This line was confirmed to be removed/not present in current file.
         }
+        checkGLError("After Effect Render Loop");
+        checkGLError("After Effect Render Loop");
+        checkGLError("After Effect Render Loop");
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         checkGLError("After Unbinding FBOs (to default)");
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
-        // Create the main dockspace on the first frame
-        // Commenting out the entire docking setup due to persistent compilation errors with ImGui docking/viewport flags and functions.
-        /*
-        if (first_time_docking) {
-            first_time_docking = false;
-            ImGuiViewport* viewport = ImGui::GetMainViewport();
-            ImGui::SetNextWindowPos(viewport->WorkPos);
-            ImGui::SetNextWindowSize(viewport->WorkSize);
-            ImGui::SetNextWindowViewportId(viewport->ID); // Corrected function name
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-
-            ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-            window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-            window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-            window_flags |= ImGuiWindowFlags_NoBackground;
-
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-            ImGui::Begin("MainDockSpaceViewport", nullptr, window_flags);
-            ImGui::PopStyleVar(3);
-
-            ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-            ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-
-            // Programmatic DockBuilder layout was already commented out.
-            // static bool initial_layout_built = false;
-            // if (!initial_layout_built && (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)) {
-            //     ...
-            // }
-            ImGui::End();
-        } else if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-            ImGuiViewport* viewport = ImGui::GetMainViewport();
-             ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_None);
-        }
-        */
-        /*
-        // Create the main dockspace on the first frame
-        static bool first_time_docking = true;
-        if (first_time_docking) {
-            ImGuiViewport* viewport = ImGui::GetMainViewport();
-            ImGui::SetNextWindowPos(viewport->WorkPos);
-            ImGui::SetNextWindowSize(viewport->WorkSize);
-            ImGui::SetNextWindowViewportId(viewport->ID);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-
-            ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-            window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-            window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-            window_flags |= ImGuiWindowFlags_NoBackground;
-
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-            ImGui::Begin("MainDockSpaceViewport", nullptr, window_flags);
-            ImGui::PopStyleVar(3); // For WindowRounding, WindowBorderSize, WindowPadding
-
-            ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-            // Use ImGuiDockNodeFlags_PassthruCentralNode if available and docking is working, otherwise ImGuiDockNodeFlags_None
-            ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
-
-            // Programmatic DockBuilder layout
-            // This might fail if ImGuiConfigFlags_DockingEnable was not successfully set or if DockBuilder symbols are not found
-            static bool initial_layout_built = false;
-            if (!initial_layout_built) {
-                ImGui::DockBuilderRemoveNode(dockspace_id);
-                ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-                ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
-
-                ImGuiID dock_main_id = dockspace_id;
-                ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
-                ImGuiID dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.25f, nullptr, &dock_main_id);
-                ImGuiID dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id);
-                ImGuiID dock_bottom_right_id = ImGui::DockBuilderSplitNode(dock_bottom_id, ImGuiDir_Right, 0.50f, nullptr, &dock_bottom_id);
-
-                ImGui::DockBuilderDockWindow("Shader Editor", dock_left_id);
-                // Assuming RenderView is the central node (dock_main_id) or handled differently.
-                // If RenderView is a specific window, it should be docked here.
-                // For now, the central space (dock_main_id after splits) will be the "Render View".
-                ImGui::DockBuilderDockWindow("Console", dock_bottom_id);
-                ImGui::DockBuilderDockWindow("Effect Properties", dock_bottom_right_id);
-
-                ImGui::DockBuilderFinish(dockspace_id);
-                initial_layout_built = true;
-            }
-            ImGui::End();
-            first_time_docking = false;
-        } else {
-            // Fallback or regular frame: ensure a dockspace is available if docking is somehow active.
-            // This might also error if DockingEnable flag wasn't processed.
-            ImGuiViewport* viewport = ImGui::GetMainViewport();
-            ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_PassthruCentralNode);
-        }
-        */
         RenderMenuBar();
         if (g_showGui) {
             if (g_showShaderEditorWindow) RenderShaderEditorWindow();
@@ -1586,42 +1508,31 @@ int main() {
         checkGLError("After Main Screen Clear");
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
         Effect* finalOutputEffect = nullptr;
-        // --- NEW LOGIC FOR finalOutputEffect ---
-        OutputNode* outputNode = nullptr;
-        for (Effect* effect : activeEffects) {
-            if (auto* on = dynamic_cast<OutputNode*>(effect)) {
-                outputNode = on;
-                break;
+        for (const auto& effect : g_scene) {
+            if (auto* outputNode = dynamic_cast<OutputNode*>(effect.get())) {
+                if (outputNode->GetInputEffect()) {
+                    finalOutputEffect = outputNode->GetInputEffect();
+                    break;
+                }
             }
         }
 
-        if (outputNode) {
-            finalOutputEffect = outputNode->GetInputEffect();
-        } else {
-            // Fallback behavior if no output node exists
-            if (!renderQueue.empty()) {
-                finalOutputEffect = renderQueue.back();
-            }
+        if (!finalOutputEffect && !renderQueue.empty()) {
+            finalOutputEffect = renderQueue.back();
         }
-        // --- END NEW LOGIC ---
 
         if (finalOutputEffect) {
-            if (auto* se = dynamic_cast<ShaderEffect*>(finalOutputEffect)) {
-                // g_consoleLog += "MainLoop: Attempting to render finalOutputEffect: " + se->name + ", TextureID: " + std::to_string(se->GetOutputTexture()) + "\n"; // Verbose, remove if too much
-                if (se->GetOutputTexture() != 0) {
-                    checkGLError("Before RenderFullscreenTexture (" + se->name + ")");
-                    g_renderer.RenderFullscreenTexture(se->GetOutputTexture());
-                    checkGLError("After RenderFullscreenTexture (" + se->name + ")");
-                } else {
-                    g_consoleLog += "MainLoop: FinalOutputEffect " + se->name + " has TextureID 0. Cannot render.\n";
-                }
-            } else {
-                g_consoleLog += "MainLoop: FinalOutputEffect '" + finalOutputEffect->name + "' is not a ShaderEffect.\n";
-            }
+            checkGLError("Before Final RenderFullscreenTexture");
+            GLuint finalTextureID = finalOutputEffect->GetOutputTexture();
+            std::cout << "Attempting to render final texture ID: " << finalTextureID << " from effect: " << finalOutputEffect->name << std::endl;
+            g_renderer.RenderFullscreenTexture(finalTextureID);
+            checkGLError("After Final RenderFullscreenTexture");
         } else {
-            g_consoleLog += "MainLoop: No finalOutputEffect could be determined to render.\n";
+            std::cout << "No finalOutputEffect determined for rendering." << std::endl;
         }
+
         glDisable(GL_BLEND);
         checkGLError("After Disabling Blend, Before ImGui Render");
         ImGui::Render();
@@ -1791,55 +1702,65 @@ void LoadScene(const std::string& filePath) {
         g_consoleLog = "Error parsing scene file: " + std::string(e.what());
         return;
     }
+
     g_scene.clear();
     g_selectedEffect = nullptr;
-    g_editor.SetText(""); // Clear editor
+    g_editor.SetText("");
     ClearErrorMarkers();
 
-    // Deserialize TimelineState
     if (sceneJson.contains("timelineState")) {
-        g_timelineState = sceneJson["timelineState"].get<TimelineState>(); // Uses from_json for TimelineState
-    } else {
-        // If no timelineState in json, reset to default (or handle as error)
-        g_timelineState = TimelineState();
-        g_consoleLog += "Warning: Scene file does not contain timeline state. Using default.\n";
+        g_timelineState = sceneJson["timelineState"].get<TimelineState>();
     }
 
-    // Deserialize actual effects into g_scene
+    std::map<int, Effect*> oldIdToNewEffectMap;
+
+    // First pass: create all effects
     if (sceneJson.contains("effects") && sceneJson["effects"].is_array()) {
         for (const auto& effectJson : sceneJson["effects"]) {
             std::string type = effectJson.value("type", "Unknown");
-            if (type == "ShaderEffect") { // Currently only ShaderEffect is supported by this logic
-                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT); // Pass default width/height
-                newEffect->Deserialize(effectJson); // Deserialize all properties, including path/source
-                newEffect->Load(); // This will load source if path is not enough, then compile, link, parse controls.
-                                   // FBO will also be created/resized here.
+            std::unique_ptr<Effect> newEffect = nullptr;
+
+            if (type == "ShaderEffect") {
+                newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT);
+            } else if (type == "OutputNode") {
+                newEffect = std::make_unique<OutputNode>();
+            }
+
+            if (newEffect) {
+                int oldId = effectJson.value("id", -1);
+                newEffect->Deserialize(effectJson);
+                newEffect->Load();
+                oldIdToNewEffectMap[oldId] = newEffect.get();
                 g_scene.push_back(std::move(newEffect));
             }
-            // TODO: Add handling for other effect types if they exist in the future
+        }
+    }
+
+    // Second pass: link effects
+    for (auto& effect_ptr : g_scene) {
+        if (auto* se = dynamic_cast<ShaderEffect*>(effect_ptr.get())) {
+            const auto& input_ids = se->GetDeserializedInputIds();
+            for (size_t i = 0; i < input_ids.size(); ++i) {
+                int old_id = input_ids[i];
+                if (oldIdToNewEffectMap.count(old_id)) {
+                    se->SetInputEffect(i, oldIdToNewEffectMap[old_id]);
+                }
+            }
+        } else if (auto* on = dynamic_cast<OutputNode*>(effect_ptr.get())) {
+            int old_id = on->GetDeserializedInputId();
+            if (oldIdToNewEffectMap.count(old_id)) {
+                on->SetInputEffect(0, oldIdToNewEffectMap[old_id]);
+            }
         }
     }
 
     if (!g_scene.empty()) {
-        g_selectedEffect = g_scene[0].get(); // Select the first effect by default
+        g_selectedEffect = g_scene[0].get();
         if(auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-            g_editor.SetText(se->GetShaderSource()); // Update editor with selected effect's source
-            const std::string& compileLog = se->GetCompileErrorLog();
-            if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
-                 g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
-                 g_consoleLog += "Loaded scene, selected effect '" + se->name + "' has issues: " + compileLog + "\n";
-            } else {
-                 g_consoleLog += "Loaded scene, selected effect: '" + se->name + "'.\n";
-            }
+            g_editor.SetText(se->GetShaderSource());
         }
-    } else {
-        g_consoleLog += "Loaded scene with no effects.\n";
     }
-    // UI should refresh automatically as it reads from g_scene and g_timelineState.
-    // Explicit refresh call might be needed if ImGui doesn't pick up all changes,
-    // but usually not for data changes that its widgets are bound to.
 
-    // Update Effect::nextId to prevent ID collisions
     int max_id = 0;
     for (const auto& effect_ptr : g_scene) {
         if (effect_ptr && effect_ptr->id > max_id) {
@@ -1847,5 +1768,5 @@ void LoadScene(const std::string& filePath) {
         }
     }
     Effect::UpdateNextId(max_id + 1);
-    g_consoleLog += "Effect::nextId updated to " + std::to_string(max_id + 1) + " after loading scene.\n";
+    g_consoleLog = "Scene loaded from: " + filePath;
 }

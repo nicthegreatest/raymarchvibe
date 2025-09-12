@@ -1,9 +1,8 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec2 TexCoords;
-
 uniform sampler2D iChannel0;
+uniform vec2 iResolution;
 
 uniform float u_exposure;    // {"default": 0.0, "min": -2.0, "max": 2.0, "step": 0.05, "label": "Exposure"}
 uniform float u_contrast;    // {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Contrast"}
@@ -17,7 +16,8 @@ vec3 change_saturation(vec3 color, float saturation) {
 
 void main()
 {
-    vec4 color = texture(iChannel0, TexCoords);
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    vec4 color = texture(iChannel0, uv);
 
     // Apply exposure
     vec3 final_color = color.rgb * pow(2.0, u_exposure);
