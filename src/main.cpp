@@ -248,12 +248,6 @@ static Effect* FindEffectById(int effect_id) {
     }
     return nullptr;
 }
-
-void MarkNodeForDeletion(int node_id) {
-    // Add node to the deletion queue if it's not already there
-    if (std::find(g_nodes_to_delete.begin(), g_nodes_to_delete.end(), node_id) == g_nodes_to_delete.end())
-    {
-        g_nodes_to_delete.push_back(node_id);
     }
 }
 
@@ -842,7 +836,6 @@ void RenderNodeEditorWindow() {
         {
             if (ImGui::MenuItem("Delete"))
             {
-                MarkNodeForDeletion(effect_ptr->id);
             }
             ImGui::EndPopup();
         }
@@ -981,7 +974,6 @@ void RenderNodeEditorWindow() {
             ImNodes::GetSelectedNodes(selected_node_ids.data());
             for (const int node_id : selected_node_ids)
             {
-                MarkNodeForDeletion(node_id);
             }
         }
     }
