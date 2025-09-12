@@ -133,7 +133,7 @@ private:
     void RenderShadertoyParamsUI();
     void RenderDefineControlsUI();
     void RenderConstControlsUI();
-    void RenderMetadataUniformsUI();
+    void RenderParsedUniformsUI();
     void RenderColorCycleUI(); // New UI for color cycling
     void GetGradientColor(float t, float* outColor); // Helper to calculate gradient color
 
