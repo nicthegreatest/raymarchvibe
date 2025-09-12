@@ -5,8 +5,7 @@ in vec2 TexCoords;
 
 uniform sampler2D screenTexture;
 
-// @control float _Mode "Mode (0=ACES, 1=Reinhard, 2=Filmic)" "min=0 max=2 step=1"
-uniform float _Mode = 0.0;
+uniform int u_mode; // {"default": 0, "min": 0, "max": 2, "step": 1, "label": "Mode (0=ACES, 1=Reinhard, 2=Filmic)"}
 
 // ACES tone mapping (approximate)
 vec3 aces(vec3 x) {
@@ -46,9 +45,9 @@ void main()
     vec4 color = texture(screenTexture, TexCoords);
     vec3 final_color = color.rgb;
 
-    if (_Mode < 0.5) { // ACES
+    if (u_mode == 0) { // ACES
         final_color = aces(color.rgb);
-    } else if (_Mode < 1.5) { // Reinhard
+    } else if (u_mode == 1) { // Reinhard
         final_color = reinhard(color.rgb);
     } else { // Filmic
         final_color = filmic(color.rgb);

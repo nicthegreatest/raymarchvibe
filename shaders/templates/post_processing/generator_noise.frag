@@ -6,12 +6,9 @@ in vec2 TexCoords;
 uniform vec2 iResolution;
 uniform float iTime;
 
-// @control float _Mode "Mode (0=Worley, 1=Simplex, 2=Perlin)" "min=0 max=2 step=1"
-uniform float _Mode = 0.0;
-// @control float _Scale "Scale" "min=1.0 max=50.0 step=1.0"
-uniform float _Scale = 5.0;
-// @control float _TimeFactor "Time Factor" "min=0.0 max=2.0 step=0.05"
-uniform float _TimeFactor = 0.2;
+uniform int   u_mode;       // {"default": 0, "min": 0, "max": 2, "step": 1, "label": "Mode (0=Worley, 1=Simplex, 2=Perlin)"}
+uniform float u_scale;      // {"default": 5.0, "min": 1.0, "max": 50.0, "step": 1.0, "label": "Scale"}
+uniform float u_timeFactor; // {"default": 0.2, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Time Factor"}
 
 // --- Utility Functions ---
 float random (vec2 st) {
@@ -28,7 +25,7 @@ float worley(vec2 uv) {
         for (int x= -1; x <= 1; x++) {
             vec2 neighbor = vec2(float(x),float(y));
             vec2 point = random(i_uv + neighbor);
-            point = 0.5 + 0.5*sin(iTime * _TimeFactor + 6.2831*point);
+            point = 0.5 + 0.5*sin(iTime * u_timeFactor + 6.2831*point);
             vec2 diff = neighbor + point - f_uv;
             float dist = length(diff);
             m_dist = min(m_dist, dist);
@@ -159,12 +156,12 @@ float perlin(vec2 P)
 
 void main()
 {
-    vec2 uv = TexCoords * _Scale;
+    vec2 uv = TexCoords * u_scale;
 
     float noise_val = 0.0;
-    if (_Mode < 0.5) { // Worley
+    if (u_mode == 0) { // Worley
         noise_val = worley(uv);
-    } else if (_Mode < 1.5) { // Simplex
+    } else if (u_mode == 1) { // Simplex
         noise_val = simplex(uv);
     } else { // Perlin
         noise_val = perlin(uv);
