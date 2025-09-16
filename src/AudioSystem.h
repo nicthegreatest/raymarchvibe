@@ -25,7 +25,7 @@ public:
     // Device Enumeration and Control
     void EnumerateCaptureDevices();
     bool InitializeAndStartSelectedCaptureDevice();
-    void StopCaptureDevice();
+    void StopActiveDevice();
     void LoadWavFile(const char* filePath);
 
     // Audio Processing
@@ -70,12 +70,14 @@ private:
     // Miniaudio core components
     ma_context miniaudioContext;
     ma_device device;
+    ma_device m_playbackDevice; // For audio file playback
     ma_device_config deviceConfig;
     ma_decoder m_decoder;
 
     // State flags
     bool contextInitialized;
     bool miniaudioDeviceInitialized;
+    bool m_playbackDeviceInitialized;
     bool captureDevicesEnumerated;
     bool audioFileLoaded;
     bool enableAudioShaderLink;
@@ -112,9 +114,12 @@ private:
 
     // Callback
     static void data_callback_static(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
-    void data_callback_member(const void* pInput, ma_uint32 frameCount);
+    void data_callback_member(void* pOutput, const void* pInput, ma_uint32 frameCount);
 
     void ProcessAudioFileSamples(ma_uint32 framesToProcessSimulated);
+
+    // Private helpers
+    bool InitializeAndStartPlaybackDevice();
 };
 
 #endif // AUDIOSYSTEM_H
