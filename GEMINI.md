@@ -57,7 +57,7 @@
 
 ## 6. Key Future Development Areas / Known Issues
 
-*   **ImGui Docking/Viewports**: There are persistent issues getting ImGui's Docking and Viewport features (specifically `ImGuiConfigFlags_DockingEnable`, `ImGuiConfigFlags_ViewportsEnable`, and `DockBuilder` API) to be recognized correctly by the compiler, despite using ImGui v1.90.8. This prevents programmatic initial window layouts. The current workaround is to have these features disabled/commented out. This needs a deeper investigation into the CMake setup, include paths, or potential version/compilation flag conflicts for ImGui.
+
 *   **Node System Enhancements**:
     *   Robust multi-input handling for `ShaderEffect` (beyond `iChannel0`).
     *   Dedicated "Image Loader" node type.
@@ -69,3 +69,10 @@
 *   **Error Reporting**: More user-friendly error reporting beyond console logs (e.g., in-UI notifications).
 
 This guide should help future AI agents understand and contribute to the RaymarchVibe project. Remember to consult the more specific `GEMINI.md` files in subdirectories for detailed information.
+ to handle a wider range of uniform types and UI controls automatically.
+*   **Timeline Polish**: More advanced features like keyframing specific uniform parameters.
+*   **Performance**: For complex scenes or many nodes, performance profiling and optimization may be needed.
+*   **Error Reporting**: More user-friendly error reporting beyond console logs (e.g., in-UI notifications).
+
+This guide should help future AI agents understand and contribute to the RaymarchVibe project. Remember to consult the more specific `GEMINI.md` files in subdirectories for detailed information.
+ectories for detailed information.

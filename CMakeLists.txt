@@ -106,7 +106,7 @@ FetchContent_MakeAvailable(imgui)
 FetchContent_Declare(
   miniaudio
   GIT_REPOSITORY https://github.com/mackron/miniaudio.git
-  GIT_TAG 0.11.21 # Pinned to a specific tag, removed 'v' prefix
+  
 )
 FetchContent_MakeAvailable(miniaudio) # This makes miniaudio_SOURCE_DIR available
 
@@ -116,6 +116,8 @@ add_library(glad_lib STATIC
 target_include_directories(glad_lib PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+
 
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
@@ -163,6 +165,7 @@ target_include_directories(RaymarchVibe PRIVATE
   ${httplib_fetch_SOURCE_DIR} # For cpp-httplib
   ${imguicolortextedit_SOURCE_DIR} # For ImGuiColorTextEdit
   ${miniaudio_SOURCE_DIR} # For miniaudio
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/dj_fft
 )
 
 target_link_libraries(RaymarchVibe PRIVATE
@@ -186,7 +189,7 @@ endif()
 
 target_compile_definitions(RaymarchVibe PRIVATE
   IMGUI_IMPL_OPENGL_LOADER_GLAD
-  MA_ENABLE_FFT
+  
 )
 # Removed CPPHTTPLIB_OPENSSL_SUPPORT from here, it's now conditional
 
