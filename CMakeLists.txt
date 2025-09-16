@@ -144,6 +144,7 @@ ExternalProject_Add(
         --extra-cflags="-fPIC"
         --disable-x86asm
         --disable-asm
+        --disable-vulkan
         --disable-iconv
         --disable-bzlib
         --disable-lzma
