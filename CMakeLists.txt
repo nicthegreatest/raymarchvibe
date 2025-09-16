@@ -138,6 +138,7 @@ endif()
 
 target_compile_definitions(RaymarchVibe PRIVATE
   IMGUI_IMPL_OPENGL_LOADER_GLAD
+  MA_ENABLE_FFT
 )
 # Removed CPPHTTPLIB_OPENSSL_SUPPORT from here, it's now conditional
 

@@ -55,6 +55,8 @@ public:
     void SetSelectedActualCaptureDeviceIndex(int index);
     void SetAudioLinkEnabled(bool enabled);
     void SetCurrentAudioSourceIndex(int index);
+    void SetAudioFilePath(const char* filePath);
+    void SetAmplitudeScale(float scale);
 
     // Error Handling
     void ClearLastError();
@@ -75,6 +77,7 @@ private:
 
     // Audio data and properties
     float currentAudioAmplitude;
+    float m_amplitudeScale;
     char audioFilePathInputBuffer[AUDIO_FILE_PATH_BUFFER_SIZE];
 
     // Capture device information

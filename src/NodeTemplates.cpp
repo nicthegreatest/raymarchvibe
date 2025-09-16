@@ -163,5 +163,15 @@ std::unique_ptr<Effect> CreateNoiseEffect(int initial_width, int initial_height)
     return effect;
 }
 
+std::unique_ptr<Effect> CreateFractalTreeAudioEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/fractal_tree_audio.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Fractal Tree Audio";
+    return effect;
+}
+
 } // namespace NodeTemplates
 } // namespace RaymarchVibe

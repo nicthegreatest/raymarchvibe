@@ -411,22 +411,17 @@ void RenderMenuBar() {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
             std::string justFileName = std::filesystem::path(filePathName).filename().string();
 
-            ShaderEffect* se = dynamic_cast<ShaderEffect*>(g_selectedEffect);
-            if (!se) { // If no ShaderEffect is selected, or if current is not a ShaderEffect
-                g_consoleLog = "No ShaderEffect selected. Creating a new one for: " + justFileName + "\n";
-                auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT); // Path will be set by LoadShaderFromFileToEditor
-                newEffect->name = justFileName.empty() ? "Untitled Shader" : justFileName;
-
-                g_scene.push_back(std::move(newEffect));
-                g_selectedEffect = g_scene.back().get();
-                se = dynamic_cast<ShaderEffect*>(g_selectedEffect);
-            }
-
-            if (se) { // se can be the initially selected one or the newly created one
-                LoadShaderFromFileToEditor(filePathName, se, g_editor, g_consoleLog);
+            auto newEffect = std::make_unique<ShaderEffect>(filePathName, SCR_WIDTH, SCR_HEIGHT);
+            newEffect->name = justFileName.empty() ? "Untitled Shader" : justFileName;
+            newEffect->Load();
+            if (!newEffect->GetCompileErrorLog().empty() && newEffect->GetCompileErrorLog().find("Successfully") == std::string::npos && newEffect->GetCompileErrorLog().find("applied successfully") == std::string::npos) {
+                g_consoleLog = "Error loading shader " + justFileName + " into new effect. Log: " + newEffect->GetCompileErrorLog();
             } else {
-                // This should not happen if the logic above is correct
-                g_consoleLog = "Critical error: Failed to get/create a ShaderEffect for loading.\n";
+                g_editor.SetText(newEffect->GetShaderSource());
+                ClearErrorMarkers();
+                g_scene.push_back(std::move(newEffect));
+                g_selectedEffect = g_scene.back().get(); // Select the new effect
+                g_consoleLog = "Loaded shader '" + justFileName + "' into a new effect.";
             }
         }
         ImGuiFileDialog::Instance()->Close();
@@ -945,6 +940,16 @@ void RenderNodeEditorWindow() {
                         g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
+                if (ImGui::MenuItem("Fractal Tree Audio")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateFractalTreeAudioEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
+                    }
+                }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Filters")) {
@@ -1291,13 +1296,42 @@ void RenderAudioReactivityWindow() {
             char* audioFilePath = g_audioSystem.GetAudioFilePathBuffer();
             ImGui::InputText("File Path", audioFilePath, AUDIO_FILE_PATH_BUFFER_SIZE);
             ImGui::SameLine();
+            if (ImGui::Button("Browse##AudioFile")) {
+                ImGuiFileDialog::Instance()->OpenDialog("ChooseAudioFileDlgKey", "Choose Audio File", ".wav,.mp3", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
+            }
+            ImGui::SameLine();
             if (ImGui::Button("Load##AudioFile")) { g_audioSystem.LoadWavFile(audioFilePath); }
             ImGui::Text("Status: %s", g_audioSystem.IsAudioFileLoaded() ? "Loaded" : "Not Loaded");
+
+            if (g_audioSystem.IsAudioFileLoaded()) {
+                if (ImGui::Button("Play")) { g_audioSystem.Play(); }
+                ImGui::SameLine();
+                if (ImGui::Button("Pause")) { g_audioSystem.Pause(); }
+                ImGui::SameLine();
+                if (ImGui::Button("Stop")) { g_audioSystem.Stop(); }
+
+                float progress = g_audioSystem.GetPlaybackProgress();
+                if (ImGui::SliderFloat("##Progress", &progress, 0.0f, 1.0f)) {
+                    g_audioSystem.SetPlaybackProgress(progress);
+                }
+            }
         }
     }
+
+    if (ImGuiFileDialog::Instance()->Display("ChooseAudioFileDlgKey")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+            g_audioSystem.SetAudioFilePath(filePathName.c_str());
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+
     ImGui::Separator();
     ImGui::Text("Live Amplitude:");
     ImGui::ProgressBar(g_audioSystem.GetCurrentAmplitude(), ImVec2(-1.0f, 0.0f));
+
+    const float* fftData = g_audioSystem.GetFFTData();
+    ImGui::PlotLines("FFT", fftData, 512, 0, NULL, 0.0f, 1.0f, ImVec2(0, 80));
     ImGui::End();
 }
 
@@ -1519,8 +1553,12 @@ int main() {
             }
         }
 
-        if (!finalOutputEffect && !renderQueue.empty()) {
-            finalOutputEffect = renderQueue.back();
+        if (!finalOutputEffect) {
+            if (g_selectedEffect) {
+                finalOutputEffect = g_selectedEffect;
+            } else if (!renderQueue.empty()) {
+                finalOutputEffect = renderQueue.back();
+            }
         }
 
         if (finalOutputEffect) {
