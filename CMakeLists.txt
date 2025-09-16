@@ -144,6 +144,9 @@ ExternalProject_Add(
         --extra-cflags="-fPIC"
         --disable-x86asm
         --disable-asm
+        --disable-iconv
+        --disable-bzlib
+        --disable-lzma
     BUILD_COMMAND make -j4
     INSTALL_COMMAND make install
 )
@@ -155,7 +158,14 @@ add_dependencies(ffmpeg ffmpeg_project)
 target_include_directories(ffmpeg INTERFACE ${FFMPEG_INSTALL_DIR}/include)
 
 # Find all the static libraries in the ffmpeg install lib dir
-file(GLOB FFMPEG_LIBS "${FFMPEG_INSTALL_DIR}/lib/*.a")
+set(FFMPEG_LIBS
+    ${FFMPEG_INSTALL_DIR}/lib/libavformat.a
+    ${FFMPEG_INSTALL_DIR}/lib/libavcodec.a
+    ${FFMPEG_INSTALL_DIR}/lib/libswscale.a
+    ${FFMPEG_INSTALL_DIR}/lib/libswresample.a
+    ${FFMPEG_INSTALL_DIR}/lib/libavutil.a
+    z
+)
 
 target_link_libraries(ffmpeg INTERFACE ${FFMPEG_LIBS})
 
