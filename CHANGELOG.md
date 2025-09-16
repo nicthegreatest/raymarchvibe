@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 - **Bugfix**: Fixed a bug where nodes were not created unless the node editor window was open.
 - **Bugfix**: Fixed a bug where the "Browse" button in the audio reactivity component was not working.
 - **Bugfix**: Fixed a build error related to duplicate definition of `AudioSystem::SetAmplitudeScale(float)`.
-- **Bugfix**: Fixed a build error related to `ma_fft_config` not being recognized by correctly defining `MA_ENABLE_FFT` in `CMakeLists.txt`.
+- **Bugfix**: Replaced broken FFT implementation with `dj_fft` to restore audio reactivity.
 - **Bugfix**: Implemented a robust `iChannel0_active` boolean uniform to replace an unreliable `textureSize` check, resolving an issue where effects would not apply on initial application startup.
 - **Bugfix**: Corrected a critical bug in the shader property parser that prevented `//#control` uniforms from being detected, which resulted in a blank render and non-functional UI.
 - **Bugfix**: Repaired multiple build failures (compiler and linker errors) caused by previous incorrect fixes during the parser rewrite.

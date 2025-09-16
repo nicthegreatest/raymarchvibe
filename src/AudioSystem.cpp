@@ -25,6 +25,9 @@ AudioSystem::AudioSystem() {
     currentAudioSourceIndex = 0; // Default to Microphone
     enableAudioShaderLink = false;
     m_amplitudeScale = 1.0f;
+
+    m_fft_input.resize(FFT_SIZE);
+    m_fftData.resize(FFT_SIZE / 2);
 }
 
 // --- Destructor ---
@@ -43,15 +46,7 @@ bool AudioSystem::Initialize() {
     AppendToErrorLog("Miniaudio context initialized successfully.");
     contextInitialized = true;
     EnumerateCaptureDevices();
-    ma_fft_init(&m_fftConfig, FFT_SIZE);
-    // Assuming EnumerateCaptureDevices logs its own success/failure.
-    // Initialize() success primarily depends on context init.
     return true;
-    // Optionally, initialize default capture device here if desired at startup
-    // For example, if the default source is Microphone:
-    // if (currentAudioSourceIndex == 0) {
-    //    InitializeAndStartSelectedCaptureDevice();
-    // }
 }
 
 void AudioSystem::Shutdown() {
@@ -71,7 +66,6 @@ void AudioSystem::EnumerateCaptureDevices() {
         captureDevicesEnumerated = false;
         return;
     }
-    // ClearLastError(); // Clear previous errors before new enumeration attempt
 
     AppendToErrorLog("Attempting to get audio devices from Miniaudio...");
     ma_device_info* pPlaybackDeviceInfos;
@@ -133,7 +127,6 @@ bool AudioSystem::InitializeAndStartSelectedCaptureDevice() {
          AppendToErrorLog("AUDIO ERROR: Miniaudio context not initialized for device start.");
         return false;
     }
-    // ClearLastError(); // Clear previous errors before new attempt
 
     if (miniaudioDeviceInitialized) { // If a device is already running, stop it first
         StopCaptureDevice();
@@ -144,7 +137,7 @@ bool AudioSystem::InitializeAndStartSelectedCaptureDevice() {
         return false;
     }
 
-    deviceConfig = ma_device_config_init(ma_device_type_capture); // Use member variable 'deviceConfig'
+    deviceConfig = ma_device_config_init(ma_device_type_capture);
     deviceConfig.capture.format   = ma_format_f32;
     deviceConfig.capture.channels = 1;
     deviceConfig.sampleRate       = 48000;
@@ -152,15 +145,15 @@ bool AudioSystem::InitializeAndStartSelectedCaptureDevice() {
     deviceConfig.pUserData        = this;
 
     if (selectedActualCaptureDeviceIndex >= 0 && selectedActualCaptureDeviceIndex < static_cast<int>(miniaudioAvailableCaptureDevicesInfo.size())) {
-        deviceConfig.capture.pDeviceID = &miniaudioAvailableCaptureDevicesInfo[selectedActualCaptureDeviceIndex].id; // Use member variable 'deviceConfig'
+        deviceConfig.capture.pDeviceID = &miniaudioAvailableCaptureDevicesInfo[selectedActualCaptureDeviceIndex].id;
         std::cout << "Attempting to initialize with selected capture device: " 
                   << miniaudioCaptureDevice_StdString_Names[selectedActualCaptureDeviceIndex] << std::endl;
     } else {
         AppendToErrorLog("AUDIO WARN: Invalid selected capture device index. Attempting system default.");
-        deviceConfig.capture.pDeviceID = NULL; // Use member variable 'deviceConfig'
+        deviceConfig.capture.pDeviceID = NULL;
     }
 
-    ma_result result = ma_device_init(&miniaudioContext, &deviceConfig, &device); // Use member variables 'deviceConfig' and 'device'
+    ma_result result = ma_device_init(&miniaudioContext, &deviceConfig, &device);
     if (result != MA_SUCCESS) {
         std::string errorDesc = ma_result_description(result);
         AppendToErrorLog("AUDIO ERROR: Failed to initialize capture device. Error: " + errorDesc);
@@ -168,28 +161,27 @@ bool AudioSystem::InitializeAndStartSelectedCaptureDevice() {
         return false; 
     }
 
-    result = ma_device_start(&device); // Use member variable 'device'
+    result = ma_device_start(&device);
     if (result != MA_SUCCESS) {
         std::string errorDesc = ma_result_description(result);
         AppendToErrorLog("AUDIO ERROR: Failed to start capture device. Error: " + errorDesc);
-        ma_device_uninit(&device); // Use member variable 'device'
+        ma_device_uninit(&device);
         miniaudioDeviceInitialized = false;
         return false;
     } 
     
     miniaudioDeviceInitialized = true; 
-    std::cout << "Audio capture device started successfully. Device: " << device.capture.name << std::endl; // Use member variable 'device'
-    AppendToErrorLog("Audio capture active: " + std::string(device.capture.name)); // Use member variable 'device'
+    std::cout << "Audio capture device started successfully. Device: " << device.capture.name << std::endl;
+    AppendToErrorLog("Audio capture active: " + std::string(device.capture.name));
     return true;
 }
 
 void AudioSystem::StopCaptureDevice() {
     if (miniaudioDeviceInitialized) {
-        ma_device_uninit(&device); // Use member variable 'device'
+        ma_device_uninit(&device);
         miniaudioDeviceInitialized = false;
         currentAudioAmplitude = 0.0f; 
         std::cout << "Audio capture device stopped and uninitialized." << std::endl;
-        // AppendToErrorLog("Audio capture stopped."); // Optional status message
     }
 }
 
@@ -200,11 +192,10 @@ void AudioSystem::LoadWavFile(const char* filePath) {
         audioFileLoaded = false;
     }
 
-    // ClearLastError(); // Clear previous errors before new attempt
     audioFileSamples.clear();
     audioFileTotalFrameCount = 0;
     audioFileCurrentFrame = 0;
-    currentAudioAmplitude = 0.0f; // Reset amplitude
+    currentAudioAmplitude = 0.0f;
 
     if (!filePath || filePath[0] == '\0') {
         AppendToErrorLog("AUDIO ERROR: File path is empty for WAV loading.");
@@ -288,7 +279,7 @@ void AudioSystem::SetAmplitudeScale(float scale) {
 }
 
 
-const float* AudioSystem::GetFFTData() const {
+const std::vector<float>& AudioSystem::GetFFTData() const {
     return m_fftData;
 }
 
@@ -314,7 +305,6 @@ void AudioSystem::SetCurrentAudioSourceIndex(int index) {
     }
 
     if (currentAudioSourceIndex != oldAudioSourceIndex) {
-        // ClearLastError(); // Clear general audio status for a fresh message
         currentAudioAmplitude = 0.0f; // Reset amplitude on source switch
 
         if (oldAudioSourceIndex == 0 && IsCaptureDeviceInitialized()) { 
@@ -322,23 +312,18 @@ void AudioSystem::SetCurrentAudioSourceIndex(int index) {
         }
         if (oldAudioSourceIndex == 2 && IsAudioFileLoaded()) {
             audioFileLoaded = false; // "Stop" file playback
-            // AppendToErrorLog("Audio file playback stopped.");
         }
 
         if (currentAudioSourceIndex == 0) { // Switched TO Microphone
             InitializeAndStartSelectedCaptureDevice(); 
         } else if (currentAudioSourceIndex == 2) { // Switched TO Audio File
-            // UI will handle calling LoadWavFile if path changes or button pressed
-            // For now, just ensure mic is stopped if it was running
             if (IsCaptureDeviceInitialized()) {
                 StopCaptureDevice();
             }
-            // AppendToErrorLog("Switched to Audio File source. Load a file.");
         } else if (currentAudioSourceIndex == 1) { // System Audio (NYI)
              if (IsCaptureDeviceInitialized()) {
                 StopCaptureDevice();
             }
-            // AppendToErrorLog("System Audio source selected (Not Yet Implemented).");
         }
     }
 }
@@ -399,8 +384,14 @@ void AudioSystem::data_callback_member(const void* pInput, ma_uint32 frameCount)
         }
         currentAudioAmplitude = (sumOfAbsoluteSamples / samplesToProcess) * m_amplitudeScale;
 
-        if (samplesToProcess > 0) {
-            ma_fft_execute(m_fftData, inputFrames, &m_fftConfig);
+        if (samplesToProcess >= FFT_SIZE) {
+            for (int i = 0; i < FFT_SIZE; ++i) {
+                m_fft_input[i] = std::complex<float>(inputFrames[i], 0.0f);
+            }
+            auto fft_output = dj::fft1d(m_fft_input, dj::fft_dir::DIR_FWD);
+            for (int i = 0; i < FFT_SIZE / 2; ++i) {
+                m_fftData[i] = std::abs(fft_output[i]);
+            }
         }
 
     } else if (currentAudioSourceIndex == 2) {

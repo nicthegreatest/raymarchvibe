@@ -1330,8 +1330,10 @@ void RenderAudioReactivityWindow() {
     ImGui::Text("Live Amplitude:");
     ImGui::ProgressBar(g_audioSystem.GetCurrentAmplitude(), ImVec2(-1.0f, 0.0f));
 
-    const float* fftData = g_audioSystem.GetFFTData();
-    ImGui::PlotLines("FFT", fftData, 512, 0, NULL, 0.0f, 1.0f, ImVec2(0, 80));
+    const auto& fftData = g_audioSystem.GetFFTData();
+    if (!fftData.empty()) {
+        ImGui::PlotLines("FFT", fftData.data(), fftData.size(), 0, NULL, 0.0f, 1.0f, ImVec2(0, 80));
+    }
     ImGui::End();
 }
 
