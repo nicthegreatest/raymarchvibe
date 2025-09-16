@@ -41,6 +41,7 @@
 #include "NodeTemplates.h" // For node template factory functions
 #include "OutputNode.h" // For the Scene Output node
 #include "Bess/Config/Themes.h" // Added Themes header
+#include "VideoRecorder.h"
 
 // Placeholder Audio System has been removed.
 
@@ -140,6 +141,7 @@ static int g_selectedTimelineItem = -1;
 static Renderer g_renderer;
 static TextEditor g_editor;
 static AudioSystem g_audioSystem;
+static VideoRecorder g_videoRecorder;
 static Bess::Config::Themes g_themes; // Global Themes object
 static bool g_showGui = true;
 
@@ -402,6 +404,50 @@ void RenderMenuBar() {
             ImGui::MenuItem("About RaymarchVibe", nullptr, &g_showHelpWindow);
             ImGui::EndMenu();
         }
+
+        if (ImGui::BeginMenu("Recording")) {
+            static char filename[128] = "output.mp4";
+            ImGui::InputText("Filename", filename, 128);
+            ImGui::SameLine();
+            if (ImGui::Button("Browse")) {
+                ImGuiFileDialog::Instance()->OpenDialog("SaveRecordingDlgKey", "Choose Output File", ".mp4,.mov,.mpg", ".");
+            }
+
+            if (ImGuiFileDialog::Instance()->Display("SaveRecordingDlgKey")) {
+                if (ImGuiFileDialog::Instance()->IsOk()) {
+                    std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
+                    strncpy(filename, filePath.c_str(), 128);
+                }
+                ImGuiFileDialog::Instance()->Close();
+            }
+
+            static int format_idx = 0;
+            const char* formats[] = { "mp4", "mov", "mpg" };
+            if (ImGui::BeginCombo("Format", formats[format_idx])) {
+                for (int i = 0; i < IM_ARRAYSIZE(formats); i++) {
+                    const bool is_selected = (format_idx == i);
+                    if (ImGui::Selectable(formats[i], is_selected))
+                        format_idx = i;
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            if (g_videoRecorder.is_recording()) {
+                if (ImGui::Button("Stop Recording")) {
+                    g_videoRecorder.stop_recording();
+                }
+                ImGui::Text("Status: Recording...");
+            } else {
+                if (ImGui::Button("Start Recording")) {
+                    g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx]);
+                }
+                ImGui::Text("Status: Idle");
+            }
+            ImGui::EndMenu();
+        }
+
         ImGui::EndMainMenuBar();
     }
 
@@ -1571,6 +1617,12 @@ int main() {
             checkGLError("After Final RenderFullscreenTexture");
         } else {
             std::cout << "No finalOutputEffect determined for rendering." << std::endl;
+        }
+
+        if (g_videoRecorder.is_recording()) {
+            std::vector<uint8_t> pixels(SCR_WIDTH * SCR_HEIGHT * 4);
+            glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            g_videoRecorder.add_video_frame(pixels.data());
         }
 
         glDisable(GL_BLEND);

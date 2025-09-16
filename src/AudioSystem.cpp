@@ -3,6 +3,9 @@
 // Since AudioSystem.h includes miniaudio.h, we put it before AudioSystem.h
 #define MINIAUDIO_IMPLEMENTATION // Define it here, once, before miniaudio.h is included via AudioSystem.h
 #include "AudioSystem.h"
+#include "VideoRecorder.h"
+
+extern VideoRecorder g_videoRecorder;
 
 #include <iostream> // For std::cout, std::endl
 #include <string>   // For std::string, std::to_string
@@ -408,6 +411,10 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
             ma_uint64 framesRead;
             ma_decoder_read_pcm_frames(&m_decoder, pOutput, frameCount, &framesRead);
 
+            if (g_videoRecorder.is_recording()) {
+                g_videoRecorder.add_audio_frame(static_cast<const float*>(pOutput), frameCount);
+            }
+
             // This part is for visualization, not playback itself
             const float* pSamples = static_cast<const float*>(pOutput);
             float sumOfAbsoluteSamples = 0.0f;
@@ -438,6 +445,10 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
         if (!miniaudioDeviceInitialized) {
             currentAudioAmplitude = 0.0f;
             return; 
+        }
+
+        if (g_videoRecorder.is_recording()) {
+            g_videoRecorder.add_audio_frame(static_cast<const float*>(pInput), frameCount);
         }
 
         const float* inputFrames = static_cast<const float*>(pInput); 
