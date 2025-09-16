@@ -141,7 +141,7 @@ static int g_selectedTimelineItem = -1;
 static Renderer g_renderer;
 static TextEditor g_editor;
 static AudioSystem g_audioSystem;
-static VideoRecorder g_videoRecorder;
+VideoRecorder g_videoRecorder;
 static Bess::Config::Themes g_themes; // Global Themes object
 static bool g_showGui = true;
 
@@ -410,7 +410,9 @@ void RenderMenuBar() {
             ImGui::InputText("Filename", filename, 128);
             ImGui::SameLine();
             if (ImGui::Button("Browse")) {
-                ImGuiFileDialog::Instance()->OpenDialog("SaveRecordingDlgKey", "Choose Output File", ".mp4,.mov,.mpg", ".");
+                IGFD::FileDialogConfig config;
+                config.path = ".";
+                ImGuiFileDialog::Instance()->OpenDialog("SaveRecordingDlgKey", "Choose Output File", ".mp4,.mov,.mpg", config);
             }
 
             if (ImGuiFileDialog::Instance()->Display("SaveRecordingDlgKey")) {
