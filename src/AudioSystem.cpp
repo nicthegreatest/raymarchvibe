@@ -24,6 +24,7 @@ AudioSystem::AudioSystem() {
     selectedActualCaptureDeviceIndex = 0;
     currentAudioSourceIndex = 0; // Default to Microphone
     enableAudioShaderLink = false;
+    m_amplitudeScale = 1.0f;
 }
 
 // --- Destructor ---
@@ -42,6 +43,7 @@ bool AudioSystem::Initialize() {
     AppendToErrorLog("Miniaudio context initialized successfully.");
     contextInitialized = true;
     EnumerateCaptureDevices();
+    ma_fft_init(&m_fftConfig, FFT_SIZE);
     // Assuming EnumerateCaptureDevices logs its own success/failure.
     // Initialize() success primarily depends on context init.
     return true;
@@ -107,7 +109,7 @@ void AudioSystem::EnumerateCaptureDevices() {
     miniaudioCaptureDevice_CString_Names.reserve(miniaudioCaptureDevice_StdString_Names.size()); 
     for (const auto& name_str : miniaudioCaptureDevice_StdString_Names) { 
         miniaudioCaptureDevice_CString_Names.push_back(name_str.c_str()); 
-    }
+    } 
     
     if (captureDeviceCount == 0) {
         std::cout << "  No capture devices found." << std::endl;
@@ -193,8 +195,12 @@ void AudioSystem::StopCaptureDevice() {
 
 
 void AudioSystem::LoadWavFile(const char* filePath) {
+    if (audioFileLoaded) {
+        ma_decoder_uninit(&m_decoder);
+        audioFileLoaded = false;
+    }
+
     // ClearLastError(); // Clear previous errors before new attempt
-    audioFileLoaded = false; 
     audioFileSamples.clear();
     audioFileTotalFrameCount = 0;
     audioFileCurrentFrame = 0;
@@ -206,90 +212,35 @@ void AudioSystem::LoadWavFile(const char* filePath) {
     }
 
     ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_f32, 0, 0); 
-    ma_decoder decoder;
 
-    ma_result result = ma_decoder_init_file(filePath, &decoderConfig, &decoder);
+    ma_result result = ma_decoder_init_file(filePath, &decoderConfig, &m_decoder);
     if (result != MA_SUCCESS) {
         AppendToErrorLog("AUDIO ERROR: Failed to load WAV file '" + std::string(filePath) + "'. Error: " + ma_result_description(result));
         return;
     }
 
-    audioFileChannels = decoder.outputChannels;
-    audioFileSampleRate = decoder.outputSampleRate;
-    ma_decoder_get_length_in_pcm_frames(&decoder, &audioFileTotalFrameCount);
+    audioFileChannels = m_decoder.outputChannels;
+    audioFileSampleRate = m_decoder.outputSampleRate;
+    ma_decoder_get_length_in_pcm_frames(&m_decoder, &audioFileTotalFrameCount);
 
     if (audioFileTotalFrameCount == 0) {
         AppendToErrorLog("AUDIO ERROR: WAV file '" + std::string(filePath) + "' contains no audio frames.");
-        ma_decoder_uninit(&decoder);
-        return;
-    }
-
-    audioFileSamples.resize(static_cast<size_t>(audioFileTotalFrameCount * audioFileChannels));
-    ma_uint64 framesRead = 0;
-    result = ma_decoder_read_pcm_frames(&decoder, audioFileSamples.data(), audioFileTotalFrameCount, &framesRead);
-
-    if (result != MA_SUCCESS || framesRead != audioFileTotalFrameCount) {
-        AppendToErrorLog("AUDIO ERROR: Failed to read all PCM frames from '" + std::string(filePath) + "'. Read " + std::to_string(framesRead) + "/" + std::to_string(audioFileTotalFrameCount) + ". Error: " + ma_result_description(result));
-        audioFileSamples.clear(); // Clear partially read data
-        ma_decoder_uninit(&decoder);
+        ma_decoder_uninit(&m_decoder);
         return;
     }
 
     audioFileLoaded = true;
     audioFileCurrentFrame = 0; 
+    m_isPlaying = true;
     std::string successMsg = "Audio file loaded: " + std::string(filePath) + " (" + std::to_string(audioFileTotalFrameCount) + " frames, " + std::to_string(audioFileChannels) + " ch, " + std::to_string(audioFileSampleRate) + " Hz)";
     std::cout << successMsg << std::endl;
     AppendToErrorLog(successMsg);
-    
-    ma_decoder_uninit(&decoder);
 }
 
-void AudioSystem::ProcessAudioFileSamples(ma_uint32 framesToProcessSimulated) {
-    if (!audioFileLoaded || audioFileSamples.empty() || audioFileChannels == 0) {
-        currentAudioAmplitude = 0.0f;
-        return;
-    }
 
-    ma_uint64 framesRemainingInFile = audioFileTotalFrameCount - audioFileCurrentFrame;
-    ma_uint32 framesForThisChunk = (framesToProcessSimulated > framesRemainingInFile) ? static_cast<ma_uint32>(framesRemainingInFile) : framesToProcessSimulated;
-
-    if (framesForThisChunk == 0) {
-        currentAudioAmplitude = 0.0f; 
-        if (audioFileTotalFrameCount > 0) { 
-            audioFileCurrentFrame = 0; 
-            framesRemainingInFile = audioFileTotalFrameCount;
-            framesForThisChunk = (framesToProcessSimulated > framesRemainingInFile) ? static_cast<ma_uint32>(framesRemainingInFile) : framesToProcessSimulated;
-            if (framesForThisChunk == 0) {
-                 currentAudioAmplitude = 0.0f;
-                 return;
-            }
-        } else { 
-            return; 
-        }
-    }
-
-    const float* pSamples = audioFileSamples.data() + (audioFileCurrentFrame * audioFileChannels);
-    float sumOfAbsoluteSamples = 0.0f;
-    ma_uint32 samplesInChunk = framesForThisChunk * audioFileChannels;
-
-    if (samplesInChunk == 0) {
-        currentAudioAmplitude = 0.0f;
-        return;
-    }
-
-    for (ma_uint32 i = 0; i < samplesInChunk; ++i) {
-        sumOfAbsoluteSamples += fabsf(pSamples[i]);
-    }
-    currentAudioAmplitude = sumOfAbsoluteSamples / samplesInChunk;
-            
-    audioFileCurrentFrame += framesForThisChunk;
-    if (audioFileCurrentFrame >= audioFileTotalFrameCount) {
-        audioFileCurrentFrame = 0; 
-    }
-}
 
 // --- Getters ---
-float AudioSystem::GetCurrentAmplitude() const { return currentAudioAmplitude; }
+float AudioSystem::GetCurrentAmplitude() const { return currentAudioAmplitude * m_amplitudeScale; }
 bool AudioSystem::IsCaptureDeviceInitialized() const { return miniaudioDeviceInitialized; }
 bool AudioSystem::IsAudioFileLoaded() const { return audioFileLoaded; }
 const std::vector<const char*>& AudioSystem::GetCaptureDeviceGUINames() const { return miniaudioCaptureDevice_CString_Names; }
@@ -300,6 +251,46 @@ int AudioSystem::GetCurrentAudioSourceIndex() const { return currentAudioSourceI
 int* AudioSystem::GetCurrentAudioSourceIndexPtr() { return &currentAudioSourceIndex; }
 char* AudioSystem::GetAudioFilePathBuffer() { return audioFilePathInputBuffer; }
 const std::string& AudioSystem::GetLastError() const { return lastErrorLog; }
+
+float AudioSystem::GetPlaybackProgress() {
+    if (!audioFileLoaded || audioFileTotalFrameCount == 0) {
+        return 0.0f;
+    }
+    ma_uint64 cursor;
+    ma_decoder_get_cursor_in_pcm_frames(&m_decoder, &cursor);
+    return (float)cursor / (float)audioFileTotalFrameCount;
+}
+
+void AudioSystem::SetPlaybackProgress(float progress) {
+    if (audioFileLoaded) {
+        ma_uint64 frameIndex = (ma_uint64)(progress * audioFileTotalFrameCount);
+        ma_decoder_seek_to_pcm_frame(&m_decoder, frameIndex);
+    }
+}
+
+void AudioSystem::Play() {
+    m_isPlaying = true;
+}
+
+void AudioSystem::Pause() {
+    m_isPlaying = false;
+}
+
+void AudioSystem::Stop() {
+    m_isPlaying = false;
+    if (audioFileLoaded) {
+        ma_decoder_seek_to_pcm_frame(&m_decoder, 0);
+    }
+}
+
+void AudioSystem::SetAmplitudeScale(float scale) {
+    m_amplitudeScale = scale;
+}
+
+
+const float* AudioSystem::GetFFTData() const {
+    return m_fftData;
+}
 
 
 // --- Setters ---
@@ -352,6 +343,13 @@ void AudioSystem::SetCurrentAudioSourceIndex(int index) {
     }
 }
 
+void AudioSystem::SetAudioFilePath(const char* filePath) {
+    if (filePath) {
+        strncpy(audioFilePathInputBuffer, filePath, AUDIO_FILE_PATH_BUFFER_SIZE - 1);
+        audioFilePathInputBuffer[AUDIO_FILE_PATH_BUFFER_SIZE - 1] = '\0';
+    }
+}
+
 
 // --- Error Handling ---
 void AudioSystem::ClearLastError() { 
@@ -377,26 +375,64 @@ void AudioSystem::data_callback_static(ma_device* pDevice, void* pOutput, const 
 }
 
 void AudioSystem::data_callback_member(const void* pInput, ma_uint32 frameCount) {
-    if (pInput == NULL || !miniaudioDeviceInitialized) { 
-        currentAudioAmplitude = 0.0f;
-        return; 
+    if (currentAudioSourceIndex == 0) {
+        if (pInput == NULL || !miniaudioDeviceInitialized) { 
+            currentAudioAmplitude = 0.0f;
+            return; 
+        }
+
+        const float* inputFrames = static_cast<const float*>(pInput); 
+        float sumOfAbsoluteSamples = 0.0f;
+        
+        ma_uint32 channels = deviceConfig.capture.channels;
+        if (channels == 0) channels = 1;
+
+        ma_uint32 samplesToProcess = frameCount * channels;
+
+        if (samplesToProcess == 0) {
+            currentAudioAmplitude = 0.0f;
+            return;
+        }
+
+        for (ma_uint32 i = 0; i < samplesToProcess; ++i) {
+            sumOfAbsoluteSamples += fabsf(inputFrames[i]);
+        }
+        currentAudioAmplitude = (sumOfAbsoluteSamples / samplesToProcess) * m_amplitudeScale;
+
+        if (samplesToProcess > 0) {
+            ma_fft_execute(m_fftData, inputFrames, &m_fftConfig);
+        }
+
+    } else if (currentAudioSourceIndex == 2) {
+        if (!audioFileLoaded || !m_isPlaying) {
+            currentAudioAmplitude = 0.0f;
+            return;
+        }
+
+        ma_uint64 framesRead;
+        std::vector<float> tempBuffer(frameCount * audioFileChannels);
+        ma_decoder_read_pcm_frames(&m_decoder, tempBuffer.data(), frameCount, &framesRead);
+
+        if (framesRead == 0) {
+            currentAudioAmplitude = 0.0f;
+            if (audioFileTotalFrameCount > 0) {
+                ma_decoder_seek_to_pcm_frame(&m_decoder, 0);
+            }
+            return;
+        }
+
+        const float* pSamples = tempBuffer.data();
+        float sumOfAbsoluteSamples = 0.0f;
+        ma_uint32 samplesInChunk = (ma_uint32)framesRead * audioFileChannels;
+
+        if (samplesInChunk == 0) {
+            currentAudioAmplitude = 0.0f;
+            return;
+        }
+
+        for (ma_uint32 i = 0; i < samplesInChunk; ++i) {
+            sumOfAbsoluteSamples += fabsf(pSamples[i]);
+        }
+        currentAudioAmplitude = (sumOfAbsoluteSamples / samplesInChunk) * m_amplitudeScale;
     }
-
-    const float* inputFrames = static_cast<const float*>(pInput); 
-    float sumOfAbsoluteSamples = 0.0f;
-    
-    ma_uint32 channels = deviceConfig.capture.channels; // Use member variable 'deviceConfig'
-    if (channels == 0) channels = 1; 
-
-    ma_uint32 samplesToProcess = frameCount * channels; 
-
-    if (samplesToProcess == 0) {
-        currentAudioAmplitude = 0.0f;
-        return;
-    }
-
-    for (ma_uint32 i = 0; i < samplesToProcess; ++i) {
-        sumOfAbsoluteSamples += fabsf(inputFrames[i]); 
-    }
-    currentAudioAmplitude = sumOfAbsoluteSamples / samplesToProcess;
 }

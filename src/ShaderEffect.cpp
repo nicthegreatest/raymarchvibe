@@ -66,6 +66,16 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
     m_iUserColor1[0] = 0.2f; m_iUserColor1[1] = 0.5f; m_iUserColor1[2] = 0.8f;
     std::fill_n(m_mouseState, 4, 0.0f);
 
+    m_uThickness = 0.7f;
+    m_uIterations = 12;
+    m_uAngle = 1.1f;
+    m_scale = 0.75f;
+    m_uAudioReactivity = 0.4f;
+    m_uSway = 0.05f;
+
+    m_uColorB[0] = 0.2f; m_uColorB[1] = 0.3f; m_uColorB[2] = 0.9f;
+    m_uGradientMix = 0.5f;
+
     if (!initialShaderPath.empty()) {
         m_shaderFilePath = initialShaderPath;
     }
@@ -189,6 +199,11 @@ void ShaderEffect::Load() {
 
 void ShaderEffect::ApplyShaderCode(const std::string& newShaderCode) {
     m_shaderSourceCode = newShaderCode;
+    if (m_shaderSourceCode.find("mainImage") != std::string::npos) {
+        m_isShadertoyMode = true;
+    } else {
+        m_isShadertoyMode = false;
+    }
     m_compileErrorLog.clear();
     CompileAndLinkShader();
     if (m_shaderProgram != 0) {
@@ -288,6 +303,31 @@ void ShaderEffect::Render() {
     }
     if (m_iAudioAmpLoc != -1) {
         glUniform1f(m_iAudioAmpLoc, m_audioAmp);
+    }
+
+    if (m_uThicknessLoc != -1) {
+        glUniform1f(m_uThicknessLoc, m_uThickness);
+    }
+    if (m_uIterationsLoc != -1) {
+        glUniform1i(m_uIterationsLoc, m_uIterations);
+    }
+    if (m_uAngleLoc != -1) {
+        glUniform1f(m_uAngleLoc, m_uAngle);
+    }
+    if (m_uScaleLoc != -1) {
+        glUniform1f(m_uScaleLoc, m_scale);
+    }
+    if (m_uAudioReactivityLoc != -1) {
+        glUniform1f(m_uAudioReactivityLoc, m_uAudioReactivity);
+    }
+    if (m_uSwayLoc != -1) {
+        glUniform1f(m_uSwayLoc, m_uSway);
+    }
+    if (m_uColorBLoc != -1) {
+        glUniform3fv(m_uColorBLoc, 1, m_uColorB);
+    }
+    if (m_uGradientMixLoc != -1) {
+        glUniform1f(m_uGradientMixLoc, m_uGradientMix);
     }
 
     Renderer::RenderQuad();
@@ -458,6 +498,17 @@ void ShaderEffect::RenderNativeParamsUI() {
         ImGui::DragFloat3("Light Pos##EffectLight", m_lightPosition, 0.1f);
         ImGui::ColorEdit3("Light Colour##EffectLight", m_lightColor);
     }
+
+    if (ImGui::CollapsingHeader("Fractal Tree Audio Controls##EffectNativeFractalTree")) {
+        ImGui::SliderFloat("Thickness##Effect", &m_uThickness, 0.1f, 2.0f);
+        ImGui::SliderInt("Iterations##Effect", &m_uIterations, 2, 25);
+        ImGui::SliderFloat("Angle##Effect", &m_uAngle, 0.1f, 2.5f);
+        ImGui::SliderFloat("Scale##Effect", &m_scale, 0.5f, 0.98f);
+        ImGui::SliderFloat("Audio Reactivity##Effect", &m_uAudioReactivity, 0.0f, 2.0f);
+        ImGui::SliderFloat("Sway##Effect", &m_uSway, 0.0f, 0.2f);
+        ImGui::ColorEdit3("Color B##Effect", m_uColorB);
+        ImGui::SliderFloat("Gradient Mix##Effect", &m_uGradientMix, 0.0f, 1.0f);
+    }
 }
 
 void ShaderEffect::RenderShadertoyParamsUI() {
@@ -483,7 +534,7 @@ void ShaderEffect::RenderParsedUniformsUI() {
             ImGui::SliderInt(label.c_str(), &control.iValue, control.metadata.value("min", 0), control.metadata.value("max", 1));
         } else if (control.glslType == "vec3" && control.isColor) {
             ImGui::ColorEdit3(label.c_str(), control.v3Value);
-        } // ... other types can be added here
+        } 
 
         ImGui::PopID();
     }
@@ -545,6 +596,37 @@ void ShaderEffect::GetGradientColor(float t, float* outColor) {
 }
 
 
+static std::string InjectStandardUniforms(const std::string& source, bool isShadertoy) {
+    std::string uniforms = "";
+    if (source.find("uniform vec2 iResolution") == std::string::npos && source.find("uniform vec3 iResolution") == std::string::npos) {
+        if (isShadertoy) {
+            uniforms += "uniform vec3 iResolution;\n";
+        } else {
+            uniforms += "uniform vec2 iResolution;\n";
+        }
+    }
+    if (source.find("uniform float iTime") == std::string::npos) {
+        uniforms += "uniform float iTime;\n";
+    }
+    if (uniforms.empty()) {
+        return source;
+    }
+
+    std::string versionLine;
+    std::string sourceWithoutVersion;
+    size_t versionPos = source.find("#version");
+    if (versionPos != std::string::npos) {
+        size_t lineEnd = source.find("\n", versionPos);
+        versionLine = source.substr(0, lineEnd + 1);
+        sourceWithoutVersion = source.substr(lineEnd + 1);
+    } else {
+        versionLine = "#version 330 core\n";
+        sourceWithoutVersion = source;
+    }
+
+    return versionLine + uniforms + sourceWithoutVersion;
+}
+
 void ShaderEffect::CompileAndLinkShader() {
     if (m_shaderProgram != 0) glDeleteProgram(m_shaderProgram);
     m_compileErrorLog.clear();
@@ -567,11 +649,12 @@ void ShaderEffect::CompileAndLinkShader() {
             "uniform int iFrame;\n"
             "uniform vec4 iMouse;\n"
             "uniform float iUserFloat1;\n"
-            "uniform vec3 iUserColor1;\n"
-            + m_shaderSourceCode +
+            "uniform vec3 iUserColor1;\n" + m_shaderSourceCode +
             "\nvoid main() {\n"
             "    mainImage(FragColor, gl_FragCoord.xy);\n"
             "}\n";
+    } else {
+        finalFragmentCode = InjectStandardUniforms(m_shaderSourceCode, m_isShadertoyMode);
     }
 
     GLuint vertexShader = CompileShader(vsSource.c_str(), GL_VERTEX_SHADER, vsError);
@@ -593,6 +676,7 @@ void ShaderEffect::CompileAndLinkShader() {
                              "Shader Link Error:\n" + linkError;
     }
 }
+
 
 void ShaderEffect::FetchUniformLocations() {
     if (m_shaderProgram == 0) return;
@@ -628,6 +712,14 @@ void ShaderEffect::FetchUniformLocations() {
     }
 
     m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
+
+    m_uThicknessLoc = glGetUniformLocation(m_shaderProgram, "u_thickness");
+    m_uIterationsLoc = glGetUniformLocation(m_shaderProgram, "u_iterations");
+    m_uAngleLoc = glGetUniformLocation(m_shaderProgram, "u_angle");
+    m_uAudioReactivityLoc = glGetUniformLocation(m_shaderProgram, "u_audio_reactivity");
+    m_uSwayLoc = glGetUniformLocation(m_shaderProgram, "u_sway");
+    m_uColorBLoc = glGetUniformLocation(m_shaderProgram, "u_colorB");
+    m_uGradientMixLoc = glGetUniformLocation(m_shaderProgram, "u_gradient_mix");
 }
 
 void ShaderEffect::ParseShaderControls() {

@@ -78,6 +78,9 @@ std::unique_ptr<Effect> CreateNoiseEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
+std::unique_ptr<Effect> CreateFractalTreeAudioEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
 } // namespace NodeTemplates
 } // namespace RaymarchVibe

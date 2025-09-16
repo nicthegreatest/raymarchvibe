@@ -88,6 +88,15 @@ private:
     float m_iUserFloat1;
     float m_iUserColor1[3];
 
+    // fractal_tree_audio uniforms
+    float m_uThickness;
+    int m_uIterations;
+    float m_uAngle;
+    float m_uAudioReactivity;
+    float m_uSway;
+    float m_uColorB[3];
+    float m_uGradientMix;
+
     float m_audioAmp;
 
     // Uniform locations
@@ -112,6 +121,14 @@ private:
     GLint m_uCamFOVLoc = -1;
     GLint m_uLightPosLoc = -1;
     GLint m_uLightColorLoc = -1;
+
+    GLint m_uThicknessLoc = -1;
+    GLint m_uIterationsLoc = -1;
+    GLint m_uAngleLoc = -1;
+    GLint m_uAudioReactivityLoc = -1;
+    GLint m_uSwayLoc = -1;
+    GLint m_uColorBLoc = -1;
+    GLint m_uGradientMixLoc = -1;
 
     ShaderParser m_shaderParser;
     std::vector<ShaderToyUniformControl> m_shadertoyUniformControls;
