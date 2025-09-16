@@ -45,7 +45,55 @@ set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)  # Don't build tests
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)   # Don't build docs
 set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE) # Disable Wayland support
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW) # Policy for FetchContent with modern GLFW
-FetchContent_MakeAvailable(glfw)
+
+FetchContent_GetProperties(glfw)
+if(NOT glfw_POPULATED)
+  FetchContent_Populate(glfw)
+
+  set(GLFW_SRC_CMAKELIST_PATH "${glfw_SOURCE_DIR}/src/CMakeLists.txt")
+  message(STATUS "Attempting to patch GLFW CMakeLists.txt at: ${GLFW_SRC_CMAKELIST_PATH}")
+
+  if(EXISTS ${GLFW_SRC_CMAKELIST_PATH})
+      message(STATUS "File exists. Reading content.")
+      file(READ ${GLFW_SRC_CMAKELIST_PATH} GLFW_SRC_CMAKELIST_CONTENT)
+      set(ORIGINAL_CONTENT "${GLFW_SRC_CMAKELIST_CONTENT}")
+
+      string(REPLACE "message(FATAL_ERROR \"RandR headers not found; install libxrandr development package\")"
+                       "#message(FATAL_ERROR \"RandR headers not found; install libxrandr development package\")"
+                       GLFW_SRC_CMAKELIST_CONTENT "${GLFW_SRC_CMAKELIST_CONTENT}")
+
+      string(REPLACE "message(FATAL_ERROR \"Xinerama headers not found; install libxinerama development package\")"
+                       "#message(FATAL_ERROR \"Xinerama headers not found; install libxinerama development package\")"
+                       GLFW_SRC_CMAKELIST_CONTENT "${GLFW_SRC_CMAKELIST_CONTENT}")
+
+      string(REPLACE "message(FATAL_ERROR \"XKB headers not found; install X11 development package\")"
+                       "#message(FATAL_ERROR \"XKB headers not found; install X11 development package\")"
+                       GLFW_SRC_CMAKELIST_CONTENT "${GLFW_SRC_CMAKELIST_CONTENT}")
+
+      string(REPLACE "message(FATAL_ERROR \"Xcursor headers not found; install libxcursor development package\")"
+                       "#message(FATAL_ERROR \"Xcursor headers not found; install libxcursor development package\")"
+                       GLFW_SRC_CMAKELIST_CONTENT "${GLFW_SRC_CMAKELIST_CONTENT}")
+
+      string(REPLACE "message(FATAL_ERROR \"XInput headers not found; install libxi development package\")"
+                       "#message(FATAL_ERROR \"XInput headers not found; install libxi development package\")"
+                       GLFW_SRC_CMAKELIST_CONTENT "${GLFW_SRC_CMAKELIST_CONTENT}")
+
+      string(REPLACE "message(FATAL_ERROR \"X Shape headers not found; install libxext development package\")"
+                       "#message(FATAL_ERROR \"X Shape headers not found; install libxext development package\")"
+                       GLFW_SRC_CMAKELIST_CONTENT "${GLFW_SRC_CMAKELIST_CONTENT}")
+
+      if(NOT "${GLFW_SRC_CMAKELIST_CONTENT}" STREQUAL "${ORIGINAL_CONTENT}")
+          message(STATUS "Content was modified. Writing back to file.")
+          file(WRITE ${GLFW_SRC_CMAKELIST_PATH} "${GLFW_SRC_CMAKELIST_CONTENT}")
+          message(STATUS "File written.")
+      else()
+          message(WARNING "Patching did not modify the content of glfw's CMakeLists.txt. The string to replace was likely not found.")
+      endif()
+  else()
+      message(WARNING "Could not find glfw's CMakeLists.txt to patch at ${GLFW_SRC_CMAKELIST_PATH}")
+  endif()
+endif()
+add_subdirectory(${glfw_SOURCE_DIR} ${glfw_BINARY_DIR})
 
 FetchContent_Declare(
   imgui
