@@ -18,6 +18,7 @@ AudioSystem::AudioSystem() {
     // Other initializations
     contextInitialized = false;
     miniaudioDeviceInitialized = false;
+    m_playbackDeviceInitialized = false;
     captureDevicesEnumerated = false;
     audioFileLoaded = false;
     currentAudioAmplitude = 0.0f;
@@ -50,7 +51,7 @@ bool AudioSystem::Initialize() {
 }
 
 void AudioSystem::Shutdown() {
-    StopCaptureDevice(); // Uninit capture device if active
+    StopActiveDevice(); // Uninit capture device if active
     
     if (contextInitialized) {
         ma_context_uninit(&miniaudioContext);
@@ -129,7 +130,7 @@ bool AudioSystem::InitializeAndStartSelectedCaptureDevice() {
     }
 
     if (miniaudioDeviceInitialized) { // If a device is already running, stop it first
-        StopCaptureDevice();
+        StopActiveDevice();
     }
 
     if (!captureDevicesEnumerated || miniaudioAvailableCaptureDevicesInfo.empty() || selectedActualCaptureDeviceIndex < 0) {
@@ -176,13 +177,18 @@ bool AudioSystem::InitializeAndStartSelectedCaptureDevice() {
     return true;
 }
 
-void AudioSystem::StopCaptureDevice() {
+void AudioSystem::StopActiveDevice() {
     if (miniaudioDeviceInitialized) {
         ma_device_uninit(&device);
         miniaudioDeviceInitialized = false;
-        currentAudioAmplitude = 0.0f; 
         std::cout << "Audio capture device stopped and uninitialized." << std::endl;
     }
+    if (m_playbackDeviceInitialized) {
+        ma_device_uninit(&m_playbackDevice);
+        m_playbackDeviceInitialized = false;
+        std::cout << "Audio playback device stopped and uninitialized." << std::endl;
+    }
+    currentAudioAmplitude = 0.0f;
 }
 
 
@@ -226,6 +232,10 @@ void AudioSystem::LoadWavFile(const char* filePath) {
     std::string successMsg = "Audio file loaded: " + std::string(filePath) + " (" + std::to_string(audioFileTotalFrameCount) + " frames, " + std::to_string(audioFileChannels) + " ch, " + std::to_string(audioFileSampleRate) + " Hz)";
     std::cout << successMsg << std::endl;
     AppendToErrorLog(successMsg);
+
+    if (m_isPlaying && currentAudioSourceIndex == 2) {
+        InitializeAndStartPlaybackDevice();
+    }
 }
 
 
@@ -261,10 +271,16 @@ void AudioSystem::SetPlaybackProgress(float progress) {
 
 void AudioSystem::Play() {
     m_isPlaying = true;
+    if (currentAudioSourceIndex == 2 && audioFileLoaded) {
+        InitializeAndStartPlaybackDevice();
+    }
 }
 
 void AudioSystem::Pause() {
     m_isPlaying = false;
+    // No need to call StopActiveDevice() here, because the data callback
+    // will just start feeding silence when m_isPlaying is false.
+    // Stopping the device would require re-initializing it on Play(), which is heavier.
 }
 
 void AudioSystem::Stop() {
@@ -272,6 +288,7 @@ void AudioSystem::Stop() {
     if (audioFileLoaded) {
         ma_decoder_seek_to_pcm_frame(&m_decoder, 0);
     }
+    StopActiveDevice();
 }
 
 void AudioSystem::SetAmplitudeScale(float scale) {
@@ -306,25 +323,16 @@ void AudioSystem::SetCurrentAudioSourceIndex(int index) {
 
     if (currentAudioSourceIndex != oldAudioSourceIndex) {
         currentAudioAmplitude = 0.0f; // Reset amplitude on source switch
-
-        if (oldAudioSourceIndex == 0 && IsCaptureDeviceInitialized()) { 
-            StopCaptureDevice(); // Stop mic if it was the old source and running
-        }
-        if (oldAudioSourceIndex == 2 && IsAudioFileLoaded()) {
-            audioFileLoaded = false; // "Stop" file playback
-        }
+        StopActiveDevice(); // Stop any active device before switching
 
         if (currentAudioSourceIndex == 0) { // Switched TO Microphone
             InitializeAndStartSelectedCaptureDevice(); 
         } else if (currentAudioSourceIndex == 2) { // Switched TO Audio File
-            if (IsCaptureDeviceInitialized()) {
-                StopCaptureDevice();
-            }
-        } else if (currentAudioSourceIndex == 1) { // System Audio (NYI)
-             if (IsCaptureDeviceInitialized()) {
-                StopCaptureDevice();
+            if (audioFileLoaded) {
+                InitializeAndStartPlaybackDevice();
             }
         }
+        // No action needed for index 1 (NYI) other than stopping the device
     }
 }
 
@@ -354,14 +362,80 @@ void AudioSystem::AppendToErrorLog(const std::string& message) {
 void AudioSystem::data_callback_static(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
     AudioSystem* pAudioSystem = static_cast<AudioSystem*>(pDevice->pUserData);
     if (pAudioSystem) {
-        pAudioSystem->data_callback_member(pInput, frameCount);
+        pAudioSystem->data_callback_member(pOutput, pInput, frameCount);
     }
-    (void)pOutput; // Unused for capture
 }
 
-void AudioSystem::data_callback_member(const void* pInput, ma_uint32 frameCount) {
-    if (currentAudioSourceIndex == 0) {
-        if (pInput == NULL || !miniaudioDeviceInitialized) { 
+bool AudioSystem::InitializeAndStartPlaybackDevice() {
+    if (!audioFileLoaded) {
+        AppendToErrorLog("AUDIO ERROR: No audio file loaded to play.");
+        return false;
+    }
+
+    if (m_playbackDeviceInitialized) {
+        StopActiveDevice();
+    }
+
+    ma_device_config playbackConfig = ma_device_config_init(ma_device_type_playback);
+    playbackConfig.playback.format   = m_decoder.outputFormat;
+    playbackConfig.playback.channels = m_decoder.outputChannels;
+    playbackConfig.sampleRate        = m_decoder.outputSampleRate;
+    playbackConfig.dataCallback      = data_callback_static;
+    playbackConfig.pUserData         = this;
+
+    ma_result result = ma_device_init(&miniaudioContext, &playbackConfig, &m_playbackDevice);
+    if (result != MA_SUCCESS) {
+        AppendToErrorLog("AUDIO ERROR: Failed to initialize playback device. " + std::string(ma_result_description(result)));
+        return false;
+    }
+
+    result = ma_device_start(&m_playbackDevice);
+    if (result != MA_SUCCESS) {
+        ma_device_uninit(&m_playbackDevice);
+        AppendToErrorLog("AUDIO ERROR: Failed to start playback device. " + std::string(ma_result_description(result)));
+        return false;
+    }
+
+    m_playbackDeviceInitialized = true;
+    AppendToErrorLog("Audio playback device started successfully.");
+    return true;
+}
+
+void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uint32 frameCount) {
+    // Playback logic
+    if (pOutput != nullptr && currentAudioSourceIndex == 2) {
+        if (audioFileLoaded && m_isPlaying) {
+            ma_uint64 framesRead;
+            ma_decoder_read_pcm_frames(&m_decoder, pOutput, frameCount, &framesRead);
+
+            // This part is for visualization, not playback itself
+            const float* pSamples = static_cast<const float*>(pOutput);
+            float sumOfAbsoluteSamples = 0.0f;
+            ma_uint32 samplesInChunk = (ma_uint32)framesRead * m_decoder.outputChannels;
+            if (samplesInChunk > 0) {
+                for (ma_uint32 i = 0; i < samplesInChunk; ++i) {
+                    sumOfAbsoluteSamples += fabsf(pSamples[i]);
+                }
+                currentAudioAmplitude = (sumOfAbsoluteSamples / samplesInChunk) * m_amplitudeScale;
+            } else {
+                currentAudioAmplitude = 0.0f;
+            }
+
+            if (framesRead < frameCount) {
+                // Reached end of file
+                m_isPlaying = false;
+                ma_decoder_seek_to_pcm_frame(&m_decoder, 0); // Loop
+            }
+        } else {
+            // Not playing, fill with silence
+            memset(pOutput, 0, frameCount * ma_get_bytes_per_frame(m_decoder.outputFormat, m_decoder.outputChannels));
+            currentAudioAmplitude = 0.0f;
+        }
+    }
+
+    // Capture logic (existing logic)
+    if (pInput != nullptr && currentAudioSourceIndex == 0) {
+        if (!miniaudioDeviceInitialized) {
             currentAudioAmplitude = 0.0f;
             return; 
         }
@@ -394,36 +468,5 @@ void AudioSystem::data_callback_member(const void* pInput, ma_uint32 frameCount)
             }
         }
 
-    } else if (currentAudioSourceIndex == 2) {
-        if (!audioFileLoaded || !m_isPlaying) {
-            currentAudioAmplitude = 0.0f;
-            return;
-        }
-
-        ma_uint64 framesRead;
-        std::vector<float> tempBuffer(frameCount * audioFileChannels);
-        ma_decoder_read_pcm_frames(&m_decoder, tempBuffer.data(), frameCount, &framesRead);
-
-        if (framesRead == 0) {
-            currentAudioAmplitude = 0.0f;
-            if (audioFileTotalFrameCount > 0) {
-                ma_decoder_seek_to_pcm_frame(&m_decoder, 0);
-            }
-            return;
-        }
-
-        const float* pSamples = tempBuffer.data();
-        float sumOfAbsoluteSamples = 0.0f;
-        ma_uint32 samplesInChunk = (ma_uint32)framesRead * audioFileChannels;
-
-        if (samplesInChunk == 0) {
-            currentAudioAmplitude = 0.0f;
-            return;
-        }
-
-        for (ma_uint32 i = 0; i < samplesInChunk; ++i) {
-            sumOfAbsoluteSamples += fabsf(pSamples[i]);
-        }
-        currentAudioAmplitude = (sumOfAbsoluteSamples / samplesInChunk) * m_amplitudeScale;
     }
 }

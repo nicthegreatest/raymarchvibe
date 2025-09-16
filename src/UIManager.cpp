@@ -561,7 +561,7 @@ void UIManager::RenderAudioReactivityWindow() {
     ImGui::RadioButton("System Audio (Loopback) - NYI", &currentSourceIndex, 1);
     if (ImGui::RadioButton("Audio File", &currentSourceIndex, 2)) {
          m_audioSystem_ref.SetCurrentAudioSourceIndex(2);
-         if(m_audioSystem_ref.IsCaptureDeviceInitialized()) m_audioSystem_ref.StopCaptureDevice();
+         if(m_audioSystem_ref.IsCaptureDeviceInitialized()) m_audioSystem_ref.StopActiveDevice();
     }
 
     ImGui::Separator();
