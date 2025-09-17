@@ -19,7 +19,7 @@ public:
     VideoRecorder();
     ~VideoRecorder();
 
-    bool start_recording(const std::string& filename, int width, int height, int fps, const std::string& format);
+    bool start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, int input_audio_sample_rate, int input_audio_channels);
     void stop_recording();
     void add_video_frame(const uint8_t* pixels);
     void add_audio_frame(const float* samples, int num_samples);
@@ -42,10 +42,13 @@ private:
     int frame_width;
     int frame_height;
     int frame_rate;
+    int input_audio_sample_rate;
+    int input_audio_channels;
     int64_t next_video_pts = 0;
     int64_t next_audio_pts = 0;
 
     bool recording = false;
+    std::vector<float> audio_input_buffer;
 };
 
 #endif // VIDEO_RECORDER_H

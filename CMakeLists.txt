@@ -1,8 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(RaymarchVibe LANGUAGES C CXX)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/dummy-gl/include")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/dummy-gl/include")
+
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -47,8 +46,7 @@ FetchContent_Declare(
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # Don't build examples
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)  # Don't build tests
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)   # Don't build docs
-set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE) # Disable Wayland support
-set(GLFW_BUILD_X11 OFF CACHE BOOL "" FORCE) # Disable X11 support
+
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW) # Policy for FetchContent with modern GLFW
 
 FetchContent_GetProperties(glfw)
@@ -123,30 +121,34 @@ ExternalProject_Add(
     GIT_REPOSITORY https://github.com/FFmpeg/FFmpeg.git
     GIT_TAG n5.1.2
     UPDATE_COMMAND ""
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure
-        --prefix=${FFMPEG_INSTALL_DIR}
-        --disable-programs
-        --disable-doc
-        --disable-shared
-        --enable-static
-        --disable-everything
-        --enable-encoder=mpeg4
-        --enable-encoder=aac
-        --enable-muxer=mp4
-        --enable-muxer=mov
-        --enable-muxer=mpg
-        --enable-protocol=file
-        --enable-avcodec
-        --enable-avformat
-        --enable-avutil
-        --enable-swresample
-        --enable-swscale
-        --extra-cflags="-fPIC"
-        --disable-x86asm
-        --disable-asm
-        --disable-vulkan
-        --disable-iconv
-        --disable-bzlib
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure 
+        --prefix=${FFMPEG_INSTALL_DIR} 
+        --disable-programs 
+        --disable-doc 
+        --disable-shared 
+        --enable-static 
+        --disable-everything 
+        --enable-encoder=libx264
+        --enable-libx264
+        --enable-gpl
+        --enable-nonfree
+        --enable-encoder=mpeg4 
+        --enable-encoder=aac 
+        --enable-muxer=mp4 
+        --enable-muxer=mov 
+        --enable-muxer=mpg 
+        --enable-protocol=file 
+        --enable-avcodec 
+        --enable-avformat 
+        --enable-avutil 
+        --enable-swresample 
+        --enable-swscale 
+        --extra-cflags="-fPIC" 
+        --disable-x86asm 
+        --disable-asm 
+        --disable-vulkan 
+        --disable-iconv 
+        --disable-bzlib 
         --disable-lzma
     BUILD_COMMAND make -j4
     INSTALL_COMMAND make install
@@ -165,6 +167,7 @@ set(FFMPEG_LIBS
     ${FFMPEG_INSTALL_DIR}/lib/libswscale.a
     ${FFMPEG_INSTALL_DIR}/lib/libswresample.a
     ${FFMPEG_INSTALL_DIR}/lib/libavutil.a
+    x264
     z
 )
 
@@ -179,9 +182,7 @@ target_include_directories(glad_lib PUBLIC
 
 
 
-set(OPENGL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dummy-gl/include)
-set(OPENGL_opengl_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/dummy-gl/lib/libGL.so)
-set(OPENGL_glx_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/dummy-gl/lib/libGLX.so)
+
 
 find_package(OpenGL)
 find_package(Threads REQUIRED)

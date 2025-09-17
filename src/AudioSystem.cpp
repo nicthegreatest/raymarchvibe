@@ -304,6 +304,24 @@ const std::vector<float>& AudioSystem::GetFFTData() const {
 }
 
 
+ma_uint32 AudioSystem::GetCurrentInputSampleRate() const {
+    if (currentAudioSourceIndex == 0) { // Microphone
+        return deviceConfig.sampleRate; // This should be 48000
+    } else if (currentAudioSourceIndex == 2) { // Audio File
+        return audioFileSampleRate;
+    }
+    return 0; // Or a default/error value
+}
+
+ma_uint32 AudioSystem::GetCurrentInputChannels() const {
+    if (currentAudioSourceIndex == 0) { // Microphone
+        return deviceConfig.capture.channels; // This should be 1
+    } else if (currentAudioSourceIndex == 2) { // Audio File
+        return audioFileChannels;
+    }
+    return 0; // Or a default/error value
+}
+
 // --- Setters ---
 void AudioSystem::SetSelectedActualCaptureDeviceIndex(int index) {
     if (captureDevicesEnumerated && index >= 0 && index < static_cast<int>(miniaudioCaptureDevice_StdString_Names.size())) {
@@ -411,12 +429,24 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
             ma_uint64 framesRead;
             ma_decoder_read_pcm_frames(&m_decoder, pOutput, frameCount, &framesRead);
 
+            // Sanitize audio samples before passing to recorder
+            float* pSamples = static_cast<float*>(pOutput);
+            ma_uint32 totalSamples = (ma_uint32)framesRead * m_decoder.outputChannels;
+            for (ma_uint32 i = 0; i < totalSamples; ++i) {
+                if (std::isnan(pSamples[i]) || std::isinf(pSamples[i])) {
+                    // Temporary debug print
+                    #ifdef DEBUG_AUDIO_NAN_INF
+                    std::cerr << "DEBUG: Detected NaN/Inf at index " << i << ", value: " << pSamples[i] << std::endl;
+                    #endif
+                    pSamples[i] = 0.0f; // Replace NaN/Inf with zero
+                }
+            }
+
             if (g_videoRecorder.is_recording()) {
-                g_videoRecorder.add_audio_frame(static_cast<const float*>(pOutput), frameCount);
+                g_videoRecorder.add_audio_frame(static_cast<const float*>(pSamples), framesRead); // Use framesRead here
             }
 
             // This part is for visualization, not playback itself
-            const float* pSamples = static_cast<const float*>(pOutput);
             float sumOfAbsoluteSamples = 0.0f;
             ma_uint32 samplesInChunk = (ma_uint32)framesRead * m_decoder.outputChannels;
             if (samplesInChunk > 0) {

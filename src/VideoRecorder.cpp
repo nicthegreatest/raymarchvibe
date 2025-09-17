@@ -8,7 +8,7 @@ VideoRecorder::~VideoRecorder() {
     stop_recording();
 }
 
-bool VideoRecorder::start_recording(const std::string& filename, int width, int height, int fps, const std::string& format) {
+bool VideoRecorder::start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, int input_audio_sample_rate, int input_audio_channels) {
     if (recording) {
         return false;
     }
@@ -16,6 +16,8 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     frame_width = width;
     frame_height = height;
     frame_rate = fps;
+    this->input_audio_sample_rate = input_audio_sample_rate;
+    this->input_audio_channels = input_audio_channels;
 
     avformat_alloc_output_context2(&format_ctx, nullptr, format.c_str(), filename.c_str());
     if (!format_ctx) {
@@ -23,9 +25,9 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
         return false;
     }
 
-    const AVCodec* video_codec = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
+    const AVCodec* video_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (!video_codec) {
-        std::cerr << "Could not find codec" << std::endl;
+        std::cerr << "Could not find H.264 codec" << std::endl;
         return false;
     }
 
@@ -46,6 +48,8 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     video_codec_ctx->time_base = {1, frame_rate};
     video_codec_ctx->framerate = {frame_rate, 1};
     video_codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    av_opt_set(video_codec_ctx->priv_data, "preset", "medium", 0);
+    av_opt_set(video_codec_ctx->priv_data, "crf", "23", 0);
     video_codec_ctx->gop_size = 10;
     video_codec_ctx->max_b_frames = 1;
 
@@ -62,6 +66,7 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
         std::cerr << "Could not copy codec parameters to stream" << std::endl;
         return false;
     }
+    video_stream->time_base = video_codec_ctx->time_base; // Set stream time_base to codec time_base
 
     const AVCodec* audio_codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
     if (!audio_codec) {
@@ -141,10 +146,12 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     audio_frame->sample_rate = audio_codec_ctx->sample_rate;
     audio_frame->nb_samples = audio_codec_ctx->frame_size;
 
+    audio_frame->nb_samples = audio_codec_ctx->frame_size;
     if (audio_frame->nb_samples == 0) {
-        audio_frame->nb_samples = 1024; // Default frame size
+        // If codec doesn't specify frame_size, use a common one or calculate based on sample rate
+        audio_frame->nb_samples = audio_codec_ctx->sample_rate / 10; // e.g., 100ms of audio
+        if (audio_frame->nb_samples < 1024) audio_frame->nb_samples = 1024; // Ensure minimum
     }
-
 
     if (av_frame_get_buffer(audio_frame, 0) < 0) {
         std::cerr << "Could not allocate audio frame data" << std::endl;
@@ -157,9 +164,9 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
         return false;
     }
 
-    av_opt_set_int(swr_ctx, "in_channel_layout", AV_CH_LAYOUT_MONO, 0);
+    av_opt_set_int(swr_ctx, "in_channel_layout", av_get_default_channel_layout(input_audio_channels), 0);
     av_opt_set_int(swr_ctx, "out_channel_layout", audio_codec_ctx->channel_layout, 0);
-    av_opt_set_int(swr_ctx, "in_sample_rate", 48000, 0);
+    av_opt_set_int(swr_ctx, "in_sample_rate", input_audio_sample_rate, 0);
     av_opt_set_int(swr_ctx, "out_sample_rate", audio_codec_ctx->sample_rate, 0);
     av_opt_set_sample_fmt(swr_ctx, "in_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
     av_opt_set_sample_fmt(swr_ctx, "out_sample_fmt", audio_codec_ctx->sample_fmt, 0);
@@ -198,6 +205,38 @@ void VideoRecorder::stop_recording() {
         }
     }
 
+    // Flush the audio encoder
+    if (audio_codec_ctx) {
+        // Flush resampler first
+        while (swr_convert(swr_ctx, (uint8_t**)audio_frame->data, audio_frame->nb_samples, nullptr, 0) > 0) {
+            audio_frame->pts = next_audio_pts;
+            next_audio_pts += audio_frame->nb_samples;
+            int ret = avcodec_send_frame(audio_codec_ctx, audio_frame);
+            if (ret < 0) {
+                fprintf(stderr, "Error sending flushed audio frame for encoding\n");
+                break;
+            }
+            AVPacket pkt;
+            av_init_packet(&pkt);
+            while (avcodec_receive_packet(audio_codec_ctx, &pkt) >= 0) {
+                pkt.stream_index = audio_stream->index;
+                av_interleaved_write_frame(format_ctx, &pkt);
+                av_packet_unref(&pkt);
+            }
+        }
+
+        // Then flush the encoder
+        if (avcodec_send_frame(audio_codec_ctx, nullptr) >= 0) {
+            AVPacket pkt;
+            av_init_packet(&pkt);
+            while (avcodec_receive_packet(audio_codec_ctx, &pkt) >= 0) {
+                pkt.stream_index = audio_stream->index;
+                av_interleaved_write_frame(format_ctx, &pkt);
+                av_packet_unref(&pkt);
+            }
+        }
+    }
+
     if (format_ctx) {
         av_write_trailer(format_ctx);
     }
@@ -211,10 +250,11 @@ void VideoRecorder::add_video_frame(const uint8_t* pixels) {
         return;
     }
 
-    const int stride = frame_width * 4;
-    sws_scale(sws_ctx, &pixels, &stride, 0, frame_height, video_frame->data, video_frame->linesize);
+    const int src_stride[1] = { -frame_width * 4 }; // Negative stride for bottom-up image
+    const uint8_t* src_slices[1] = { pixels + (frame_height - 1) * frame_width * 4 }; // Point to the last row
+    sws_scale(sws_ctx, src_slices, src_stride, 0, frame_height, video_frame->data, video_frame->linesize);
 
-    video_frame->pts = next_video_pts++;
+    video_frame->pts = av_rescale_q(next_video_pts++, video_codec_ctx->time_base, video_stream->time_base);
 
     int ret = avcodec_send_frame(video_codec_ctx, video_frame);
     if (ret < 0) {
@@ -245,41 +285,65 @@ void VideoRecorder::add_audio_frame(const float* samples, int num_samples) {
         return;
     }
 
-    uint8_t* converted_samples[2] = { nullptr, nullptr };
-    converted_samples[0] = (uint8_t*)audio_frame->data[0];
-    converted_samples[1] = (uint8_t*)audio_frame->data[1];
+    // Append incoming samples to the buffer
+    audio_input_buffer.insert(audio_input_buffer.end(), samples, samples + num_samples * input_audio_channels);
 
-    const int out_samples = swr_convert(swr_ctx, converted_samples, audio_frame->nb_samples, (const uint8_t**)&samples, num_samples);
-    if (out_samples < 0) {
-        std::cerr << "Error while converting" << std::endl;
-        return;
-    }
+    // Process buffer in chunks
+    while (audio_input_buffer.size() >= (size_t)input_audio_channels * swr_get_delay(swr_ctx, input_audio_sample_rate)) {
+        // Calculate how many input samples are needed to produce one audio_frame->nb_samples output samples
+        // This is the number of samples *per channel* for the input.
+        int input_samples_needed_per_channel = av_rescale_rnd(audio_frame->nb_samples, input_audio_sample_rate, audio_codec_ctx->sample_rate, AV_ROUND_UP);
 
-    audio_frame->pts = next_audio_pts;
-    next_audio_pts += audio_frame->nb_samples;
-
-    int ret = avcodec_send_frame(audio_codec_ctx, audio_frame);
-    if (ret < 0) {
-        fprintf(stderr, "Error sending a frame for encoding\n");
-        return;
-    }
-
-    AVPacket pkt;
-    av_init_packet(&pkt);
-
-    ret = 0;
-    while (ret >= 0) {
-        ret = avcodec_receive_packet(audio_codec_ctx, &pkt);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-            break;
-        } else if (ret < 0) {
-            fprintf(stderr, "Error during encoding\n");
-            break;
+        // Ensure we have enough samples in the buffer for the current input chunk
+        if ((size_t)input_samples_needed_per_channel * input_audio_channels > audio_input_buffer.size()) {
+            break; // Not enough samples in buffer yet
         }
 
-        pkt.stream_index = audio_stream->index;
-        av_interleaved_write_frame(format_ctx, &pkt);
-        av_packet_unref(&pkt);
+        // Prepare input for swr_convert
+        const float* current_input_samples_ptr = audio_input_buffer.data();
+
+        // Directly use audio_frame->data and audio_frame->linesize for swr_convert
+        int out_samples = swr_convert(swr_ctx, audio_frame->data, audio_frame->nb_samples,
+                                      (const uint8_t**)&current_input_samples_ptr, input_samples_needed_per_channel);
+        if (out_samples < 0) {
+            std::cerr << "Error while converting audio samples" << std::endl;
+            // Clear buffer to avoid infinite loop on error
+            audio_input_buffer.clear();
+            return;
+        }
+
+        // If we got output samples, send them to encoder
+        if (out_samples > 0) {
+            audio_frame->nb_samples = out_samples;
+            audio_frame->pts = next_audio_pts;
+            next_audio_pts += out_samples;
+
+            int ret = avcodec_send_frame(audio_codec_ctx, audio_frame);
+            if (ret < 0) {
+                fprintf(stderr, "Error sending audio frame for encoding\n");
+            }
+
+            AVPacket pkt;
+            av_init_packet(&pkt);
+
+            ret = 0;
+            while (ret >= 0) {
+                ret = avcodec_receive_packet(audio_codec_ctx, &pkt);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    break;
+                } else if (ret < 0) {
+                    fprintf(stderr, "Error during audio encoding\n");
+                    break;
+                }
+
+                pkt.stream_index = audio_stream->index;
+                av_interleaved_write_frame(format_ctx, &pkt);
+                av_packet_unref(&pkt);
+            }
+        }
+
+        // Remove processed samples from buffer
+        audio_input_buffer.erase(audio_input_buffer.begin(), audio_input_buffer.begin() + (size_t)input_samples_needed_per_channel * input_audio_channels);
     }
 }
 

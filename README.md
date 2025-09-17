@@ -69,10 +69,12 @@ System Libraries (typically needed for Linux builds):
 2.  Install Dependencies (if not already present):
 
     bash
+    # For Debian/Ubuntu-based systems:
     sudo apt update
-    sudo apt install build-essential cmake libgl1-mesa-dev libglfw3-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev
-    
-    (Package names may vary slightly on other distributions. For RHEL/Fedora use sudo dnf install.)
+    sudo apt install build-essential cmake libgl1-mesa-dev libglfw3-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev libx264-dev
+
+    # For Fedora/RHEL-based systems:
+    sudo dnf install build-essential cmake mesa-libGL-devel glfw-devel libX11-devel libXrandr-devel libXinerama-devel libXcursor-devel libXi-devel openssl-devel x264-devel
 
 3.  Configure with CMake (cmake from same dir you placed CMakeLists.txt which should be raymarchvibe/):
 

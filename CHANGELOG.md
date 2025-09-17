@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 - **Feature**: Implemented amplitude scaling for audio reactivity.
 
 ### Fixed
+- **Bugfix**: Video recording output length was 10x longer than actual duration due to incorrect timebase scaling in FFmpeg.
+- **Bugfix**: Video recording output was upside-down due to incorrect stride handling in `sws_scale`.
+- **Bugfix**: Resolved `NaN/+-Inf` errors in audio encoding by sanitizing audio samples from file input.
+- **Bugfix**: Eliminated segmentation fault on recording start by correcting `AVFrame` buffer handling for audio.
+- **Bugfix**: Resolved "Failed to create GLFW window" runtime error by removing leftover "dummy-gl" references and re-enabling GLFW's X11/Wayland support in `CMakeLists.txt`. The "dummy-gl" setup was a remnant from an AI coding agent's virtual environment, which was incompatible with the workstation's actual graphics environment.
 - **Bugfix**: Resolved an issue where the `fractal_tree_audio.frag` shader was rendering a blank black screen due to a logic error in the shader code (`length(p.y)` instead of `abs(p.y)`).
 - **Bugfix**: Corrected the issue where `iResolution` and `iTime` were undeclared in shaders by ensuring standard uniforms are always injected, regardless of Shadertoy mode.
 - **Bugfix**: Fixed a bug where the "Shadertoy Mode" flag was not being reset when loading new shaders, causing compilation errors.
@@ -29,3 +34,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Cleanup**: Removed verbose debugging logs from the console to improve output clarity.
 - **Changed**: Added more detailed OpenGL error logging to the main render loop to help diagnose future rendering issues.
+
+### Known Issues
+- **Build Issue**: CMake parsing error in `CMakeLists.txt` related to `CONFIGURE_COMMAND` for FFmpeg's `ExternalProject_Add` when enabling `libx264`. This prevents `libx264` from being built and used.
+- **Video Issue**: Video output is a blank black screen when recording. This is likely due to the `MPEG4` encoder or its configuration, as `libx264` is currently not building.
+- **Audio Issue**: Audio from MP3/WAV file input is still choppy and slowed down in recordings, despite `NaN/+-Inf` errors being resolved and buffering logic implemented. Microphone audio records correctly.
