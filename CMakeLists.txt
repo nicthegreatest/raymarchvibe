@@ -144,10 +144,10 @@ ExternalProject_Add(
         --extra-cflags="-fPIC"
         --disable-x86asm
         --disable-asm
-        --disable-vulkan
         --disable-iconv
         --disable-bzlib
         --disable-lzma
+        --disable-vulkan
     BUILD_COMMAND make -j4
     INSTALL_COMMAND make install
 )
@@ -158,7 +158,6 @@ add_dependencies(ffmpeg ffmpeg_project)
 
 target_include_directories(ffmpeg INTERFACE ${FFMPEG_INSTALL_DIR}/include)
 
-# Find all the static libraries in the ffmpeg install lib dir
 set(FFMPEG_LIBS
     ${FFMPEG_INSTALL_DIR}/lib/libavformat.a
     ${FFMPEG_INSTALL_DIR}/lib/libavcodec.a
