@@ -50,6 +50,8 @@ public:
     float GetMidVolume() const;
     float GetHighVolume() const;
     const std::array<float, 4>& GetVolumeData() const;
+    ma_uint32 GetCurrentInputSampleRate() const;
+    ma_uint32 GetCurrentInputChannels() const;
 
     // Setters
     void SetSelectedActualCaptureDeviceIndex(int index);

@@ -58,6 +58,11 @@ void processInput(GLFWwindow *window);
 void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 
+// New: GLFW error callback function
+void glfw_error_callback(int error, const char* description) {
+    std::cerr << "GLFW Error (" << error << "): " << description << std::endl;
+}
+
 void RenderMenuBar();
 void RenderShaderEditorWindow();
 void RenderEffectPropertiesWindow();
@@ -443,7 +448,9 @@ void RenderMenuBar() {
                 ImGui::Text("Status: Recording...");
             } else {
                 if (ImGui::Button("Start Recording")) {
-                    g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx]);
+                    g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx],
+                                                    g_audioSystem.GetCurrentInputSampleRate(),
+                                                    g_audioSystem.GetCurrentInputChannels());
                 }
                 ImGui::Text("Status: Idle");
             }
@@ -1387,7 +1394,19 @@ void RenderAudioReactivityWindow() {
 
 // Main Application
 int main() {
-    glfwInit();
+    // Set GLFW error callback BEFORE glfwInit()
+    glfwSetErrorCallback(glfw_error_callback);
+
+    if (!glfwInit()) {
+        std::cerr << "Failed to initialize GLFW" << std::endl;
+        return -1;
+    }
+
+    // Add GLFW window hints for OpenGL 3.3 Core Profile
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "RaymarchVibe", NULL, NULL);
     if (window == NULL) {
         std::cerr << "Failed to create GLFW window" << std::endl;
@@ -1619,7 +1638,7 @@ int main() {
         if (finalOutputEffect) {
             checkGLError("Before Final RenderFullscreenTexture");
             GLuint finalTextureID = finalOutputEffect->GetOutputTexture();
-            std::cout << "Attempting to render final texture ID: " << finalTextureID << " from effect: " << finalOutputEffect->name << std::endl;
+            
             g_renderer.RenderFullscreenTexture(finalTextureID);
             checkGLError("After Final RenderFullscreenTexture");
         } else {
