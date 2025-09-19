@@ -72,8 +72,10 @@ void RenderNodeEditorWindow();
 void RenderConsoleWindow();
 void RenderHelpWindow();
 void RenderAudioReactivityWindow();
+void RenderShadertoyWindow();
 
 std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects);
+
 TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log);
 void ClearErrorMarkers();
 static std::string LoadFileContent(const std::string& path, std::string& errorMsg); // Forward declaration
@@ -163,6 +165,9 @@ static bool g_showTimelineWindow = false;
 static bool g_showNodeEditorWindow = false;
 static bool g_showAudioWindow = false;
 static bool g_showHelpWindow = false;
+static bool g_showShadertoyWindow = false;
+
+static char g_shadertoyApiKeyBuffer[256] = ""; // For user's API key
 
 static bool g_enableAudioLink = false; // Changed to false
 static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
@@ -376,6 +381,7 @@ void RenderMenuBar() {
             ImGui::MenuItem("Timeline", nullptr, &g_showTimelineWindow);
             ImGui::MenuItem("Node Editor", nullptr, &g_showNodeEditorWindow);
             ImGui::MenuItem("Audio Reactivity", nullptr, &g_showAudioWindow);
+            ImGui::MenuItem("Shadertoy", nullptr, &g_showShadertoyWindow);
             ImGui::Separator();
             ImGui::MenuItem("Toggle All GUI", "Spacebar", &g_showGui);
             ImGui::EndMenu();
@@ -563,72 +569,6 @@ void RenderShaderEditorWindow() {
     ImGui::Separator(); // Separator after the toolbar
 
     g_editor.Render("TextEditor");
-    ImGui::Separator();
-    ImGui::Text("Fetch Shadertoy:");
-    ImGui::SameLine();
-    ImGui::Text("Mouse: (%.1f, %.1f)", g_mouseState[0], g_mouseState[1]);
-
-    ImGui::Separator();
-
-    // --- Shadertoy Fetching UI ---
-    if (ImGui::CollapsingHeader("Load from Shadertoy")) {
-        static char shadertoyIdBuffer[256] = ""; // Moved static buffer here
-        ImGui::InputTextWithHint("##ShadertoyInput", "Shadertoy ID (e.g. Ms2SD1) or Full URL", shadertoyIdBuffer, sizeof(shadertoyIdBuffer));
-        ImGui::SameLine();
-        if (ImGui::Button("Fetch & Apply##ShadertoyApply")) {
-            std::string idOrUrl = shadertoyIdBuffer;
-            if (!idOrUrl.empty()) {
-                std::string shaderId = ShadertoyIntegration::ExtractId(idOrUrl);
-                if (!shaderId.empty()) {
-                    g_consoleLog = "Fetching Shadertoy " + shaderId + "...";
-                    std::string fetchError;
-                    // API Key can be a global static or configured elsewhere if needed
-                    std::string fetchedCode = ShadertoyIntegration::FetchCode(shaderId, "", fetchError);
-
-                    if (!fetchedCode.empty()) {
-                        ShaderEffect* se = dynamic_cast<ShaderEffect*>(g_selectedEffect);
-                        if (!se) { // If no effect or wrong type, create a new one
-                            auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT, true);
-                            newEffect->name = "Shadertoy - " + shaderId;
-                            g_scene.push_back(std::move(newEffect));
-                            g_selectedEffect = g_scene.back().get();
-                            se = dynamic_cast<ShaderEffect*>(g_selectedEffect);
-                        }
-
-                        if (se) {
-                            se->SetSourceFilePath("shadertoy://" + shaderId);
-                            se->LoadShaderFromSource(fetchedCode); // This sets m_shaderSourceCode
-                            se->SetShadertoyMode(true); // Explicitly set Shadertoy mode
-                            se->Load(); // This compiles, links, fetches uniforms, parses controls
-
-                            g_editor.SetText(se->GetShaderSource());
-                            ClearErrorMarkers();
-                            const std::string& compileLog = se->GetCompileErrorLog();
-                            if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
-                                g_editor.SetErrorMarkers(ParseGlslErrorLog(compileLog));
-                                g_consoleLog = "Shadertoy '" + shaderId + "' fetched, but application failed. Log:\n" + compileLog;
-                            } else {
-                                g_consoleLog = "Shadertoy '" + shaderId + "' fetched and applied!";
-                            }
-                        }
-                    } else {
-                         g_consoleLog = fetchError;
-                         if (g_consoleLog.empty()) {
-                            g_consoleLog = "Failed to retrieve code for Shadertoy ID: " + shaderId;
-                         }
-                    }
-                } else {
-                    g_consoleLog = "Invalid Shadertoy ID or URL format.";
-                }
-            } else {
-                g_consoleLog = "Please enter a Shadertoy ID or URL.";
-            }
-        }
-        // Note: "Load to Editor" button from old code can be added if distinct functionality is needed.
-        // For now, "Fetch & Apply" covers the main use case.
-        ImGui::TextWrapped("Note: Requires network. Fetches shaders by ID from Shadertoy.com.");
-        ImGui::Spacing();
-    }
 
     // --- Sample Shader Loading UI ---
     if (ImGui::CollapsingHeader("Load Sample Shader")) {
@@ -1348,6 +1288,69 @@ void RenderHelpWindow() {
     ImGui::End();
 }
 
+void RenderShadertoyWindow() {
+    if (!g_showShadertoyWindow) return;
+
+    ImGui::Begin("Shadertoy", &g_showShadertoyWindow);
+
+    static char shadertoyIdBuffer[256] = "";
+
+    ImGui::InputTextWithHint("API Key", "Enter your key", g_shadertoyApiKeyBuffer, sizeof(g_shadertoyApiKeyBuffer), ImGuiInputTextFlags_Password);
+    ImGui::InputTextWithHint("ID/URL", "e.g., Ms2SD1 or full URL", shadertoyIdBuffer, sizeof(shadertoyIdBuffer));
+    
+    ImGui::Separator();
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::Button("Load", ImVec2(-1, 0))) { // Full width button
+        std::string idOrUrl = shadertoyIdBuffer;
+        if (!idOrUrl.empty()) {
+            std::string shaderId = ShadertoyIntegration::ExtractId(idOrUrl);
+            if (!shaderId.empty()) {
+                g_consoleLog = "Fetching Shadertoy " + shaderId + "...";
+                std::string fetchError;
+                std::string apiKey = g_shadertoyApiKeyBuffer;
+                std::string fetchedCode = ShadertoyIntegration::FetchCode(shaderId, apiKey, fetchError);
+
+                if (!fetchedCode.empty()) {
+                    auto newEffect = std::make_unique<ShaderEffect>("", SCR_WIDTH, SCR_HEIGHT, true);
+                    newEffect->name = "Shadertoy - " + shaderId;
+                    newEffect->SetSourceFilePath("shadertoy://" + shaderId);
+                    newEffect->LoadShaderFromSource(fetchedCode);
+                    newEffect->SetShadertoyMode(true);
+                    newEffect->Load();
+
+                    const std::string& compileLog = newEffect->GetCompileErrorLog();
+                    if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
+                        g_consoleLog = "Shadertoy '" + shaderId + "' fetched, but compilation failed. Log:\n" + compileLog;
+                    } else {
+                        g_editor.SetText(newEffect->GetShaderSource());
+                        ClearErrorMarkers();
+                        g_scene.push_back(std::move(newEffect));
+                        g_selectedEffect = g_scene.back().get();
+                        g_consoleLog = "Shadertoy '" + shaderId + "' fetched and applied!";
+                        g_showShadertoyWindow = false; // Close window on success
+                    }
+                } else {
+                    g_consoleLog = fetchError;
+                    if (g_consoleLog.empty()) {
+                        g_consoleLog = "Failed to retrieve code for Shadertoy ID: " + shaderId + ". Check API key and ID.";
+                    }
+                }
+            } else {
+                g_consoleLog = "Invalid Shadertoy ID or URL format.";
+            }
+        } else {
+            g_consoleLog = "Please enter a Shadertoy ID or URL.";
+        }
+    }
+    ImGui::PopStyleColor(4);
+
+    ImGui::End();
+}
+
 // Helper struct to manage and format time values, like a UI-specific hook.
 struct ChronoTimer {
     float currentTime = 0.0f;
@@ -1425,7 +1428,12 @@ void RenderAudioReactivityWindow() {
                 ImGuiFileDialog::Instance()->OpenDialog("ChooseAudioFileDlgKey", "Choose Audio File", ".mp3,.wav", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
             }
             ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
             if (ImGui::Button("Load##AudioFile")) { g_audioSystem.LoadWavFile(audioFilePath); }
+            ImGui::PopStyleColor(4);
             ImGui::Text("Status: %s", g_audioSystem.IsAudioFileLoaded() ? "Loaded" : "Not Loaded");
 
             if (g_audioSystem.IsAudioFileLoaded()) {
@@ -1458,12 +1466,11 @@ void RenderAudioReactivityWindow() {
     }
 
     ImGui::Separator();
-    ImGui::Text("Live Amplitude:");
     ImGui::ProgressBar(g_audioSystem.GetCurrentAmplitude(), ImVec2(-1.0f, 0.0f));
 
     const auto& fftData = g_audioSystem.GetFFTData();
     if (!fftData.empty()) {
-        ImGui::PlotLines("FFT", fftData.data(), fftData.size(), 0, NULL, 0.0f, 1.0f, ImVec2(0, 80));
+        ImGui::PlotLines("##FFT", fftData.data(), fftData.size(), 0, NULL, 0.0f, 1.0f, ImVec2(0, 80));
     }
     ImGui::End();
 }
@@ -1683,6 +1690,7 @@ int main() {
             if (g_showNodeEditorWindow) RenderNodeEditorWindow();
             if (g_showAudioWindow) RenderAudioReactivityWindow();
             if (g_showHelpWindow) RenderHelpWindow();
+            if (g_showShadertoyWindow) RenderShadertoyWindow();
         }
 
         int display_w, display_h;

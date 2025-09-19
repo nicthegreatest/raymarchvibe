@@ -22,11 +22,9 @@ public:
 private:
     std::unordered_map<std::string, std::function<void()>> m_themes;
 
-    void setDarkThemeColors();
-    void setModernDarkColors();
     void setCatpuccinMochaColors();
     void setBessDarkColors();
-    void setFluentUIColors();
+    void setGrayGrayColors();
     // Add any other private theme-setting methods if new themes are added directly in themes.cpp
 };
 

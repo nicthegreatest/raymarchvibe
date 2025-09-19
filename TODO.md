@@ -34,3 +34,43 @@ This file outlines the plan to address issues identified during a code review, w
     - **RAII for FFmpeg Resources:** Wrapped raw FFmpeg pointers in `VideoRecorder` with `std::unique_ptr` and custom deleters to prevent resource leaks.
     - **Decouple Audio/Video Systems:** Implemented an observer pattern to remove the direct dependency of `AudioSystem` on `g_videoRecorder`.
     - **Improve Encapsulation & Remove Magic Numbers:** Refactored `AudioSystem` to use a strongly-typed `enum class` for audio sources and improved its public interface.
+
+## Audio Reactivity Enhancement Plan
+
+**Goal:** Map extracted frequency bands to shader uniforms for real-time visual modulation.
+
+**API Definition for Audio-Reactive Shader Parameters:**
+
+We will expose frequency band data to shaders via a uniform array:
+`uniform float iAudioBands[4];`
+
+Where:
+- `iAudioBands[0]` will represent the **Bass** frequency band.
+- `iAudioBands[1]` will represent the **Low-Mids** frequency band.
+- `iAudioBands[2]` will represent the **High-Mids** frequency band.
+- `iAudioBands[3]` will represent the **Highs** frequency band.
+
+**Implementation Plan:**
+
+1.  **Define Frequency Band Ranges:**
+    *   In `AudioSystem.h`, define constants for the frequency ranges that correspond to indices in the `m_fftData` array. This will involve mapping FFT bin indices to actual frequencies based on the sample rate (48000 Hz) and `FFT_SIZE` (1024).
+    *   Example mapping (approximate):
+        *   Bass (0-250 Hz): Bins 0-5
+        *   Low-Mids (250-2000 Hz): Bins 6-42
+        *   High-Mids (2000-8000 Hz): Bins 43-170
+        *   Highs (8000-20000 Hz): Bins 171-426
+
+2.  **Calculate Band Magnitudes:**
+    *   In `AudioSystem.cpp`, within `ProcessAudio`, after computing `m_fftData`, calculate the average magnitude for each defined frequency band.
+    *   Store these calculated band magnitudes in new member variables (e.g., `std::array<float, 4> m_audioBands;`).
+
+3.  **Expose Band Magnitudes to Shaders:**
+    *   In `ShaderEffect.h`, add a new uniform location for the audio bands (e.g., `GLint m_iAudioBandsLoc;`).
+    *   In `ShaderEffect.cpp`, during shader compilation, retrieve this uniform location.
+    *   In `ShaderEffect::Update` (or a new method called from `Update`), set the `iAudioBands` uniform array using `glUniform1fv` with the data from `AudioSystem`.
+
+4.  **Update `main.cpp`:**
+    *   In the main loop, pass the `m_audioBands` data from `g_audioSystem` to the currently active `ShaderEffect` (similar to how `iAudioAmp` is passed).
+
+5.  **Shader Integration (Documentation/Examples):**
+    *   Provide example GLSL code demonstrating how to use the `iAudioBands` uniform in shaders.
