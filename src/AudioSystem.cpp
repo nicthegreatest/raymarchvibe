@@ -147,22 +147,6 @@ void AudioSystem::LoadWavFile(const char* filePath) {
     }
 }
 
-void AudioSystem::ProcessAudio() {
-    if (currentAudioSource != AudioSource::Microphone) {
-        std::fill(m_fftData.begin(), m_fftData.end(), 0.0f);
-        return;
-    }
-    const size_t hopSize = FFT_SIZE / 2;
-    if (m_mic_fft_buffer.size() >= FFT_SIZE) {
-        std::copy(m_mic_fft_buffer.end() - FFT_SIZE, m_mic_fft_buffer.end(), m_fft_input.begin());
-        auto fft_output = dj::fft1d(m_fft_input, dj::fft_dir::DIR_FWD);
-        for (int i = 0; i < FFT_SIZE / 2; ++i) {
-            m_fftData[i] = std::abs(fft_output[i]);
-        }
-        m_mic_fft_buffer.erase(m_mic_fft_buffer.begin(), m_mic_fft_buffer.begin() + hopSize);
-    }
-}
-
 void AudioSystem::RegisterListener(IAudioListener* listener) {
     if (listener) m_listeners.push_back(listener);
 }
@@ -286,6 +270,15 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
                 listener->onAudioData(pSamples, framesRead, m_decoder.outputChannels, m_decoder.outputSampleRate);
             }
 
+            // Feed the FFT buffer (mix to mono if stereo)
+            if (m_decoder.outputChannels == 1) {
+                m_file_fft_buffer.insert(m_file_fft_buffer.end(), pSamples, pSamples + framesRead);
+            } else if (m_decoder.outputChannels >= 2) {
+                for (ma_uint64 i = 0; i < framesRead; ++i) {
+                    m_file_fft_buffer.push_back((pSamples[i * 2] + pSamples[i * 2 + 1]) * 0.5f);
+                }
+            }
+
             ma_uint32 totalSamples = (ma_uint32)framesRead * m_decoder.outputChannels;
             float sumOfAbsoluteSamples = 0.0f;
             for (ma_uint32 i = 0; i < totalSamples; ++i) sumOfAbsoluteSamples += fabsf(pSamples[i]);
@@ -316,6 +309,36 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
         float sumOfAbsoluteSamples = 0.0f;
         for (ma_uint32 i = 0; i < samplesToProcess; ++i) sumOfAbsoluteSamples += fabsf(inputFrames[i]);
         currentAudioAmplitude = samplesToProcess > 0 ? (sumOfAbsoluteSamples / samplesToProcess) * m_amplitudeScale : 0.0f;
+    }
+}
+
+void AudioSystem::ProcessAudio() {
+    const size_t hopSize = FFT_SIZE / 2; // 50% overlap
+    std::vector<float>* buffer_to_process = nullptr;
+
+    if (currentAudioSource == AudioSource::Microphone) {
+        buffer_to_process = &m_mic_fft_buffer;
+    } else if (currentAudioSource == AudioSource::AudioFile) {
+        buffer_to_process = &m_file_fft_buffer;
+    } else {
+        std::fill(m_fftData.begin(), m_fftData.end(), 0.0f);
+        return;
+    }
+
+    if (buffer_to_process && buffer_to_process->size() >= FFT_SIZE) {
+        // Copy the latest FFT_SIZE samples into the input buffer
+        std::copy(buffer_to_process->end() - FFT_SIZE, buffer_to_process->end(), m_fft_input.begin());
+
+        // Perform FFT
+        auto fft_output = dj::fft1d(m_fft_input, dj::fft_dir::DIR_FWD);
+        for (int i = 0; i < FFT_SIZE / 2; ++i) {
+            m_fftData[i] = std::abs(fft_output[i]);
+        }
+
+        // Remove old samples from the front of the circular buffer
+        buffer_to_process->erase(buffer_to_process->begin(), buffer_to_process->begin() + hopSize);
+    } else {
+        // Not enough data, can optionally clear or just leave stale
     }
 }
 

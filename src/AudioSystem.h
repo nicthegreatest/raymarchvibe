@@ -97,6 +97,7 @@ private:
 
     // FFT related members
     std::vector<float> m_mic_fft_buffer; // Circular buffer for microphone FFT analysis
+    std::vector<float> m_file_fft_buffer; // Circular buffer for audio file FFT analysis
     std::vector<std::complex<float>> m_fft_input;
     std::vector<float> m_fftData;
 
