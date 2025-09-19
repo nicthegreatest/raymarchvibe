@@ -20,6 +20,7 @@
 #include <queue>
 #include <nlohmann/json.hpp> // For scene save/load
 #include <filesystem> // For std::filesystem::path
+#include <chrono> // For recording timer
 
 // --- Core App Headers ---
 #include "Effect.h"
@@ -150,6 +151,9 @@ VideoRecorder g_videoRecorder;
 static Bess::Config::Themes g_themes; // Global Themes object
 static bool g_showGui = true;
 
+// Recording state
+static std::chrono::steady_clock::time_point g_recordingStartTime;
+
 // Window visibility flags
 static bool g_showShaderEditorWindow = true;
 // static bool g_showEffectPropertiesWindow = true; // Removed, integrated into Node Editor
@@ -183,14 +187,11 @@ static TimelineState g_timelineState;
 static const std::vector<std::pair<std::string, std::string>> g_demoShaders = {
     {"Plasma V1", "shaders/raymarch_v1.frag"},
     {"Plasma V2", "shaders/raymarch_v2.frag"},
-    {"Passthrough", "shaders/passthrough.frag"},
-    {"Texture Test", "shaders/texture.frag"},
     {"Sample: Fractal 1", "shaders/samples/fractal1.frag"},
     {"Sample: Fractal 2", "shaders/samples/fractal2.frag"},
     {"Sample: Fractal 3", "shaders/samples/fractal3.frag"},
     {"Sample: Simple Red", "shaders/samples/simple_red.frag"},
-    {"Sample: UV Pattern", "shaders/samples/uv_pattern.frag"},
-    {"Sample: Cube Test", "shaders/samples/tester_cube.frag"}
+    {"Sample: UV Pattern", "shaders/samples/uv_pattern.frag"}
 };
 
 // Shader Templates
@@ -334,36 +335,23 @@ void RenderMenuBar() {
             ImGui::Separator();
             // --- Load Demo Shader Submenu ---
             if (ImGui::BeginMenu("Load Demo Shader")) {
-                for (const auto& demo : g_demoShaders) { // Use global g_demoShaders
+                for (const auto& demo : g_demoShaders) {
                     if (ImGui::MenuItem(demo.first.c_str())) {
-                        if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
-                            // Using ShaderEffect's internal loader which also sets file path
-                            if (se->LoadShaderFromFile(demo.second)) {
-                                se->Load(); // This calls ApplyShaderCode
-                                g_editor.SetText(se->GetShaderSource());
-                                ClearErrorMarkers();
-                                g_consoleLog = "Loaded demo shader: " + demo.first;
-                                if (!se->GetCompileErrorLog().empty() && se->GetCompileErrorLog().find("Successfully") == std::string::npos && se->GetCompileErrorLog().find("applied successfully") == std::string::npos) {
-                                    g_consoleLog += "\nCompile Log: " + se->GetCompileErrorLog();
-                                    g_editor.SetErrorMarkers(ParseGlslErrorLog(se->GetCompileErrorLog()));
-                                }
-                            } else {
-                                g_consoleLog = "Error loading demo shader " + demo.first + ". Log: " + se->GetCompileErrorLog();
-                            }
+                        // Always create a new effect for a demo shader
+                        auto newEffect = std::make_unique<ShaderEffect>(demo.second, SCR_WIDTH, SCR_HEIGHT);
+                        newEffect->name = demo.first;
+                        newEffect->Load(); // This will load from file path and apply
+                        
+                        const std::string& compileLog = newEffect->GetCompileErrorLog();
+                        if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
+                            g_consoleLog = "Error loading demo shader " + demo.first + ". Log: " + compileLog;
+                            // Don't add the broken effect to the scene
                         } else {
-                             // Create a new ShaderEffect if none is selected
-                            auto newEffect = std::make_unique<ShaderEffect>(demo.second, SCR_WIDTH, SCR_HEIGHT);
-                            newEffect->name = demo.first;
-                            newEffect->Load(); // This will load from file path and apply
-                            if (!newEffect->GetCompileErrorLog().empty() && newEffect->GetCompileErrorLog().find("Successfully") == std::string::npos && newEffect->GetCompileErrorLog().find("applied successfully") == std::string::npos) {
-                                g_consoleLog = "Error loading demo shader " + demo.first + " into new effect. Log: " + newEffect->GetCompileErrorLog();
-                            } else {
-                                g_editor.SetText(newEffect->GetShaderSource());
-                                ClearErrorMarkers();
-                                g_scene.push_back(std::move(newEffect));
-                                g_selectedEffect = g_scene.back().get(); // Select the new effect
-                                g_consoleLog = "Loaded demo shader '" + demo.first + "' into a new effect.";
-                            }
+                            g_editor.SetText(newEffect->GetShaderSource());
+                            ClearErrorMarkers();
+                            g_scene.push_back(std::move(newEffect));
+                            g_selectedEffect = g_scene.back().get(); // Select the new effect
+                            g_consoleLog = "Loaded demo shader '" + demo.first + "' into a new effect.";
                         }
                     }
                 }
@@ -442,18 +430,61 @@ void RenderMenuBar() {
             }
 
             if (g_videoRecorder.is_recording()) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
                 if (ImGui::Button("Stop Recording")) {
                     g_videoRecorder.stop_recording();
                 }
-                ImGui::Text("Status: Recording...");
+                ImGui::PopStyleColor(4);
+                ImGui::SameLine();
+                
+                auto duration = std::chrono::steady_clock::now() - g_recordingStartTime;
+                auto hours = std::chrono::duration_cast<std::chrono::hours>(duration);
+                duration -= hours;
+                auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration);
+                duration -= minutes;
+                auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
+                ImGui::Text("Status: Recording... %02d:%02d:%02d", (int)hours.count(), (int)minutes.count(), (int)seconds.count());
+
             } else {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
                 if (ImGui::Button("Start Recording")) {
-                    g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx],
+                    if (std::filesystem::exists(filename)) {
+                        ImGui::OpenPopup("Overwrite File?");
+                    } else {
+                        g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx],
                                                     g_audioSystem.GetCurrentInputSampleRate(),
                                                     g_audioSystem.GetCurrentInputChannels());
+                        g_recordingStartTime = std::chrono::steady_clock::now();
+                    }
                 }
+                ImGui::PopStyleColor(4);
                 ImGui::Text("Status: Idle");
             }
+
+            // Overwrite confirmation popup
+            if (ImGui::BeginPopupModal("Overwrite File?", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::Text("File '%s' already exists.\nDo you want to overwrite it?", filename);
+                ImGui::Separator();
+                if (ImGui::Button("Overwrite", ImVec2(120, 0))) {
+                    g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx],
+                                                g_audioSystem.GetCurrentInputSampleRate(),
+                                                g_audioSystem.GetCurrentInputChannels());
+                    g_recordingStartTime = std::chrono::steady_clock::now();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+
             ImGui::EndMenu();
         }
 
@@ -1317,27 +1348,66 @@ void RenderHelpWindow() {
     ImGui::End();
 }
 
+// Helper struct to manage and format time values, like a UI-specific hook.
+struct ChronoTimer {
+    float currentTime = 0.0f;
+    float duration = 0.0f;
+    float progress = 0.0f;
+
+    void update(float newProgress, float totalDuration) {
+        progress = newProgress;
+        duration = totalDuration;
+        currentTime = progress * duration;
+    }
+
+    std::string getFormattedTime(float timeInSeconds) {
+        if (timeInSeconds < 0) timeInSeconds = 0;
+        int hours = static_cast<int>(timeInSeconds) / 3600;
+        timeInSeconds -= hours * 3600;
+        int minutes = static_cast<int>(timeInSeconds) / 60;
+        timeInSeconds -= minutes * 60;
+        int seconds = static_cast<int>(timeInSeconds);
+        
+        char buffer[12];
+        snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", hours, minutes, seconds);
+        return std::string(buffer);
+    }
+};
+
 void RenderAudioReactivityWindow() {
     ImGui::Begin("Audio Reactivity", &g_showAudioWindow);
     ImGui::Checkbox("Enable Audio Link (iAudioAmp)", &g_enableAudioLink);
     ImGui::Separator();
-    int currentSourceIndex = g_audioSystem.GetCurrentAudioSourceIndex();
-    if (ImGui::RadioButton("Microphone", &currentSourceIndex, 0)) { g_audioSystem.SetCurrentAudioSourceIndex(0); }
+
+    auto currentSource = g_audioSystem.GetCurrentAudioSource();
+    int currentSourceInt = static_cast<int>(currentSource);
+
+    if (ImGui::RadioButton("Microphone", &currentSourceInt, static_cast<int>(AudioSystem::AudioSource::Microphone))) {
+        if (currentSource != AudioSystem::AudioSource::Microphone) {
+            g_audioSystem.SetCurrentAudioSource(AudioSystem::AudioSource::Microphone);
+        }
+    }
     ImGui::SameLine();
-    if (ImGui::RadioButton("Audio File", &currentSourceIndex, 2)) { g_audioSystem.SetCurrentAudioSourceIndex(2); }
+    if (ImGui::RadioButton("Audio File", &currentSourceInt, static_cast<int>(AudioSystem::AudioSource::AudioFile))) {
+        if (currentSource != AudioSystem::AudioSource::AudioFile) {
+            g_audioSystem.SetCurrentAudioSource(AudioSystem::AudioSource::AudioFile);
+        }
+    }
     ImGui::Separator();
-    if (currentSourceIndex == 0) {
+
+    if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::Microphone) {
         if (ImGui::CollapsingHeader("Microphone Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
             const auto& devices = g_audioSystem.GetCaptureDeviceGUINames();
-            int* selectedDeviceIndex = g_audioSystem.GetSelectedActualCaptureDeviceIndexPtr();
+            int selectedDeviceIndex = g_audioSystem.GetSelectedCaptureDeviceIndex();
+            
             if (devices.empty()) {
                 ImGui::Text("No capture devices found.");
-            } else if (ImGui::BeginCombo("Input Device", (*selectedDeviceIndex >= 0 && (size_t)*selectedDeviceIndex < devices.size()) ? devices[*selectedDeviceIndex] : "None")) {
+            } else if (ImGui::BeginCombo("Input Device", (selectedDeviceIndex >= 0 && (size_t)selectedDeviceIndex < devices.size()) ? devices[selectedDeviceIndex] : "None")) {
                 for (size_t i = 0; i < devices.size(); ++i) {
-                    const bool is_selected = (*selectedDeviceIndex == (int)i);
+                    const bool is_selected = (selectedDeviceIndex == (int)i);
                     if (ImGui::Selectable(devices[i], is_selected)) {
-                        if (*selectedDeviceIndex != (int)i) {
-                            g_audioSystem.SetSelectedActualCaptureDeviceIndex(i);
+                        if (selectedDeviceIndex != (int)i) {
+                            g_audioSystem.SetSelectedCaptureDeviceIndex(i);
                             g_audioSystem.InitializeAndStartSelectedCaptureDevice();
                         }
                     }
@@ -1346,29 +1416,35 @@ void RenderAudioReactivityWindow() {
                 ImGui::EndCombo();
             }
         }
-    } else if (currentSourceIndex == 2) {
+    } else if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile) {
         if (ImGui::CollapsingHeader("Audio File Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
             char* audioFilePath = g_audioSystem.GetAudioFilePathBuffer();
             ImGui::InputText("File Path", audioFilePath, AUDIO_FILE_PATH_BUFFER_SIZE);
             ImGui::SameLine();
             if (ImGui::Button("Browse##AudioFile")) {
-                ImGuiFileDialog::Instance()->OpenDialog("ChooseAudioFileDlgKey", "Choose Audio File", ".wav,.mp3", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
+                ImGuiFileDialog::Instance()->OpenDialog("ChooseAudioFileDlgKey", "Choose Audio File", ".mp3,.wav", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
             }
             ImGui::SameLine();
             if (ImGui::Button("Load##AudioFile")) { g_audioSystem.LoadWavFile(audioFilePath); }
             ImGui::Text("Status: %s", g_audioSystem.IsAudioFileLoaded() ? "Loaded" : "Not Loaded");
 
             if (g_audioSystem.IsAudioFileLoaded()) {
+                static ChronoTimer timer;
+                timer.update(g_audioSystem.GetPlaybackProgress(), g_audioSystem.GetPlaybackDuration());
+
                 if (ImGui::Button("Play")) { g_audioSystem.Play(); }
                 ImGui::SameLine();
                 if (ImGui::Button("Pause")) { g_audioSystem.Pause(); }
                 ImGui::SameLine();
                 if (ImGui::Button("Stop")) { g_audioSystem.Stop(); }
 
-                float progress = g_audioSystem.GetPlaybackProgress();
-                if (ImGui::SliderFloat("##Progress", &progress, 0.0f, 1.0f)) {
-                    g_audioSystem.SetPlaybackProgress(progress);
+                ImGui::Text("%s", timer.getFormattedTime(timer.currentTime).c_str());
+                ImGui::SameLine();
+                if (ImGui::SliderFloat("##Progress", &timer.progress, 0.0f, 1.0f, "")) {
+                    g_audioSystem.SetPlaybackProgress(timer.progress);
                 }
+                ImGui::SameLine();
+                ImGui::Text("%s", timer.getFormattedTime(timer.duration).c_str());
             }
         }
     }
@@ -1447,6 +1523,7 @@ int main() {
     g_themes.applyTheme("Bess Dark"); // Apply default theme
     g_editor.SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
     g_audioSystem.Initialize();
+    g_audioSystem.RegisterListener(&g_videoRecorder); // Connect audio system to video recorder
 
     // Load raymarch_v1.frag as the default effect
     auto defaultEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v2.frag", SCR_WIDTH, SCR_HEIGHT);
@@ -1525,6 +1602,8 @@ int main() {
         float currentFrameTime = (float)glfwGetTime();
         deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
+
+        g_audioSystem.ProcessAudio(); // Process audio for FFT
 
         // Advance g_timelineState.currentTime_seconds based on its own UI controls (play/pause)
         // This happens if the timeline's UI playback controls are active AND it's not paused.
@@ -1646,9 +1725,7 @@ int main() {
         }
 
         if (g_videoRecorder.is_recording()) {
-            std::vector<uint8_t> pixels(SCR_WIDTH * SCR_HEIGHT * 4);
-            glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-            g_videoRecorder.add_video_frame(pixels.data());
+            g_videoRecorder.add_video_frame_from_pbo();
         }
 
         glDisable(GL_BLEND);

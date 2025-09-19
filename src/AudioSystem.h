@@ -3,6 +3,7 @@
 
 #include "miniaudio.h"
 #include "dj_fft.h"
+#include "IAudioListener.h"
 #include <vector>
 #include <array>
 #include <string>
@@ -13,6 +14,11 @@
 
 class AudioSystem {
 public:
+    enum class AudioSource {
+        Microphone = 0,
+        AudioFile = 2 // Value 1 is reserved
+    };
+
     static const int FFT_SIZE = 1024;
 
     AudioSystem();
@@ -28,35 +34,34 @@ public:
     void StopActiveDevice();
     void LoadWavFile(const char* filePath);
 
-    // Audio Processing
+    // Audio Processing (called from main thread)
     void ProcessAudio();
+
+    // Listener Registration
+    void RegisterListener(IAudioListener* listener);
+    void UnregisterListener(IAudioListener* listener);
 
     // Getters
     float GetCurrentAmplitude() const;
     bool IsCaptureDeviceInitialized() const;
     bool IsAudioFileLoaded() const;
     const std::vector<const char*>& GetCaptureDeviceGUINames() const;
-    int* GetSelectedActualCaptureDeviceIndexPtr();
+    int GetSelectedCaptureDeviceIndex() const;
     bool WereDevicesEnumerated() const;
     bool IsAudioLinkEnabled() const;
-    int  GetCurrentAudioSourceIndex() const;
-    int* GetCurrentAudioSourceIndexPtr();
+    AudioSource GetCurrentAudioSource() const;
     char* GetAudioFilePathBuffer();
     const std::string& GetLastError() const;
     float GetPlaybackProgress();
+    float GetPlaybackDuration() const;
     const std::vector<float>& GetFFTData() const;
-    float GetAverageVolume() const;
-    float GetBassVolume() const;
-    float GetMidVolume() const;
-    float GetHighVolume() const;
-    const std::array<float, 4>& GetVolumeData() const;
     ma_uint32 GetCurrentInputSampleRate() const;
     ma_uint32 GetCurrentInputChannels() const;
 
     // Setters
-    void SetSelectedActualCaptureDeviceIndex(int index);
+    void SetSelectedCaptureDeviceIndex(int index);
     void SetAudioLinkEnabled(bool enabled);
-    void SetCurrentAudioSourceIndex(int index);
+    void SetCurrentAudioSource(AudioSource source);
     void SetAudioFilePath(const char* filePath);
     void SetAmplitudeScale(float scale);
     void SetPlaybackProgress(float progress);
@@ -91,6 +96,7 @@ private:
     char audioFilePathInputBuffer[AUDIO_FILE_PATH_BUFFER_SIZE];
 
     // FFT related members
+    std::vector<float> m_mic_fft_buffer; // Circular buffer for microphone FFT analysis
     std::vector<std::complex<float>> m_fft_input;
     std::vector<float> m_fftData;
 
@@ -99,7 +105,7 @@ private:
     std::vector<std::string>    miniaudioCaptureDevice_StdString_Names;
     std::vector<const char*>    miniaudioCaptureDevice_CString_Names;
     int selectedActualCaptureDeviceIndex;
-    int currentAudioSourceIndex;
+    AudioSource currentAudioSource;
 
     // Audio file playback data
     std::vector<float> audioFileSamples;
@@ -111,14 +117,12 @@ private:
     // Error logging
     std::string lastErrorLog;
 
-    // FFT and volume analysis data
-    std::array<float, 4> volumeData;
+    // Listeners for audio data
+    std::vector<IAudioListener*> m_listeners;
 
     // Callback
     static void data_callback_static(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
     void data_callback_member(void* pOutput, const void* pInput, ma_uint32 frameCount);
-
-    void ProcessAudioFileSamples(ma_uint32 framesToProcessSimulated);
 
     // Private helpers
     bool InitializeAndStartPlaybackDevice();

@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Feature**: Added a running timer (`HH:MM:SS`) to the UI to display elapsed time during recording.
+- **Feature**: Added a confirmation dialog to prevent accidental overwriting of existing files when starting a recording.
+- **Feature**: Added a formatted timer display (`HH:MM:SS`) for audio file playback progress.
 - **Feature**: Implemented a functional "Scene Output" node in the node editor for explicit graph termination and final output rendering.
 - **Feature**: Implemented full scene serialization for node connections and shader parameters, allowing projects to be saved and loaded.
 - **Feature**: Implemented amplitude scaling for audio reactivity.
 
 ### Fixed
+- **Bugfix**: Fixed critical performance issue causing a blank screen during video recording by re-architecting the recorder to use a threaded, asynchronous PBO-based pipeline.
+- **Bugfix**: Fixed choppy/stuttering audio in recordings by implementing a robust audio buffering strategy within the encoding thread.
+- **Bugfix**: Fixed unresponsive and unreliable audio-reactive visuals by implementing a circular buffer for FFT analysis, ensuring smooth and consistent processing.
 - **Bugfix**: Video recording output length was 10x longer than actual duration due to incorrect timebase scaling in FFmpeg.
 - **Bugfix**: Video recording output was upside-down due to incorrect stride handling in `sws_scale`.
 - **Bugfix**: Resolved `NaN/+-Inf` errors in audio encoding by sanitizing audio samples from file input.
@@ -32,10 +38,12 @@ All notable changes to this project will be documented in this file.
 - **Bugfix**: Eliminated a segmentation fault that occurred when deleting a node from the middle of a connection chain by ensuring all dangling pointers are nullified.
 
 ### Changed
+- **Refactor**: `VideoRecorder` now uses RAII (`std::unique_ptr`) for all FFmpeg objects to ensure robust, automatic resource management and prevent memory leaks.
+- **Refactor**: Decoupled `AudioSystem` from `VideoRecorder` using an observer pattern (`IAudioListener`) to improve modularity and maintainability.
+- **Refactor**: Replaced integer-based audio source identifiers with a strongly-typed `enum class` for improved code clarity and safety.
 - **Cleanup**: Removed verbose debugging logs from the console to improve output clarity.
 - **Changed**: Added more detailed OpenGL error logging to the main render loop to help diagnose future rendering issues.
 
 ### Known Issues
+- **Video Issue**: Video recording length is incorrect. A recording of a specific duration results in an output file with a significantly longer, incorrect duration (e.g., 20s recording produces a 55s file).
 - **Build Issue**: CMake parsing error in `CMakeLists.txt` related to `CONFIGURE_COMMAND` for FFmpeg's `ExternalProject_Add` when enabling `libx264`. This prevents `libx264` from being built and used.
-- **Video Issue**: Video output is a blank black screen when recording. This is likely due to the `MPEG4` encoder or its configuration, as `libx264` is currently not building.
-- **Audio Issue**: Audio from MP3/WAV file input is still choppy and slowed down in recordings, despite `NaN/+-Inf` errors being resolved and buffering logic implemented. Microphone audio records correctly.
