@@ -182,15 +182,28 @@ float AudioSystem::GetPlaybackDuration() const {
 const std::vector<float>& AudioSystem::GetFFTData() const { return m_fftData; }
 
 ma_uint32 AudioSystem::GetCurrentInputSampleRate() const {
-    if (currentAudioSource == AudioSource::Microphone) return deviceConfig.sampleRate;
-    if (currentAudioSource == AudioSource::AudioFile) return audioFileSampleRate;
-    return 0;
+    if (currentAudioSource == AudioSource::Microphone) {
+        // If the device is not yet initialized, it has no sample rate. Return a sensible default.
+        if (!miniaudioDeviceInitialized) return 48000;
+        return device.sampleRate;
+    }
+    if (currentAudioSource == AudioSource::AudioFile) {
+        if (!audioFileLoaded) return 48000; // Default if no file is loaded
+        return audioFileSampleRate;
+    }
+    return 48000; // Fallback default
 }
 
 ma_uint32 AudioSystem::GetCurrentInputChannels() const {
-    if (currentAudioSource == AudioSource::Microphone) return deviceConfig.capture.channels;
-    if (currentAudioSource == AudioSource::AudioFile) return audioFileChannels;
-    return 0;
+    if (currentAudioSource == AudioSource::Microphone) {
+        if (!miniaudioDeviceInitialized) return 1; // Default to mono
+        return device.capture.channels;
+    }
+    if (currentAudioSource == AudioSource::AudioFile) {
+        if (!audioFileLoaded) return 1; // Default to mono
+        return audioFileChannels;
+    }
+    return 1; // Fallback default
 }
 
 // --- Setters ---
