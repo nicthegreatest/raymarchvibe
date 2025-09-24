@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <nlohmann/json.hpp>
+#include <filesystem>
 
 class ShaderEffect : public Effect {
 public:
@@ -32,6 +33,7 @@ public:
     void SetDeltaTime(float dt) { m_deltaTime = dt; }
     void IncrementFrameCount() { m_frameCount++; }
     void SetAudioAmplitude(float amp);
+    void SetAudioBands(const std::array<float, 4>& bands);
 
     const std::string& GetShaderSource() const { return m_shaderSourceCode; }
     const std::string& GetCompileErrorLog() const { return m_compileErrorLog; }
@@ -41,6 +43,8 @@ public:
     nlohmann::json Serialize() const override;
     void Deserialize(const nlohmann::json& data) override;
     void ResetParameters() override;
+
+    bool CheckForUpdatesAndReload();
 
     const std::vector<int>& GetDeserializedInputIds() const { return m_deserialized_input_ids; }
 
@@ -72,32 +76,10 @@ private:
     float m_mouseState[4];
     int m_currentDisplayWidth, m_currentDisplayHeight;
 
-    // Native uniforms
-    float m_objectColor[3];
-    float m_scale;
-    float m_timeSpeed;
-    float m_colorMod[3];
-    float m_patternScale;
-    float m_cameraPosition[3];
-    float m_cameraTarget[3];
-    float m_cameraFOV;
-    float m_lightPosition[3];
-    float m_lightColor[3];
-
     // Shadertoy user uniforms
-    float m_iUserFloat1;
-    float m_iUserColor1[3];
-
-    // fractal_tree_audio uniforms
-    float m_uThickness;
-    int m_uIterations;
-    float m_uAngle;
-    float m_uAudioReactivity;
-    float m_uSway;
-    float m_uColorB[3];
-    float m_uGradientMix;
 
     float m_audioAmp;
+    std::array<float, 4> m_audioBands;
 
     // Uniform locations
     GLint m_iResolutionLocation = -1;
@@ -107,28 +89,8 @@ private:
     GLint m_iMouseLocation = -1;
     GLint m_iChannel0SamplerLoc = -1;
     GLint m_iChannel0ActiveLoc = -1;
-    GLint m_iUserFloat1Loc = -1;
-    GLint m_iUserColor1Loc = -1;
     GLint m_iAudioAmpLoc = -1;
-
-    GLint m_uObjectColorLoc = -1;
-    GLint m_uScaleLoc = -1;
-    GLint m_uTimeSpeedLoc = -1;
-    GLint m_uColorModLoc = -1;
-    GLint m_uPatternScaleLoc = -1;
-    GLint m_uCamPosLoc = -1;
-    GLint m_uCamTargetLoc = -1;
-    GLint m_uCamFOVLoc = -1;
-    GLint m_uLightPosLoc = -1;
-    GLint m_uLightColorLoc = -1;
-
-    GLint m_uThicknessLoc = -1;
-    GLint m_uIterationsLoc = -1;
-    GLint m_uAngleLoc = -1;
-    GLint m_uAudioReactivityLoc = -1;
-    GLint m_uSwayLoc = -1;
-    GLint m_uColorBLoc = -1;
-    GLint m_uGradientMixLoc = -1;
+    GLint m_iAudioBandsLoc = -1;
 
     ShaderParser m_shaderParser;
     std::vector<ShaderToyUniformControl> m_shadertoyUniformControls;
@@ -148,4 +110,5 @@ private:
 
     nlohmann::json m_deserialized_controls;
     std::vector<int> m_deserialized_input_ids;
+    std::filesystem::file_time_type m_lastWriteTime;
 };

@@ -175,6 +175,7 @@ static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 static bool g_timeline_paused = false; // Reverted to false for default playback
 // static float g_timeline_time = 0.0f; // This will be g_timelineState.currentTime_seconds // Unused variable
 static bool g_timelineControlActive = false; // Added for explicit timeline UI control
+static bool g_no_output_logged = false;
 
 // --- Node Editor State for Delayed Positioning ---
 #include <set> // Required for std::set
@@ -1340,9 +1341,7 @@ void RenderShadertoyWindow() {
                     } else {
                         g_editor.SetText(newEffect->GetShaderSource());
                         ClearErrorMarkers();
-                        g_scene.push_back(std::move(newEffect));
-                        g_selectedEffect = g_scene.back().get();
-                        g_consoleLog = "Shadertoy '" + shaderId + "' fetched and applied!";
+                        g_scene.push_back(std::move(newEffect));                        g_consoleLog = "Shadertoy '" + shaderId + "' fetched and applied!";
                         g_showShadertoyWindow = false; // Close window on success
                     }
                 } else {
@@ -1576,8 +1575,15 @@ int main() {
 
     float deltaTime = 0.0f, lastFrameTime = 0.0f;
     // static bool first_time_docking = true; // Unused variable
+    static size_t last_scene_size = 0;
 
     while(!glfwWindowShouldClose(window)) {
+        // Check if a node was added to reset the console log spam guard
+        if (g_scene.size() > last_scene_size) {
+            g_no_output_logged = false;
+        }
+        last_scene_size = g_scene.size();
+
         // Process deferred deletions at the start of the frame
         if (!g_nodes_to_delete.empty()) {
             for (int node_id : g_nodes_to_delete) {
@@ -1621,6 +1627,23 @@ int main() {
         float currentFrameTime = (float)glfwGetTime();
         deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
+
+        // --- Hot-reloading Check (every second) ---
+        static float hot_reload_timer = 0.0f;
+        hot_reload_timer += deltaTime;
+        if (hot_reload_timer > 1.0f) {
+            for (const auto& effect_ptr : g_scene) {
+                if (auto* se = dynamic_cast<ShaderEffect*>(effect_ptr.get())) {
+                    if (se->CheckForUpdatesAndReload()) {
+                        g_consoleLog += "Hot-reloaded shader: " + se->GetEffectName() + "\n";
+                        if (se == g_selectedEffect) {
+                            g_editor.SetText(se->GetShaderSource());
+                        }
+                    }
+                }
+            }
+            hot_reload_timer = 0.0f;
+        }
 
         g_audioSystem.ProcessAudio(); // Process audio for FFT
 
@@ -1668,6 +1691,7 @@ int main() {
         }
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
         float audioAmp = g_enableAudioLink ? g_audioSystem.GetCurrentAmplitude() : 0.0f;
+        const auto& audioBands = g_audioSystem.GetAudioBands();
 
         checkGLError("Before Effect Render Loop");
         checkGLError("Before Effect Render Loop");
@@ -1679,6 +1703,9 @@ int main() {
                 se->SetDeltaTime(deltaTime);
                 se->IncrementFrameCount();
                 se->SetAudioAmplitude(audioAmp);
+                if (g_enableAudioLink) {
+                    se->SetAudioBands(audioBands);
+                }
             }
             effect_ptr->Update(currentTimeForEffects); 
             effect_ptr->Render();
@@ -1741,7 +1768,10 @@ int main() {
             g_renderer.RenderFullscreenTexture(finalTextureID);
             checkGLError("After Final RenderFullscreenTexture");
         } else {
-            std::cout << "No finalOutputEffect determined for rendering." << std::endl;
+            if (!g_no_output_logged) {
+                std::cout << "No finalOutputEffect determined for rendering." << std::endl;
+                g_no_output_logged = true;
+            }
         }
 
         if (g_videoRecorder.is_recording()) {

@@ -21,6 +21,14 @@ public:
 
     static const int FFT_SIZE = 1024;
 
+    // Frequency band definitions for FFT analysis
+    // Based on a 48000 Hz sample rate and FFT_SIZE of 1024
+    // Each FFT bin represents (48000 / 1024) = 46.875 Hz
+    static const int BASS_BINS_END = 5;      // ~234 Hz
+    static const int LOW_MIDS_BINS_END = 42; // ~1968 Hz
+    static const int HIGH_MIDS_BINS_END = 170; // ~7968 Hz
+    static const int HIGHS_BINS_END = 426;   // ~19968 Hz
+
     AudioSystem();
     ~AudioSystem();
 
@@ -55,6 +63,7 @@ public:
     float GetPlaybackProgress();
     float GetPlaybackDuration() const;
     const std::vector<float>& GetFFTData() const;
+    const std::array<float, 4>& GetAudioBands() const;
     ma_uint32 GetCurrentInputSampleRate() const;
     ma_uint32 GetCurrentInputChannels() const;
 
@@ -100,6 +109,7 @@ private:
     std::vector<float> m_file_fft_buffer; // Circular buffer for audio file FFT analysis
     std::vector<std::complex<float>> m_fft_input;
     std::vector<float> m_fftData;
+    std::array<float, 4> m_audioBands;
 
     // Capture device information
     std::vector<ma_device_info> miniaudioAvailableCaptureDevicesInfo;
