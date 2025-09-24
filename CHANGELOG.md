@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Feature**: Implemented a robust, data-driven UI system for shader uniforms. The UI is now generated dynamically from comments in the shader source code.
+- **Feature**: Added support for `bool`, `vec2`, `vec3`, `vec4`, and `color` types in shader control comments, which generate corresponding UI widgets (checkboxes, sliders, color pickers).
+- **Feature**: Implemented shader hot-reloading. The application now watches for file changes and automatically reloads a shader and its UI when the source file is saved.
+- **Feature**: Added a "Record Audio" checkbox to the UI to allow for video-only recordings.
 - **Feature**: Added a running timer (`HH:MM:SS`) to the UI to display elapsed time during recording.
 - **Feature**: Added a confirmation dialog to prevent accidental overwriting of existing files when starting a recording.
 - **Feature**: Added a formatted timer display (`HH:MM:SS`) for audio file playback progress.
@@ -13,10 +17,13 @@ All notable changes to this project will be documented in this file.
 - **Feature**: Implemented amplitude scaling for audio reactivity.
 
 ### Fixed
+- **Bugfix**: Fixed a persistent video recording bug where the output video's duration was incorrect. The final fix involved ensuring an active audio stream provides a master clock for the video PTS calculation.
+- **Bugfix**: Fixed a critical bug in the shader property parser that prevented `//#control` uniforms from being detected, which resulted in a blank render and non-functional UI.
+- **Bugfix**: Fixed console spam for the "No finalOutputEffect determined for rendering" error.
 - **Bugfix**: Fixed critical performance issue causing a blank screen during video recording by re-architecting the recorder to use a threaded, asynchronous PBO-based pipeline.
 - **Bugfix**: Fixed choppy/stuttering audio in recordings by implementing a robust audio buffering strategy within the encoding thread.
 - **Bugfix**: Fixed unresponsive and unreliable audio-reactive visuals by implementing a circular buffer for FFT analysis, ensuring smooth and consistent processing.
-- **Bugfix**: Video recording output length was 10x longer than actual duration due to incorrect timebase scaling in FFmpeg.
+- **Bugfix**: Video recording output was 10x longer than actual duration due to incorrect timebase scaling in FFmpeg.
 - **Bugfix**: Video recording output was upside-down due to incorrect stride handling in `sws_scale`.
 - **Bugfix**: Resolved `NaN/+-Inf` errors in audio encoding by sanitizing audio samples from file input.
 - **Bugfix**: Eliminated segmentation fault on recording start by correcting `AVFrame` buffer handling for audio.
@@ -29,7 +36,6 @@ All notable changes to this project will be documented in this file.
 - **Bugfix**: Fixed a build error related to duplicate definition of `AudioSystem::SetAmplitudeScale(float)`.
 - **Bugfix**: Replaced broken FFT implementation with `dj_fft` to restore audio reactivity.
 - **Bugfix**: Implemented a robust `iChannel0_active` boolean uniform to replace an unreliable `textureSize` check, resolving an issue where effects would not apply on initial application startup.
-- **Bugfix**: Corrected a critical bug in the shader property parser that prevented `//#control` uniforms from being detected, which resulted in a blank render and non-functional UI.
 - **Bugfix**: Repaired multiple build failures (compiler and linker errors) caused by previous incorrect fixes during the parser rewrite.
 - **Bugfix**: Audited and corrected all filter shaders that were using an incorrect `in vec2 TexCoords;` variable, ensuring they correctly calculate UVs and can be used in the node graph.
 - **Bugfix**: Restored the renderer's internal fragment shader (`texture.frag`) to its correct state, fixing a bug that contributed to the blank render.

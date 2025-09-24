@@ -5,20 +5,20 @@ uniform vec2 iResolution;
 uniform float iTime;
 
 // Native Uniforms
-uniform vec3 u_objectColor = vec3(0.7, 0.5, 0.9); // Default to a violet
-uniform float u_scale = 0.8;        // Overall size of the dodecahedron
-uniform float u_timeSpeed = 0.3;    // Speed of rotation
-uniform vec3 u_colorMod = vec3(0.2, 0.3, 0.4); // For color variations
-uniform float u_patternScale = 5.0; // For surface pattern frequency
+uniform vec3 u_objectColor = vec3(0.7, 0.5, 0.9); // {"type": "color", "label": "Object Color"}
+uniform float u_scale = 0.8;        // {"default": 0.8, "min": 0.1, "max": 2.0, "label": "Scale"}
+uniform float u_timeSpeed = 0.3;    // {"default": 0.3, "min": 0.0, "max": 2.0, "label": "Time Speed"}
+uniform vec3 u_colorMod = vec3(0.2, 0.3, 0.4); // {"type": "color", "label": "Color Modulation"}
+uniform float u_patternScale = 5.0; // {"default": 5.0, "min": 0.5, "max": 20.0, "label": "Pattern Scale"}
 
 // Camera Uniforms
-uniform vec3 u_camPos = vec3(0.0, 0.8, -2.5);
-uniform vec3 u_camTarget = vec3(0.0, 0.0, 0.0);
-uniform float u_camFOV = 60.0;
+uniform vec3 u_camPos = vec3(0.0, 0.8, -2.5); // {"default": [0.0, 0.8, -2.5], "label": "Camera Position"}
+uniform vec3 u_camTarget = vec3(0.0, 0.0, 0.0); // {"default": [0.0, 0.0, 0.0], "label": "Camera Target"}
+uniform float u_camFOV = 60.0; // {"default": 60.0, "min": 15.0, "max": 120.0, "label": "Field of View"}
 
 // Light Uniforms
-uniform vec3 u_lightPosition = vec3(3.0, 2.0, -4.0);
-uniform vec3 u_lightColor = vec3(1.0, 0.95, 0.9);
+uniform vec3 u_lightPosition = vec3(3.0, 2.0, -4.0); // {"default": [3.0, 2.0, -4.0], "label": "Light Position"}
+uniform vec3 u_lightColor = vec3(1.0, 0.95, 0.9); // {"type": "color", "label": "Light Color"}
 
 uniform float iAudioAmp = 0.0; // Audio amplitude, 0 to 1
 
