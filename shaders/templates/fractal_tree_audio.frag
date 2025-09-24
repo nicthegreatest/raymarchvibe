@@ -19,6 +19,7 @@
 
 // Global Uniforms provided by the application
 uniform float iAudioAmp; // Expected to be a normalized amplitude [0, 1]
+uniform float iAudioBands[4]; // Bass, Low-Mids, High-Mids, Highs
 
 // Custom Uniforms for UI control
 uniform vec3 u_color;
@@ -50,8 +51,9 @@ void main()
 
     // 3. Calculate dynamic angle for animation and audio reactivity
     float timeSway = sin(iTime * 0.5) * u_sway;
-    float audioSway = iAudioAmp * u_audio_reactivity;
+    float audioSway = iAudioBands[0] * u_audio_reactivity; // Bass affects angle
     float dynamicAngle = u_angle + timeSway + audioSway;
+    float dynamicThickness = u_thickness + iAudioBands[3] * 0.5; // Highs affect thickness
 
     // 4. Fractal generation loop
     vec2 p = uv;
@@ -71,7 +73,7 @@ void main()
 
     // 5. Draw the tree
     // Use the y-component of the final coordinate as a distance estimate
-    float tree = abs(p.y) / u_thickness;
+    float tree = abs(p.y) / dynamicThickness;
     
     vec3 mixed_color = mix(u_color, u_colorB, uv.y * u_gradient_mix);
 

@@ -26,6 +26,7 @@ AudioSystem::AudioSystem() {
 
     m_fft_input.resize(FFT_SIZE);
     m_fftData.resize(FFT_SIZE / 2, 0.0f);
+    m_audioBands.fill(0.0f);
 }
 
 // --- Destructor ---
@@ -180,6 +181,8 @@ float AudioSystem::GetPlaybackDuration() const {
 }
 
 const std::vector<float>& AudioSystem::GetFFTData() const { return m_fftData; }
+
+const std::array<float, 4>& AudioSystem::GetAudioBands() const { return m_audioBands; }
 
 ma_uint32 AudioSystem::GetCurrentInputSampleRate() const {
     if (currentAudioSource == AudioSource::Microphone) {
@@ -348,10 +351,23 @@ void AudioSystem::ProcessAudio() {
             m_fftData[i] = std::abs(fft_output[i]);
         }
 
+        // Calculate frequency band averages
+        float bass = 0.0f, low_mids = 0.0f, high_mids = 0.0f, highs = 0.0f;
+        for (int i = 0; i < BASS_BINS_END; ++i) bass += m_fftData[i];
+        for (int i = BASS_BINS_END; i < LOW_MIDS_BINS_END; ++i) low_mids += m_fftData[i];
+        for (int i = LOW_MIDS_BINS_END; i < HIGH_MIDS_BINS_END; ++i) high_mids += m_fftData[i];
+        for (int i = HIGH_MIDS_BINS_END; i < HIGHS_BINS_END; ++i) highs += m_fftData[i];
+
+        m_audioBands[0] = bass / (BASS_BINS_END);
+        m_audioBands[1] = low_mids / (LOW_MIDS_BINS_END - BASS_BINS_END);
+        m_audioBands[2] = high_mids / (HIGH_MIDS_BINS_END - LOW_MIDS_BINS_END);
+        m_audioBands[3] = highs / (HIGHS_BINS_END - HIGH_MIDS_BINS_END);
+
         // Remove old samples from the front of the circular buffer
         buffer_to_process->erase(buffer_to_process->begin(), buffer_to_process->begin() + hopSize);
     } else {
         // Not enough data, can optionally clear or just leave stale
+        m_audioBands.fill(0.0f);
     }
 }
 

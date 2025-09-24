@@ -39,42 +39,22 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
       m_time(0.0f),
       m_deltaTime(0.0f),
       m_frameCount(0),
-      m_scale(1.0f),
-      m_timeSpeed(1.0f),
-      m_patternScale(1.0f),
-      m_cameraFOV(60.0f),
-      m_iUserFloat1(0.5f),
       m_audioAmp(0.0f),
       m_iAudioAmpLoc(-1),
+      m_iAudioBandsLoc(-1),
       m_shaderParser(),
       m_iChannel0SamplerLoc(-1),
       m_fboID(0),
       m_fboTextureID(0),
       m_rboID(0),
       m_fboWidth(initialWidth),
-      m_fboHeight(initialHeight)
+      m_fboHeight(initialHeight),
+      m_lastWriteTime{}
 {
     m_inputs.resize(1, nullptr);
 
-    // Initialize arrays
-    m_objectColor[0] = 0.8f; m_objectColor[1] = 0.9f; m_objectColor[2] = 1.0f;
-    m_colorMod[0] = 0.1f; m_colorMod[1] = 0.1f; m_colorMod[2] = 0.2f;
-    m_cameraPosition[0] = 0.0f; m_cameraPosition[1] = 1.0f; m_cameraPosition[2] = -3.0f;
-    m_cameraTarget[0] = 0.0f; m_cameraTarget[1] = 0.0f; m_cameraTarget[2] = 0.0f;
-    m_lightPosition[0] = 2.0f; m_lightPosition[1] = 3.0f; m_lightPosition[2] = -2.0f;
-    m_lightColor[0] = 1.0f; m_lightColor[1] = 1.0f; m_lightColor[2] = 0.9f;
-    m_iUserColor1[0] = 0.2f; m_iUserColor1[1] = 0.5f; m_iUserColor1[2] = 0.8f;
     std::fill_n(m_mouseState, 4, 0.0f);
-
-    m_uThickness = 0.7f;
-    m_uIterations = 12;
-    m_uAngle = 1.1f;
-    m_scale = 0.75f;
-    m_uAudioReactivity = 0.4f;
-    m_uSway = 0.05f;
-
-    m_uColorB[0] = 0.2f; m_uColorB[1] = 0.3f; m_uColorB[2] = 0.9f;
-    m_uGradientMix = 0.5f;
+    m_audioBands.fill(0.0f);
 
     if (!initialShaderPath.empty()) {
         m_shaderFilePath = initialShaderPath;
@@ -150,6 +130,12 @@ bool ShaderEffect::LoadShaderFromFile(const std::string& filePath) {
         m_shaderLoaded = false;
         return false;
     }
+    try {
+        m_lastWriteTime = std::filesystem::last_write_time(filePath);
+    } catch (const std::filesystem::filesystem_error& e) {
+        m_compileErrorLog = "Failed to get file timestamp: " + std::string(e.what());
+        // Not returning false, as the file was read successfully
+    }
     if (m_shaderSourceCode.find("mainImage") != std::string::npos) {
         m_isShadertoyMode = true;
     } else {
@@ -207,8 +193,8 @@ void ShaderEffect::ApplyShaderCode(const std::string& newShaderCode) {
     m_compileErrorLog.clear();
     CompileAndLinkShader();
     if (m_shaderProgram != 0) {
-        FetchUniformLocations();
         ParseShaderControls();
+        FetchUniformLocations();
         m_shaderLoaded = true;
         if (m_compileErrorLog.empty()) {
              m_compileErrorLog = "Shader applied successfully.";
@@ -233,7 +219,12 @@ void ShaderEffect::Update(float currentTime) {
 
     if (m_colorCycleState.isEnabled) {
         m_colorCycleState.cycleTime += m_deltaTime * m_colorCycleState.speed;
-        GetGradientColor(m_colorCycleState.cycleTime, m_objectColor);
+        for (auto& control : m_shadertoyUniformControls) {
+            if (control.name == "u_objectColor") { // Or another designated target uniform for cycling
+                GetGradientColor(m_colorCycleState.cycleTime, control.v3Value);
+                break;
+            }
+        }
     }
 }
 
@@ -285,49 +276,15 @@ void ShaderEffect::Render() {
         if (m_iTimeDeltaLocation != -1) glUniform1f(m_iTimeDeltaLocation, m_deltaTime);
         if (m_iFrameLocation != -1) glUniform1i(m_iFrameLocation, m_frameCount);
         if (m_iMouseLocation != -1) glUniform4fv(m_iMouseLocation, 1, m_mouseState);
-        if (m_iUserFloat1Loc != -1) glUniform1f(m_iUserFloat1Loc, m_iUserFloat1);
-        if (m_iUserColor1Loc != -1) glUniform3fv(m_iUserColor1Loc, 1, m_iUserColor1);
     } else {
         if (m_iResolutionLocation != -1) glUniform2f(m_iResolutionLocation, (float)m_fboWidth, (float)m_fboHeight);
         if (m_iTimeLocation != -1) glUniform1f(m_iTimeLocation, m_time);
-        if (m_uObjectColorLoc != -1) glUniform3fv(m_uObjectColorLoc, 1, m_objectColor);
-        if (m_uScaleLoc != -1) glUniform1f(m_uScaleLoc, m_scale);
-        if (m_uTimeSpeedLoc != -1) glUniform1f(m_uTimeSpeedLoc, m_timeSpeed);
-        if (m_uColorModLoc != -1) glUniform3fv(m_uColorModLoc, 1, m_colorMod);
-        if (m_uPatternScaleLoc != -1) glUniform1f(m_uPatternScaleLoc, m_patternScale);
-        if (m_uCamPosLoc != -1) glUniform3fv(m_uCamPosLoc, 1, m_cameraPosition);
-        if (m_uCamTargetLoc != -1) glUniform3fv(m_uCamTargetLoc, 1, m_cameraTarget);
-        if (m_uCamFOVLoc != -1) glUniform1f(m_uCamFOVLoc, m_cameraFOV);
-        if (m_uLightPosLoc != -1) glUniform3fv(m_uLightPosLoc, 1, m_lightPosition);
-        if (m_uLightColorLoc != -1) glUniform3fv(m_uLightColorLoc, 1, m_lightColor);
     }
     if (m_iAudioAmpLoc != -1) {
         glUniform1f(m_iAudioAmpLoc, m_audioAmp);
     }
-
-    if (m_uThicknessLoc != -1) {
-        glUniform1f(m_uThicknessLoc, m_uThickness);
-    }
-    if (m_uIterationsLoc != -1) {
-        glUniform1i(m_uIterationsLoc, m_uIterations);
-    }
-    if (m_uAngleLoc != -1) {
-        glUniform1f(m_uAngleLoc, m_uAngle);
-    }
-    if (m_uScaleLoc != -1) {
-        glUniform1f(m_uScaleLoc, m_scale);
-    }
-    if (m_uAudioReactivityLoc != -1) {
-        glUniform1f(m_uAudioReactivityLoc, m_uAudioReactivity);
-    }
-    if (m_uSwayLoc != -1) {
-        glUniform1f(m_uSwayLoc, m_uSway);
-    }
-    if (m_uColorBLoc != -1) {
-        glUniform3fv(m_uColorBLoc, 1, m_uColorB);
-    }
-    if (m_uGradientMixLoc != -1) {
-        glUniform1f(m_uGradientMixLoc, m_uGradientMix);
+    if (m_iAudioBandsLoc != -1) {
+        glUniform1fv(m_iAudioBandsLoc, 4, m_audioBands.data());
     }
 
     Renderer::RenderQuad();
@@ -335,6 +292,10 @@ void ShaderEffect::Render() {
 
 void ShaderEffect::SetAudioAmplitude(float amp) {
     m_audioAmp = amp;
+}
+
+void ShaderEffect::SetAudioBands(const std::array<float, 4>& bands) {
+    m_audioBands = bands;
 }
 
 void ShaderEffect::SetMouseState(float x, float y, float click_x, float click_y) {
@@ -450,12 +411,6 @@ void ShaderEffect::RenderUI() {
     }
     ImGui::Separator();
 
-    if (m_isShadertoyMode) {
-        RenderShadertoyParamsUI();
-    } else {
-        RenderNativeParamsUI();
-    }
-
     if (ImGui::CollapsingHeader("Parsed Uniforms##EffectParsedUniforms", ImGuiTreeNodeFlags_DefaultOpen)) {
         RenderParsedUniformsUI();
     }
@@ -469,53 +424,7 @@ void ShaderEffect::RenderUI() {
     }
 }
 
-void ShaderEffect::RenderNativeParamsUI() {
-    ImGui::Text("Native Shader Parameters:");
-    ImGui::Spacing();
-
-    if (ImGui::CollapsingHeader("Colour Parameters##EffectNativeColours", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::ColorEdit3("Object Colour##Effect", m_objectColor);
-        ImGui::ColorEdit3("Colour Mod##Effect", m_colorMod);
-        RenderColorCycleUI();
-    }
-    ImGui::Spacing();
-
-    if (ImGui::CollapsingHeader("Patterns of Time and Space##EffectNativePatterns")) {
-        ImGui::SliderFloat("Scale##Effect", &m_scale, 0.1f, 3.0f);
-        ImGui::SliderFloat("Pattern Scale##Effect", &m_patternScale, 0.1f, 10.0f);
-        ImGui::SliderFloat("Time Speed##Effect", &m_timeSpeed, 0.0f, 5.0f);
-    }
-    ImGui::Spacing();
-
-    if (ImGui::CollapsingHeader("Camera Controls##EffectNativeCamera")) {
-        ImGui::DragFloat3("Position##EffectCam", m_cameraPosition, 0.1f);
-        ImGui::DragFloat3("Target##EffectCam", m_cameraTarget, 0.1f);
-        ImGui::SliderFloat("FOV##EffectCam", &m_cameraFOV, 15.0f, 120.0f);
-    }
-    ImGui::Spacing();
-
-    if (ImGui::CollapsingHeader("Lighting Controls##EffectNativeLighting")) {
-        ImGui::DragFloat3("Light Pos##EffectLight", m_lightPosition, 0.1f);
-        ImGui::ColorEdit3("Light Colour##EffectLight", m_lightColor);
-    }
-
-    if (ImGui::CollapsingHeader("Fractal Tree Audio Controls##EffectNativeFractalTree")) {
-        ImGui::SliderFloat("Thickness##Effect", &m_uThickness, 0.1f, 2.0f);
-        ImGui::SliderInt("Iterations##Effect", &m_uIterations, 2, 25);
-        ImGui::SliderFloat("Angle##Effect", &m_uAngle, 0.1f, 2.5f);
-        ImGui::SliderFloat("Scale##Effect", &m_scale, 0.5f, 0.98f);
-        ImGui::SliderFloat("Audio Reactivity##Effect", &m_uAudioReactivity, 0.0f, 2.0f);
-        ImGui::SliderFloat("Sway##Effect", &m_uSway, 0.0f, 0.2f);
-        ImGui::ColorEdit3("Color B##Effect", m_uColorB);
-        ImGui::SliderFloat("Gradient Mix##Effect", &m_uGradientMix, 0.0f, 1.0f);
-    }
-}
-
-void ShaderEffect::RenderShadertoyParamsUI() {
-    ImGui::Text("Shadertoy User Parameters:");
-    ImGui::SliderFloat("iUserFloat1##Effect", &m_iUserFloat1, 0.0f, 1.0f);
-    ImGui::ColorEdit3("iUserColour1##Effect", m_iUserColor1);
-}
+// Obsolete function, replaced by data-driven UI from shader parsing.
 
 void ShaderEffect::RenderParsedUniformsUI() {
     if (m_shadertoyUniformControls.empty()) {
@@ -528,13 +437,29 @@ void ShaderEffect::RenderParsedUniformsUI() {
         std::string label = control.metadata.value("label", control.name);
         ImGui::PushID(static_cast<int>(i));
 
-        if (control.glslType == "float") {
+        float step = control.metadata.value("step", 0.01f);
+
+        if (control.glslType == "bool") {
+            ImGui::Checkbox(label.c_str(), &control.bValue);
+        } else if (control.glslType == "float") {
             ImGui::SliderFloat(label.c_str(), &control.fValue, control.metadata.value("min", 0.0f), control.metadata.value("max", 1.0f));
         } else if (control.glslType == "int") {
-            ImGui::SliderInt(label.c_str(), &control.iValue, control.metadata.value("min", 0), control.metadata.value("max", 1));
-        } else if (control.glslType == "vec3" && control.isColor) {
-            ImGui::ColorEdit3(label.c_str(), control.v3Value);
-        } 
+            ImGui::SliderInt(label.c_str(), &control.iValue, control.metadata.value("min", 0), control.metadata.value("max", 100));
+        } else if (control.glslType == "vec2") {
+            ImGui::DragFloat2(label.c_str(), control.v2Value, step);
+        } else if (control.glslType == "vec3") {
+            if (control.isColor) {
+                ImGui::ColorEdit3(label.c_str(), control.v3Value);
+            } else {
+                ImGui::DragFloat3(label.c_str(), control.v3Value, step);
+            }
+        } else if (control.glslType == "vec4") {
+            if (control.isColor) {
+                ImGui::ColorEdit4(label.c_str(), control.v4Value);
+            } else {
+                ImGui::DragFloat4(label.c_str(), control.v4Value, step);
+            }
+        }
 
         ImGui::PopID();
     }
@@ -546,12 +471,23 @@ void ShaderEffect::RenderDefineControlsUI() {
         return;
     }
     for (size_t i = 0; i < m_defineControls.size(); ++i) {
+        auto& control = m_defineControls[i];
         ImGui::PushID(static_cast<int>(i) + 1000);
-        bool defineEnabledState = m_defineControls[i].isEnabled;
-        if (ImGui::Checkbox(m_defineControls[i].name.c_str(), &defineEnabledState)) {
-            std::string modifiedCode = m_shaderParser.ToggleDefineInString(m_shaderSourceCode, m_defineControls[i].name, defineEnabledState, m_defineControls[i].originalValueString);
-            if (!modifiedCode.empty()) {
-                ApplyShaderCode(modifiedCode);
+
+        if (control.hasValue) {
+            if (ImGui::InputFloat(control.name.c_str(), &control.floatValue)) {
+                std::string modifiedCode = m_shaderParser.UpdateDefineValueInString(m_shaderSourceCode, control.name, control.floatValue);
+                if (!modifiedCode.empty()) {
+                    ApplyShaderCode(modifiedCode);
+                }
+            }
+        } else {
+            bool defineEnabledState = control.isEnabled;
+            if (ImGui::Checkbox(control.name.c_str(), &defineEnabledState)) {
+                std::string modifiedCode = m_shaderParser.ToggleDefineInString(m_shaderSourceCode, control.name, defineEnabledState, control.originalValueString);
+                if (!modifiedCode.empty()) {
+                    ApplyShaderCode(modifiedCode);
+                }
             }
         }
         ImGui::PopID();
@@ -683,43 +619,18 @@ void ShaderEffect::FetchUniformLocations() {
     m_iChannel0SamplerLoc = glGetUniformLocation(m_shaderProgram, "iChannel0");
     m_iChannel0ActiveLoc = glGetUniformLocation(m_shaderProgram, "iChannel0_active");
 
-    if (m_isShadertoyMode) {
-        m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution");
-        m_iTimeLocation = glGetUniformLocation(m_shaderProgram, "iTime");
-        m_iTimeDeltaLocation = glGetUniformLocation(m_shaderProgram, "iTimeDelta");
-        m_iFrameLocation = glGetUniformLocation(m_shaderProgram, "iFrame");
-        m_iMouseLocation = glGetUniformLocation(m_shaderProgram, "iMouse");
-        m_iUserFloat1Loc = glGetUniformLocation(m_shaderProgram, "iUserFloat1");
-        m_iUserColor1Loc = glGetUniformLocation(m_shaderProgram, "iUserColor1");
-    } else {
-        m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution");
-        m_iTimeLocation = glGetUniformLocation(m_shaderProgram, "iTime");
-        m_uObjectColorLoc = glGetUniformLocation(m_shaderProgram, "u_objectColor");
-        m_uScaleLoc = glGetUniformLocation(m_shaderProgram, "u_scale");
-        m_uTimeSpeedLoc = glGetUniformLocation(m_shaderProgram, "u_timeSpeed");
-        m_uColorModLoc = glGetUniformLocation(m_shaderProgram, "u_colorMod");
-        m_uPatternScaleLoc = glGetUniformLocation(m_shaderProgram, "u_patternScale");
-        m_uCamPosLoc = glGetUniformLocation(m_shaderProgram, "u_camPos");
-        m_uCamTargetLoc = glGetUniformLocation(m_shaderProgram, "u_camTarget");
-        m_uCamFOVLoc = glGetUniformLocation(m_shaderProgram, "u_camFOV");
-        m_uLightPosLoc = glGetUniformLocation(m_shaderProgram, "u_lightPosition");
-        m_uLightColorLoc = glGetUniformLocation(m_shaderProgram, "u_lightColor");
-    }
+    m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution");
+    m_iTimeLocation = glGetUniformLocation(m_shaderProgram, "iTime");
+    m_iTimeDeltaLocation = glGetUniformLocation(m_shaderProgram, "iTimeDelta");
+    m_iFrameLocation = glGetUniformLocation(m_shaderProgram, "iFrame");
+    m_iMouseLocation = glGetUniformLocation(m_shaderProgram, "iMouse");
+    m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
+    m_iAudioBandsLoc = glGetUniformLocation(m_shaderProgram, "iAudioBands");
 
     // This now runs for ALL effects
     for (auto& control : m_shadertoyUniformControls) {
         control.location = glGetUniformLocation(m_shaderProgram, control.name.c_str());
     }
-
-    m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
-
-    m_uThicknessLoc = glGetUniformLocation(m_shaderProgram, "u_thickness");
-    m_uIterationsLoc = glGetUniformLocation(m_shaderProgram, "u_iterations");
-    m_uAngleLoc = glGetUniformLocation(m_shaderProgram, "u_angle");
-    m_uAudioReactivityLoc = glGetUniformLocation(m_shaderProgram, "u_audio_reactivity");
-    m_uSwayLoc = glGetUniformLocation(m_shaderProgram, "u_sway");
-    m_uColorBLoc = glGetUniformLocation(m_shaderProgram, "u_colorB");
-    m_uGradientMixLoc = glGetUniformLocation(m_shaderProgram, "u_gradient_mix");
 }
 
 void ShaderEffect::ParseShaderControls() {
@@ -822,26 +733,35 @@ void ShaderEffect::Deserialize(const nlohmann::json& data) {
 }
 
 void ShaderEffect::ResetParameters() {
-    // Reset native params
-    m_objectColor[0] = 0.8f; m_objectColor[1] = 0.9f; m_objectColor[2] = 1.0f;
-    m_scale = 1.0f;
-    m_timeSpeed = 1.0f;
-    m_colorMod[0] = 0.1f; m_colorMod[1] = 0.1f; m_colorMod[2] = 0.2f;
-    m_patternScale = 1.0f;
-    m_cameraPosition[0] = 0.0f; m_cameraPosition[1] = 1.0f; m_cameraPosition[2] = -3.0f;
-    m_cameraTarget[0] = 0.0f; m_cameraTarget[1] = 0.0f; m_cameraTarget[2] = 0.0f;
-    m_cameraFOV = 60.0f;
-    m_lightPosition[0] = 2.0f; m_lightPosition[1] = 3.0f; m_lightPosition[2] = -2.0f;
-    m_lightColor[0] = 1.0f; m_lightColor[1] = 1.0f; m_lightColor[2] = 0.9f;
-    
-    // Reset Shadertoy params
-    m_iUserFloat1 = 0.5f;
-    m_iUserColor1[0] = 0.2f; m_iUserColor1[1] = 0.5f; m_iUserColor1[2] = 0.8f;
-
-    // Reset color cycle state
-    m_colorCycleState = ColorCycleState();
-
+    // This function will now effectively re-parse the defaults from the shader source.
     if (!m_shaderSourceCode.empty()) {
         ApplyShaderCode(m_shaderSourceCode);
     }
+}
+
+bool ShaderEffect::CheckForUpdatesAndReload() {
+    if (m_shaderFilePath.empty() || m_shaderFilePath == "dynamic_source" || m_shaderFilePath.rfind("shadertoy://", 0) == 0) {
+        return false; // Not a reloadable file
+    }
+
+    try {
+        auto current_write_time = std::filesystem::last_write_time(m_shaderFilePath);
+        if (current_write_time > m_lastWriteTime) {
+            m_lastWriteTime = current_write_time;
+            LoadShaderFromFile(m_shaderFilePath);
+            ApplyShaderCode(m_shaderSourceCode);
+            return true; // Reloaded
+        }
+    } catch (const std::filesystem::filesystem_error& e) {
+        // File might have been deleted or is otherwise inaccessible
+        // Log this, but don't spam
+        static std::string last_error;
+        if (last_error != e.what()) {
+            std::cerr << "[Hot-Reload] Filesystem error for " << m_shaderFilePath << ": " << e.what() << std::endl;
+            last_error = e.what();
+        }
+        return false;
+    }
+
+    return false; // No changes
 }

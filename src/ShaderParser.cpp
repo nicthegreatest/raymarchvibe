@@ -133,45 +133,34 @@ void ShaderParser::ScanAndPrepareUniformControls(const std::string& shaderCode) 
     m_uniformControls.clear();
     std::istringstream iss(shaderCode);
     std::string line;
-    std::string pending_control_line;
+
+    // This regex finds a uniform declaration and a control comment on the same line.
+    // It captures: 1:type, 2:name, 3:json blob
+    std::regex uniform_control_regex(R"(uniform\s+(float|int|bool|vec2|vec3|vec4)\s+([a-zA-Z_][a-zA-Z0-9_]*)[^/]*?//.*?(\{.*\}))");
 
     while (std::getline(iss, line)) {
-        std::string trimmed_line = Utils::Trim(line);
-        std::regex control_regex(R"(^//\s*#control\s+(color|float|vec2|vec3|vec4|int|bool)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+\"([^\"]*)\"\s+(\{.*\}))");
-        std::smatch control_match;
+        std::smatch match;
+        if (std::regex_search(line, match, uniform_control_regex)) {
+            std::string glsl_type = match[1].str();
+            std::string name_str = match[2].str();
+            std::string json_str = match[3].str();
 
-        if (std::regex_search(trimmed_line, control_match, control_regex)) {
-            pending_control_line = trimmed_line;
-            continue; 
-        }
-
-        if (!pending_control_line.empty()) {
-            std::regex_search(pending_control_line, control_match, control_regex);
-            
-            std::string control_type = control_match[1].str();
-            std::string name_str = control_match[2].str();
-            std::string label_str = control_match[3].str();
-            std::string json_str = control_match[4].str();
-
-            std::string expected_glsl_type = control_type;
-            if (control_type == "color") {
-                expected_glsl_type = "vec3";
-            }
-
-            std::regex uniform_regex(R"(^\s*uniform\s+)" + expected_glsl_type + R"(\s+)" + name_str);
-            if (std::regex_search(trimmed_line, uniform_regex)) {
-                try {
-                    json metadata = json::parse(json_str);
-                    metadata["label"] = label_str;
-                    if (control_type == "color") {
-                        metadata["widget"] = "color";
-                    }
-                    m_uniformControls.emplace_back(name_str, expected_glsl_type, metadata);
-                } catch (const json::parse_error& e) {
-                    std::cerr << "[ShaderParser] JSON parse error for control '" << name_str << "': " << e.what() << std::endl;
+            try {
+                json metadata = json::parse(json_str);
+                if (!metadata.contains("label")) {
+                    metadata["label"] = name_str;
                 }
+                
+                if (metadata.value("type", "") == "color") {
+                    if (glsl_type == "vec3" || glsl_type == "vec4") {
+                         metadata["widget"] = "color";
+                    }
+                }
+
+                m_uniformControls.emplace_back(name_str, glsl_type, metadata);
+            } catch (const json::parse_error& e) {
+                std::cerr << "[ShaderParser] JSON parse error for control '" << name_str << "': " << e.what() << std::endl;
             }
-            pending_control_line.clear();
         }
     }
 
@@ -234,4 +223,33 @@ void ShaderParser::ScanAndPrepareConstControls(const std::string& shaderCode) {
     }
     std::sort(m_constControls.begin(), m_constControls.end(),
               [](const ConstVariableControl& a, const ConstVariableControl& b) { return a.name < b.name; });
+}
+
+std::string ShaderParser::UpdateDefineValueInString(const std::string& shaderCode, const std::string& defineName, float newValue) {
+    std::vector<std::string> lines;
+    std::istringstream iss(shaderCode);
+    std::string line;
+    while (std::getline(iss, line)) {
+        lines.push_back(line);
+    }
+
+    // Regex to find an active (not commented out) #define with a value
+    std::regex defineLineRegex(R"(^(\s*#define\s+)" + defineName + R"(\s+)(.*))");
+    std::smatch match;
+
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (std::regex_match(lines[i], match, defineLineRegex)) {
+            // Found the line. Reconstruct it with the new value.
+            std::ostringstream oss;
+            oss << match[1].str() << newValue;
+            lines[i] = oss.str();
+            break; // Assume only one definition
+        }
+    }
+
+    std::ostringstream oss;
+    for (const auto& l : lines) {
+        oss << l << '\n';
+    }
+    return oss.str();
 }
