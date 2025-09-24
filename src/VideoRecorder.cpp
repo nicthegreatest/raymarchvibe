@@ -1,6 +1,7 @@
 #include "VideoRecorder.h"
 #include <iostream>
 #include <vector>
+#include <chrono> // Required for time-based PTS
 
 VideoRecorder::VideoRecorder() : recording(false), pbo_index(0) {}
 
@@ -23,6 +24,7 @@ void VideoRecorder::init_pbos() {
 
 void VideoRecorder::add_video_frame_from_pbo() {
     if (!recording) return;
+    auto capture_time = std::chrono::steady_clock::now();
     int next_pbo_index = (pbo_index + 1) % PBO_COUNT;
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);
     glReadPixels(0, 0, frame_width, frame_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
@@ -30,7 +32,7 @@ void VideoRecorder::add_video_frame_from_pbo() {
     GLubyte* ptr = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
     if (ptr) {
         std::lock_guard<std::mutex> lock(queue_mutex);
-        video_queue.push(std::vector<uint8_t>(ptr, ptr + frame_width * frame_height * 4));
+        video_queue.push({std::vector<uint8_t>(ptr, ptr + frame_width * frame_height * 4), capture_time});
         cv.notify_one();
         glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     }
@@ -46,12 +48,13 @@ void VideoRecorder::add_audio_frame(const float* samples, int num_samples) {
 }
 
 void VideoRecorder::onAudioData(const float* samples, uint32_t frameCount, int channels, int sampleRate) {
+    if (!m_recordAudio) return;
     if (recording) {
         add_audio_frame(samples, frameCount);
     }
 }
 
-bool VideoRecorder::start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, int input_audio_sample_rate, int input_audio_channels) {
+bool VideoRecorder::start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels) {
     if (recording) {
         std::cerr << "VideoRecorder::start_recording called while already recording." << std::endl;
         return false;
@@ -59,10 +62,16 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     frame_width = width;
     frame_height = height;
     frame_rate = fps;
-    this->input_audio_sample_rate = input_audio_sample_rate;
-    this->input_audio_channels = input_audio_channels;
+    m_recordAudio = record_audio;
+    if (m_recordAudio) {
+        this->input_audio_sample_rate = input_audio_sample_rate;
+        this->input_audio_channels = input_audio_channels;
+    }
     init_pbos();
     recording = true;
+    next_audio_pts = 0;
+    last_video_pts = -1;
+    recording_start_time = std::chrono::steady_clock::now();
     encoding_thread = std::thread(&VideoRecorder::encoding_thread_main, this, filename, format);
     return true;
 }
@@ -83,6 +92,7 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
     format_ctx.reset(raw_format_ctx);
     if (!format_ctx) { std::cerr << "Could not create output context" << std::endl; return; }
 
+    // Video Stream Setup
     const AVCodec* video_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
     video_stream = avformat_new_stream(format_ctx.get(), video_codec);
     video_codec_ctx.reset(avcodec_alloc_context3(video_codec));
@@ -96,70 +106,88 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
     if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) video_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     if (avcodec_open2(video_codec_ctx.get(), video_codec, nullptr) < 0) { std::cerr << "Could not open video codec" << std::endl; return; }
     avcodec_parameters_from_context(video_stream->codecpar, video_codec_ctx.get());
-    video_stream->time_base = {1, 90000}; // Use a high-resolution timebase
+    video_stream->time_base = {1, 90000};
 
-    const AVCodec* audio_codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
-    audio_stream = avformat_new_stream(format_ctx.get(), audio_codec);
-    audio_codec_ctx.reset(avcodec_alloc_context3(audio_codec));
-    audio_codec_ctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-    audio_codec_ctx->bit_rate = 128000;
-    audio_codec_ctx->sample_rate = 44100;
-    av_channel_layout_from_string(&audio_codec_ctx->ch_layout, "stereo");
-    audio_codec_ctx->time_base = {1, audio_codec_ctx->sample_rate};
-    if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) audio_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    if (avcodec_open2(audio_codec_ctx.get(), audio_codec, nullptr) < 0) { std::cerr << "Could not open audio codec" << std::endl; return; }
-    avcodec_parameters_from_context(audio_stream->codecpar, audio_codec_ctx.get());
-    audio_stream->time_base = {1, 90000}; // Use a high-resolution timebase
+    // Audio Stream Setup (Conditional)
+    if (m_recordAudio) {
+        const AVCodec* audio_codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+        audio_stream = avformat_new_stream(format_ctx.get(), audio_codec);
+        audio_codec_ctx.reset(avcodec_alloc_context3(audio_codec));
+        audio_codec_ctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+        audio_codec_ctx->bit_rate = 128000;
+        audio_codec_ctx->sample_rate = 44100;
+        av_channel_layout_from_string(&audio_codec_ctx->ch_layout, "stereo");
+        audio_codec_ctx->time_base = {1, audio_codec_ctx->sample_rate};
+        if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) audio_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        if (avcodec_open2(audio_codec_ctx.get(), audio_codec, nullptr) < 0) { std::cerr << "Could not open audio codec" << std::endl; return; }
+        avcodec_parameters_from_context(audio_stream->codecpar, audio_codec_ctx.get());
+        audio_stream->time_base = {1, 90000};
+    }
 
     if (!(format_ctx->oformat->flags & AVFMT_NOFILE)) {
         if (avio_open(&format_ctx->pb, filename.c_str(), AVIO_FLAG_WRITE) < 0) { std::cerr << "Could not open output file" << std::endl; return; }
     }
     if (avformat_write_header(format_ctx.get(), nullptr) < 0) { std::cerr << "Could not write header" << std::endl; return; }
 
+    // Video Frame Setup
     video_frame.reset(av_frame_alloc());
     video_frame->format = video_codec_ctx->pix_fmt;
     video_frame->width = frame_width;
     video_frame->height = frame_height;
     av_frame_get_buffer(video_frame.get(), 32);
 
-    audio_frame.reset(av_frame_alloc());
-    audio_frame->format = audio_codec_ctx->sample_fmt;
-    audio_frame->ch_layout = audio_codec_ctx->ch_layout;
-    audio_frame->sample_rate = audio_codec_ctx->sample_rate;
-    audio_frame->nb_samples = audio_codec_ctx->frame_size == 0 ? 1024 : audio_codec_ctx->frame_size;
-    av_frame_get_buffer(audio_frame.get(), 0);
+    // Audio Frame and Resampler Setup (Conditional)
+    if (m_recordAudio) {
+        audio_frame.reset(av_frame_alloc());
+        audio_frame->format = audio_codec_ctx->sample_fmt;
+        audio_frame->ch_layout = audio_codec_ctx->ch_layout;
+        audio_frame->sample_rate = audio_codec_ctx->sample_rate;
+        audio_frame->nb_samples = audio_codec_ctx->frame_size == 0 ? 1024 : audio_codec_ctx->frame_size;
+        av_frame_get_buffer(audio_frame.get(), 0);
+
+        SwrContext* swr_ptr = nullptr;
+        AVChannelLayout in_ch_layout;
+        if (input_audio_channels == 1) {
+            av_channel_layout_from_string(&in_ch_layout, "mono");
+        } else {
+            av_channel_layout_from_string(&in_ch_layout, "stereo");
+        }
+        swr_alloc_set_opts2(&swr_ptr, &audio_codec_ctx->ch_layout, audio_codec_ctx->sample_fmt, audio_codec_ctx->sample_rate, &in_ch_layout, AV_SAMPLE_FMT_FLT, input_audio_sample_rate, 0, nullptr);
+        swr_ctx.reset(swr_ptr);
+        swr_init(swr_ctx.get());
+    }
 
     sws_ctx.reset(sws_getContext(frame_width, frame_height, AV_PIX_FMT_RGBA, frame_width, frame_height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, nullptr, nullptr, nullptr));
     
-    SwrContext* swr_ptr = nullptr;
-    AVChannelLayout in_ch_layout;
-    // Set input channel layout based on channel count
-    if (input_audio_channels == 1) {
-        av_channel_layout_from_string(&in_ch_layout, "mono");
-    } else {
-        av_channel_layout_from_string(&in_ch_layout, "stereo");
-    }
-    swr_alloc_set_opts2(&swr_ptr, &audio_codec_ctx->ch_layout, audio_codec_ctx->sample_fmt, audio_codec_ctx->sample_rate, &in_ch_layout, AV_SAMPLE_FMT_FLT, input_audio_sample_rate, 0, nullptr);
-    swr_ctx.reset(swr_ptr);
-    swr_init(swr_ctx.get());
-
     std::vector<float> audio_input_buffer;
-    while (recording || !video_queue.empty() || !audio_queue.empty()) {
+    while (recording || !video_queue.empty() || (m_recordAudio && !audio_queue.empty())) {
         std::unique_lock<std::mutex> lock(queue_mutex);
-        cv.wait(lock, [this] { return !recording || !video_queue.empty() || !audio_queue.empty(); });
+        cv.wait(lock, [this] { return !recording || !video_queue.empty() || (m_recordAudio && !audio_queue.empty()); });
 
+        // Video Encoding Loop
         while (!video_queue.empty()) {
-            std::vector<uint8_t> pixels = video_queue.front();
+            auto frame_data = video_queue.front();
             video_queue.pop();
             lock.unlock();
+
+            const std::vector<uint8_t>& pixels = frame_data.first;
+            const auto& capture_time = frame_data.second;
 
             const int src_stride[1] = { -frame_width * 4 };
             const uint8_t* src_slices[1] = { pixels.data() + (frame_height - 1) * frame_width * 4 };
             sws_scale(sws_ctx.get(), src_slices, src_stride, 0, frame_height, video_frame->data, video_frame->linesize);
             
-            video_frame->pts = next_video_pts++;
+            auto elapsed_duration = capture_time - recording_start_time;
+            double elapsed_seconds = std::chrono::duration_cast<std::chrono::duration<double>>(elapsed_duration).count();
+            int64_t pts = static_cast<int64_t>(elapsed_seconds * frame_rate);
 
-            AVPacket pkt; 
+            if (pts <= last_video_pts) {
+                pts = last_video_pts + 1;
+            }
+            last_video_pts = pts;
+            video_frame->pts = pts;
+
+            AVPacket pkt;
             av_new_packet(&pkt, 0);
             int ret = avcodec_send_frame(video_codec_ctx.get(), video_frame.get());
             if (ret < 0) { lock.lock(); continue; }
@@ -174,41 +202,45 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
             lock.lock();
         }
 
-        while (!audio_queue.empty()) {
-            std::vector<float> samples = audio_queue.front();
-            audio_queue.pop();
-            lock.unlock();
+        // Audio Encoding Loop (Conditional)
+        if (m_recordAudio) {
+            while (!audio_queue.empty()) {
+                std::vector<float> samples = audio_queue.front();
+                audio_queue.pop();
+                lock.unlock();
 
-            audio_input_buffer.insert(audio_input_buffer.end(), samples.begin(), samples.end());
-            const int output_samples_per_frame = audio_frame->nb_samples;
-            const int input_samples_needed = av_rescale_rnd(output_samples_per_frame, input_audio_sample_rate, audio_codec_ctx->sample_rate, AV_ROUND_UP);
-            const int total_input_samples_needed = input_samples_needed * input_audio_channels;
+                audio_input_buffer.insert(audio_input_buffer.end(), samples.begin(), samples.end());
+                const int output_samples_per_frame = audio_frame->nb_samples;
+                const int input_samples_needed = av_rescale_rnd(output_samples_per_frame, input_audio_sample_rate, audio_codec_ctx->sample_rate, AV_ROUND_UP);
+                const int total_input_samples_needed = input_samples_needed * input_audio_channels;
 
-            while (audio_input_buffer.size() >= total_input_samples_needed) {
-                const uint8_t* in_data = (const uint8_t*)audio_input_buffer.data();
-                int out_samples = swr_convert(swr_ctx.get(), audio_frame->data, output_samples_per_frame, &in_data, input_samples_needed);
-                if (out_samples > 0) {
-                    audio_frame->pts = next_audio_pts;
-                    next_audio_pts += out_samples;
-                    AVPacket pkt;
-                    av_new_packet(&pkt, 0);
-                    int ret = avcodec_send_frame(audio_codec_ctx.get(), audio_frame.get());
-                    if (ret < 0) { break; }
-                    while (ret >= 0) {
-                        ret = avcodec_receive_packet(audio_codec_ctx.get(), &pkt);
-                        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
-                        av_packet_rescale_ts(&pkt, audio_codec_ctx->time_base, audio_stream->time_base);
-                        pkt.stream_index = audio_stream->index;
-                        av_interleaved_write_frame(format_ctx.get(), &pkt);
-                        av_packet_unref(&pkt);
+                while (audio_input_buffer.size() >= total_input_samples_needed) {
+                    const uint8_t* in_data = (const uint8_t*)audio_input_buffer.data();
+                    int out_samples = swr_convert(swr_ctx.get(), audio_frame->data, output_samples_per_frame, &in_data, input_samples_needed);
+                    if (out_samples > 0) {
+                        audio_frame->pts = next_audio_pts;
+                        next_audio_pts += out_samples;
+                        AVPacket pkt;
+                        av_new_packet(&pkt, 0);
+                        int ret = avcodec_send_frame(audio_codec_ctx.get(), audio_frame.get());
+                        if (ret < 0) { break; }
+                        while (ret >= 0) {
+                            ret = avcodec_receive_packet(audio_codec_ctx.get(), &pkt);
+                            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+                            av_packet_rescale_ts(&pkt, audio_codec_ctx->time_base, audio_stream->time_base);
+                            pkt.stream_index = audio_stream->index;
+                            av_interleaved_write_frame(format_ctx.get(), &pkt);
+                            av_packet_unref(&pkt);
+                        }
                     }
+                    audio_input_buffer.erase(audio_input_buffer.begin(), audio_input_buffer.begin() + total_input_samples_needed);
                 }
-                audio_input_buffer.erase(audio_input_buffer.begin(), audio_input_buffer.begin() + total_input_samples_needed);
+                lock.lock();
             }
-            lock.lock();
         }
     }
 
+    // Flushing encoders
     AVPacket pkt;
     av_new_packet(&pkt, 0);
     int ret = avcodec_send_frame(video_codec_ctx.get(), nullptr);
@@ -221,18 +253,18 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
         av_packet_unref(&pkt);
     }
 
-    av_new_packet(&pkt, 0);
-    ret = avcodec_send_frame(audio_codec_ctx.get(), nullptr);
-    while (ret >= 0) {
-        ret = avcodec_receive_packet(audio_codec_ctx.get(), &pkt);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
-        av_packet_rescale_ts(&pkt, audio_codec_ctx->time_base, audio_stream->time_base);
-        pkt.stream_index = audio_stream->index;
-        av_interleaved_write_frame(format_ctx.get(), &pkt);
-        av_packet_unref(&pkt);
+    if (m_recordAudio) {
+        av_new_packet(&pkt, 0);
+        ret = avcodec_send_frame(audio_codec_ctx.get(), nullptr);
+        while (ret >= 0) {
+            ret = avcodec_receive_packet(audio_codec_ctx.get(), &pkt);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+            av_packet_rescale_ts(&pkt, audio_codec_ctx->time_base, audio_stream->time_base);
+            pkt.stream_index = audio_stream->index;
+            av_interleaved_write_frame(format_ctx.get(), &pkt);
+            av_packet_unref(&pkt);
+        }
     }
 
     av_write_trailer(format_ctx.get());
-    
-    // All unique_ptrs will now automatically clean up their resources
 }

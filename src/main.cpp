@@ -435,6 +435,9 @@ void RenderMenuBar() {
                 ImGui::EndCombo();
             }
 
+            static bool g_recordAudio = true;
+            ImGui::Checkbox("Record Audio", &g_recordAudio);
+
             if (g_videoRecorder.is_recording()) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
@@ -460,10 +463,15 @@ void RenderMenuBar() {
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
                 if (ImGui::Button("Start Recording")) {
+                    // Ensure the audio device is started if we are recording with mic input
+                    if (g_recordAudio && g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::Microphone && !g_audioSystem.IsCaptureDeviceInitialized()) {
+                        g_audioSystem.InitializeAndStartSelectedCaptureDevice();
+                    }
+
                     if (std::filesystem::exists(filename)) {
                         ImGui::OpenPopup("Overwrite File?");
                     } else {
-                        g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx],
+                        g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx], g_recordAudio,
                                                     g_audioSystem.GetCurrentInputSampleRate(),
                                                     g_audioSystem.GetCurrentInputChannels());
                         g_recordingStartTime = std::chrono::steady_clock::now();
@@ -478,7 +486,11 @@ void RenderMenuBar() {
                 ImGui::Text("File '%s' already exists.\nDo you want to overwrite it?", filename);
                 ImGui::Separator();
                 if (ImGui::Button("Overwrite", ImVec2(120, 0))) {
-                    g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx],
+                    // Ensure the audio device is started if we are recording with mic input
+                    if (g_recordAudio && g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::Microphone && !g_audioSystem.IsCaptureDeviceInitialized()) {
+                        g_audioSystem.InitializeAndStartSelectedCaptureDevice();
+                    }
+                    g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx], g_recordAudio,
                                                 g_audioSystem.GetCurrentInputSampleRate(),
                                                 g_audioSystem.GetCurrentInputChannels());
                     g_recordingStartTime = std::chrono::steady_clock::now();

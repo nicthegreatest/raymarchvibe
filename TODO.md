@@ -6,6 +6,21 @@ This file outlines the plan to address issues identified during a code review, w
 
 - [ ] **Fix Video Recording Duration Bug:** A 20-second recording results in a ~55-second video file. The presentation timestamps (PTS) for video frames are being calculated or interpreted incorrectly, stretching the video's duration.
 
+    **Debugging Summary (2025-09-24):**
+    A series of attempts were made to resolve this persistent bug. The core issue is a desynchronization between the video and audio streams, where a recording of a given duration results in a video stream that is approximately 3x longer, while the audio stream has the correct length.
+
+    1.  **Initial State:** The video PTS was calculated using a simple frame counter (`frame_pts++`). This resulted in a ~3x slowdown, indicating the application was rendering much faster (~180fps) than the codec's configured framerate (60fps), causing too many frames to be timestamped within a given second.
+
+    2.  **Attempted Fix 1: Real-time PTS Calculation:** The logic was changed to use `std::chrono` to calculate a real-time PTS for each video frame, independent of the application's framerate. 
+        -   **Intended Result:** To decouple the video timestamps from the render speed, ensuring the final video duration matched the recording duration.
+        -   **Actual Result:** This led to major errors (`non-strictly-monotonic PTS`) and catastrophically long video files (e.g., 2.5 hours for a 5-second recording), indicating a fundamental error in how the timestamps were being calculated or rescaled.
+
+    3.  **Attempted Fix 2: Audio Clock Synchronization:** Analysis of the output file showed a complete lack of an audio stream. The root cause was identified as the audio device not being active when recording started. The fix was to automatically start the default microphone to provide a stable audio clock for the video to sync against.
+        -   **Intended Result:** The presence of a correctly timed audio stream would force the video container to have the correct duration, and the video frames would be synchronized to it.
+        -   **Actual Result:** This successfully added an audio track of the correct length to the output file. However, the video stream was still ~3x too long. For a 10-second recording, the audio now correctly plays for 10 seconds while the slow-motion video continues for another ~20 seconds.
+
+    4.  **Current State:** The code uses a robust, real-time (`chrono`-based) PTS calculation for video frames, and correctly handles optional audio recording by ensuring the audio device is active. Despite the video PTS calculation being theoretically sound and following standard practices, the output video duration is still consistently ~3x longer than the actual recording time. This indicates a persistent, deep-seated issue in how FFmpeg's `libx264` codec or muxer is interpreting the provided timestamps.
+
 ## Completed Tasks
 
 - [x] **Re-architect Video Frame Capture for Performance**

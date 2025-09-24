@@ -10,11 +10,10 @@
 #include <condition_variable>
 #include <atomic>
 #include <queue>
-
+#include <chrono>
+#include <memory>
 
 #include "IAudioListener.h"
-
-#include <memory>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -58,7 +57,7 @@ public:
     VideoRecorder();
     ~VideoRecorder();
 
-    bool start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, int input_audio_sample_rate, int input_audio_channels);
+    bool start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels);
     void stop_recording();
     void add_video_frame_from_pbo();
     void add_audio_frame(const float* samples, int num_samples);
@@ -82,6 +81,9 @@ private:
     std::unique_ptr<AVFrame, AVFrameDeleter> audio_frame;
     std::unique_ptr<SwrContext, SwrContextDeleter> swr_ctx;
 
+    // Recording settings
+    bool m_recordAudio;
+
     // Frame properties
     int frame_width;
     int frame_height;
@@ -90,6 +92,10 @@ private:
     int input_audio_channels;
     int64_t next_video_pts = 0;
     int64_t next_audio_pts = 0;
+    int64_t last_video_pts = -1;
+
+    // Timing
+    std::chrono::steady_clock::time_point recording_start_time;
 
     // PBO members
     static const int PBO_COUNT = 2;
@@ -103,7 +109,7 @@ private:
     std::condition_variable cv;
 
     // Frame queues
-    std::queue<std::vector<uint8_t>> video_queue;
+    std::queue<std::pair<std::vector<uint8_t>, std::chrono::steady_clock::time_point>> video_queue;
     std::queue<std::vector<float>> audio_queue;
 };
 
