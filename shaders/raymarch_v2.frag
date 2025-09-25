@@ -2,35 +2,26 @@
 
 out vec4 FragColor;
 
-// --- UI Controls (metadata for C++ app) ---
-//#control color u_objectColor "Object Color" {"default":[0.8, 0.5, 0.3]}
-//#control color u_lightColor "Light Color" {"default":[1.0, 0.9, 0.8]}
-//#control float u_smoothness "Smooth Union" {"default":0.1, "min":0.0, "max":1.0}
-//#define_control ENABLE_AO 1
-//#define_control ENABLE_SOFT_SHADOWS 1
+// --- Shader Parameters ---
+uniform vec3 u_objectColor = vec3(0.8, 0.5, 0.3);      // {"widget":"color", "label":"Object Color"}
+uniform vec3 u_lightColor = vec3(1.0, 0.9, 0.8);       // {"widget":"color", "label":"Light Color"}
+uniform float u_smoothness = 0.1;                     // {"default":0.1, "min":0.0, "max":1.0, "label":"Smooth Union"}
+uniform bool u_enableAO = true;                       // {"label":"Enable AO"}
+uniform bool u_enableSoftShadows = true;              // {"label":"Enable Soft Shadows"}
+uniform float u_scale = 1.0;                          // {"default": 1.0, "min": 0.1, "max": 2.0, "label": "Scale"}
+uniform float u_timeSpeed = 0.2;                      // {"default": 0.2, "min": 0.0, "max": 2.0, "label": "Time Speed"}
+uniform vec3 u_colorMod = vec3(0.1, 0.1, 0.2);        // {"widget":"color", "label": "Color Modulation"}
+uniform float u_patternScale = 1.0;                   // {"default": 1.0, "min": 0.5, "max": 20.0, "label": "Pattern Scale"}
+uniform vec3 u_camPos = vec3(0.0, 1.0, -3.0);         // {"label": "Camera Position"}
+uniform vec3 u_camTarget = vec3(0.0, 0.0, 0.0);       // {"label": "Camera Target"}
+uniform float u_camFOV = 60.0;                        // {"default": 60.0, "min": 15.0, "max": 120.0, "label": "Field of View"}
+uniform vec3 u_lightPosition = vec3(2.0, 3.0, -2.0);  // {"label": "Light Position"}
 
 // --- Standard Uniforms (from your C++ app) ---
 uniform vec2 iResolution;
 uniform float iTime;
 uniform sampler2D iChannel0; // Input texture from another effect
 uniform bool iChannel0_active;
-
-// --- Native Controls (from your C++ app) ---
-uniform vec3 u_objectColor;   // Base color of the dodecahedron
-uniform float u_scale;        // Overall scale of the dodecahedron
-uniform float u_timeSpeed;    // Speed of rotation
-uniform vec3 u_colorMod;      // For color effects (can be used for psychedelic patterns)
-uniform float u_patternScale; // Can be repurposed (e.g., for surface pattern frequency)
-uniform float u_smoothness;   // Controls the smoothness of the union between shapes
-
-// Camera Uniforms
-uniform vec3 u_camPos;
-uniform vec3 u_camTarget;
-uniform float u_camFOV; // Field of View in degrees
-
-// Light Uniforms
-uniform vec3 u_lightPosition;
-uniform vec3 u_lightColor;
 
 // --- Helper Functions ---
 float radians(float degrees) {
@@ -109,11 +100,7 @@ float mapScene(vec3 p, float time) {
 
     float dodecaDist = sdDodecahedron(p_transformed, dodecaInradius);
 
-    // Optional ground plane for context
-    float planeDist = p.y + 0.0; // Plane at y = 0
-
-    // Use smooth union instead of min()
-    return opSmoothUnion(dodecaDist, planeDist, u_smoothness);
+    return dodecaDist;
 }
 
 // --- Normal Calculation (using the scene map) ---
@@ -196,9 +183,10 @@ void main() {
         vec3 lightDir = normalize(u_lightPosition - hitPos);
         float diffuse = max(0.0, dot(normal, lightDir));
         
-        #ifdef ENABLE_AO
+        float ao;
+        if (u_enableAO) {
         // Ambient Occlusion (simple)
-        float ao = 0.0;
+        ao = 0.0;
         float aoStep = 0.01 * u_scale;
         float aoTotalDist = 0.0;
         for(int j=0; j<4; j++){ // Fewer AO steps for performance
@@ -208,15 +196,15 @@ void main() {
             aoStep *= 1.8;
         }
         ao = 1.0 - clamp(ao * (0.15 / (u_scale*u_scale) ), 0.0, 1.0);
-        #else
-        float ao = 1.0; // AO is disabled, so full ambient light
-        #endif
+        } else {
+        ao = 1.0; // AO is disabled, so full ambient light
+        }
 
         float shadow = 1.0; // Default to no shadow
-        #ifdef ENABLE_SOFT_SHADOWS
+        if (u_enableSoftShadows) {
         // Soft Shadows
         shadow = getSoftShadow(hitPos + normal * 0.002, lightDir, 0.001, 5.0, 16.0, iTime);
-        #endif
+        }
 
         // Specular
         vec3 viewDir = normalize(ro - hitPos);
