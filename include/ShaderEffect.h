@@ -27,6 +27,7 @@ public:
     bool LoadShaderFromSource(const std::string& sourceCode);
     void ApplyShaderCode(const std::string& newShaderCode);
     void SetShadertoyMode(bool mode);
+    bool IsShadertoyMode() const; // Added getter
 
     void SetMouseState(float x, float y, float click_x, float click_y);
     void SetDisplayResolution(int width, int height);

@@ -424,6 +424,10 @@ void ShaderEffect::RenderUI() {
     }
 }
 
+bool ShaderEffect::IsShadertoyMode() const {
+    return m_isShadertoyMode;
+}
+
 // Obsolete function, replaced by data-driven UI from shader parsing.
 
 void ShaderEffect::RenderParsedUniformsUI() {
