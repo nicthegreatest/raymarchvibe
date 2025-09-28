@@ -195,7 +195,10 @@ static const std::vector<std::pair<std::string, std::string>> g_demoShaders = {
     {"Sample: Fractal 2", "shaders/samples/fractal2.frag"},
     {"Sample: Fractal 3", "shaders/samples/fractal3.frag"},
     {"Sample: Simple Red", "shaders/samples/simple_red.frag"},
-    {"Sample: UV Pattern", "shaders/samples/uv_pattern.frag"}
+    {"Sample: UV Pattern", "shaders/samples/uv_pattern.frag"},
+    {"Sample: Fractal Tree Audio", "shaders/samples/fractal_tree_audio.frag"},
+    {"Sample: Soap Bubbles", "shaders/samples/shape_soap_bubble.frag"},
+    {"Sample: Heart Shape", "shaders/samples/shape_heart.frag"}
 };
 
 // Shader Templates
@@ -845,36 +848,6 @@ void RenderNodeEditorWindow() {
                 }
                 if (ImGui::MenuItem("Noise Generator")) {
                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateNoiseEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Fractal Tree Audio")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateFractalTreeAudioEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Soap Bubbles")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateSoapBubbleEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Heart Shape")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateHeartEffect();
                     if (newEffectUniquePtr) {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
