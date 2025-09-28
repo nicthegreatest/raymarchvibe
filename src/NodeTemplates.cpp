@@ -163,35 +163,5 @@ std::unique_ptr<Effect> CreateNoiseEffect(int initial_width, int initial_height)
     return effect;
 }
 
-std::unique_ptr<Effect> CreateFractalTreeAudioEffect(int initial_width, int initial_height) {
-    auto effect = std::make_unique<ShaderEffect>(
-        "shaders/templates/fractal_tree_audio.frag",
-        initial_width,
-        initial_height
-    );
-    effect->name = "Fractal Tree Audio";
-    return effect;
-}
-
-std::unique_ptr<Effect> CreateSoapBubbleEffect(int initial_width, int initial_height) {
-    auto effect = std::make_unique<ShaderEffect>(
-        "shaders/templates/shape_soap_bubble.frag",
-        initial_width,
-        initial_height
-    );
-    effect->name = "Soap Bubbles";
-    return effect;
-}
-
-std::unique_ptr<Effect> CreateHeartEffect(int initial_width, int initial_height) {
-    auto effect = std::make_unique<ShaderEffect>(
-        "shaders/templates/shape_heart.frag",
-        initial_width,
-        initial_height
-    );
-    effect->name = "Heart Shape";
-    return effect;
-}
-
 } // namespace NodeTemplates
 } // namespace RaymarchVibe
