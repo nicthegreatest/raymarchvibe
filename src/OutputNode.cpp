@@ -66,3 +66,7 @@ void OutputNode::Deserialize(const nlohmann::json& data) {
 void OutputNode::ResetParameters() {
     // No parameters to reset
 }
+
+std::unique_ptr<Effect> OutputNode::Clone() const {
+    return std::make_unique<OutputNode>(*this);
+}

@@ -135,3 +135,12 @@ void ImageEffect::Deserialize(const nlohmann::json& j) {
         }
     }
 }
+
+std::unique_ptr<Effect> ImageEffect::Clone() const {
+    auto newEffect = std::make_unique<ImageEffect>();
+    newEffect->name = this->name + " (Copy)";
+    if (!this->m_imagePath.empty()) {
+        newEffect->LoadImage(this->m_imagePath);
+    }
+    return newEffect;
+}

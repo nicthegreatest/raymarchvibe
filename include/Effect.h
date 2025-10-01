@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <memory> // For std::unique_ptr
 #include <glad/glad.h> // For GLuint in GetOutputTexture
 #include <nlohmann/json.hpp> // Added for nlohmann::json serialization
 #include <iostream> // Required for std::cout (for temporary debugging ID assignment)
@@ -12,6 +13,9 @@
 class Effect {
 public:
     virtual ~Effect() = default;
+
+    // Create a deep copy of the effect.
+    virtual std::unique_ptr<Effect> Clone() const = 0;
 
     // Load resources like shaders, textures, etc.
     virtual void Load() = 0;

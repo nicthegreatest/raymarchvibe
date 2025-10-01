@@ -273,6 +273,17 @@ void MarkNodeForDeletion(int node_id) {
     }
 }
 
+// Helper function to add a new effect to the scene and set its initial position
+void CreateAndPlaceNode(std::unique_ptr<Effect> newEffect, ImVec2 position) {
+    if (newEffect) {
+        Effect* rawPtr = newEffect.get();
+        g_scene.push_back(std::move(newEffect));
+        rawPtr->Load();
+        g_nodes_requiring_initial_position.insert(rawPtr->id);
+        g_new_node_initial_positions[rawPtr->id] = position;
+    }
+}
+
 // Helper to load file content
 static std::string LoadFileContent(const std::string& path, std::string& errorMsg) {
     std::ifstream file(path);
@@ -752,6 +763,48 @@ void RenderNodeEditorWindow() {
 
         if (ImGui::BeginPopupContextItem("Node Context Menu"))
         {
+            if (ImGui::MenuItem("Duplicate"))
+            {
+                if (effect_ptr) {
+                    auto newEffect = effect_ptr->Clone();
+                    Effect* rawPtr = newEffect.get();
+                    g_scene.push_back(std::move(newEffect));
+                    rawPtr->Load(); // Important to load after adding to scene
+
+                    // Position the new node near the original
+                    ImVec2 originalPos = ImNodes::GetNodeScreenSpacePos(effect_ptr->id);
+                    g_nodes_requiring_initial_position.insert(rawPtr->id);
+                    g_new_node_initial_positions[rawPtr->id] = originalPos + ImVec2(50.0f, 50.0f);
+                }
+            }
+            if (ImGui::MenuItem("Unlink"))
+            {
+                // 1. Clear all input connections OF this node
+                for (int i = 0; i < effect_ptr->GetInputPinCount(); ++i) {
+                    effect_ptr->SetInputEffect(i, nullptr);
+                }
+
+                // 2. Clear all connections FROM other nodes TO this node
+                for (const auto& other_effect : g_scene) {
+                    if (other_effect && other_effect.get() != effect_ptr.get()) {
+                        // This requires a virtual method in Effect to get all its inputs
+                        // and check if they point to effect_ptr. For now, we assume ShaderEffect and OutputNode.
+                        if (auto* other_se = dynamic_cast<ShaderEffect*>(other_effect.get())) {
+                            const auto& inputs = other_se->GetInputs();
+                            for (size_t i = 0; i < inputs.size(); ++i) {
+                                if (inputs[i] && inputs[i]->id == effect_ptr->id) {
+                                    other_se->SetInputEffect(i, nullptr);
+                                }
+                            }
+                        } else if (auto* other_on = dynamic_cast<OutputNode*>(other_effect.get())) {
+                            if (other_on->GetInputEffect() && other_on->GetInputEffect()->id == effect_ptr->id) {
+                                other_on->SetInputEffect(0, nullptr);
+                            }
+                        }
+                    }
+                }
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("Delete"))
             {
                 MarkNodeForDeletion(effect_ptr->id);
@@ -797,204 +850,49 @@ void RenderNodeEditorWindow() {
         }
     }
 
+    static ImVec2 popup_pos;
     // Context menu for adding new nodes, triggered by right-click on the editor canvas
     // Ensuring this is called within BeginNodeEditor / EndNodeEditor
     if (ImNodes::IsEditorHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+        popup_pos = ImGui::GetMousePos();
         ImGui::OpenPopup("AddNodeContextMenu");
     }
 
     if (ImGui::BeginPopup("AddNodeContextMenu")) {
         if (ImGui::BeginMenu("Add Effect")) {
             if (ImGui::BeginMenu("Generators")) {
-                if (ImGui::MenuItem("Basic Plasma")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreatePlasmaBasicEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Simple Color")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateSimpleColorEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Value Noise")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateValueNoiseEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Noise Generator")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateNoiseEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Raymarch Sphere")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateRaymarchSphereEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Circular Audio Viz")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateCircularAudioVizEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Debug Color")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateDebugColorEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
+                if (ImGui::MenuItem("Basic Plasma")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreatePlasmaBasicEffect(), popup_pos);
+                if (ImGui::MenuItem("Simple Color")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateSimpleColorEffect(), popup_pos);
+                if (ImGui::MenuItem("Value Noise")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateValueNoiseEffect(), popup_pos);
+                if (ImGui::MenuItem("Noise Generator")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateNoiseEffect(), popup_pos);
+                if (ImGui::MenuItem("Raymarch Sphere")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateRaymarchSphereEffect(), popup_pos);
+                if (ImGui::MenuItem("Circular Audio Viz")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateCircularAudioVizEffect(), popup_pos);
+                if (ImGui::MenuItem("Debug Color")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateDebugColorEffect(), popup_pos);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Filters")) {
-                if (ImGui::MenuItem("Invert Color")) {
-                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateInvertColorEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Brightness/Contrast")) {
-                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateBrightnessContrastEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Color Correction")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateColorCorrectionEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Sharpen")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateSharpenEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Grain")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateGrainEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Chromatic Aberration")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateChromaticAberrationEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
+                if (ImGui::MenuItem("Invert Color")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateInvertColorEffect(), popup_pos);
+                if (ImGui::MenuItem("Brightness/Contrast")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateBrightnessContrastEffect(), popup_pos);
+                if (ImGui::MenuItem("Color Correction")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateColorCorrectionEffect(), popup_pos);
+                if (ImGui::MenuItem("Sharpen")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateSharpenEffect(), popup_pos);
+                if (ImGui::MenuItem("Grain")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateGrainEffect(), popup_pos);
+                if (ImGui::MenuItem("Chromatic Aberration")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateChromaticAberrationEffect(), popup_pos);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Post-Processing")) {
-                if (ImGui::MenuItem("Bloom")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateBloomEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Tone Mapping")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateToneMappingEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Vignette")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateVignetteEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
+                if (ImGui::MenuItem("Bloom")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateBloomEffect(), popup_pos);
+                if (ImGui::MenuItem("Tone Mapping")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateToneMappingEffect(), popup_pos);
+                if (ImGui::MenuItem("Vignette")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateVignetteEffect(), popup_pos);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Image")) {
-                if (ImGui::MenuItem("Image Loader")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateImageLoaderEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
+                if (ImGui::MenuItem("Image Loader")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateImageLoaderEffect(), popup_pos);
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Output")) {
-            if (ImGui::MenuItem("Scene Output")) {
-                auto newEffect = std::make_unique<OutputNode>();
-                newEffect->Load();
-                g_scene.push_back(std::move(newEffect));
-            }
+            if (ImGui::MenuItem("Scene Output")) CreateAndPlaceNode(std::make_unique<OutputNode>(), popup_pos);
             ImGui::EndMenu();
         }
         ImGui::EndPopup();

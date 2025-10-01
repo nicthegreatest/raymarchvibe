@@ -81,16 +81,12 @@ The project uses CMake to manage the build process and dependencies.
     *   `ApplyShaderCode(const std::string&)`: Re-compiles the shader with new source code.
     *   `RenderUI()`: Renders the dynamically generated UI controls for the shader's uniforms.
     *   `SetInputEffect(int pinIndex, Effect* inputEffect)`: Connects another effect to one of this effect's input pins.
-    *   **Common Usage Pattern:** A new `ShaderEffect` is created, added to the `g_scene`, and then its inputs are connected from other effects.
+    *   **Common Usage Pattern:** A new `ShaderEffect` is created and added to the scene using the `CreateAndPlaceNode` helper function inside a menu item handler in `main.cpp`.
         ```cpp
-        // In main.cpp, inside a menu item handler
-        auto newEffect = std::make_unique<ShaderEffect>("shaders/templates/my_shader.frag", width, height);
-        Effect* rawPtr = newEffect.get(); // Get raw pointer before moving ownership
-        g_scene.push_back(std::move(newEffect));
-        rawPtr->Load();
-
-        // To connect 'someOtherEffect' to the first input of the new effect:
-        // rawPtr->SetInputEffect(0, someOtherEffect);
+        // In main.cpp, inside a menu item handler for the node editor
+        if (ImGui::MenuItem("My New Shader")) {
+            CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateMyNewShaderEffect(), popup_pos);
+        }
         ```
 
 *   **`AudioSystem`**
@@ -186,5 +182,10 @@ Only proceed with this method if the user has given you explicit permission afte
 1.  **Generate and save the shader file** to `shaders/templates/my_new_effect.frag` (if not already done).
 2.  **Add a factory function declaration** in `include/NodeTemplates.h`.
 3.  **Implement the factory function** in `src/NodeTemplates.cpp`.
-4.  **Add a `ImGui::MenuItem`** in `src/main.cpp` inside `RenderNodeEditorWindow` to call your factory function.
+4.  **Add a `ImGui::MenuItem`** in `src/main.cpp` inside `RenderNodeEditorWindow` to call your factory function via the `CreateAndPlaceNode` helper.
+    ```cpp
+    if (ImGui::MenuItem("My New Effect")) {
+        CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateMyNewEffect(), popup_pos);
+    }
+    ```
 5.  **Commit your changes** with a clear and descriptive commit message.
