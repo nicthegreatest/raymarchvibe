@@ -23,6 +23,8 @@ public:
     void Deserialize(const nlohmann::json& data) override;
     void ResetParameters() override;
 
+    std::unique_ptr<Effect> Clone() const override;
+
     int GetDeserializedInputId() const { return m_deserialized_input_id; }
 
 private:

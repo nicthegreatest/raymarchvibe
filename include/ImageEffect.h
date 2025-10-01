@@ -20,6 +20,8 @@ public:
     nlohmann::json Serialize() const override;
     void Deserialize(const nlohmann::json& j) override;
 
+    std::unique_ptr<Effect> Clone() const override;
+
 private:
     GLuint m_textureID = 0;
     int m_width = 0;

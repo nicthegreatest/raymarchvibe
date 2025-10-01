@@ -773,6 +773,30 @@ bool ShaderEffect::CheckForUpdatesAndReload() {
     return false; // No changes
 }
 
+std::unique_ptr<Effect> ShaderEffect::Clone() const {
+    // Create a new ShaderEffect with the same basic configuration
+    auto newEffect = std::make_unique<ShaderEffect>(m_shaderFilePath, m_fboWidth, m_fboHeight, m_isShadertoyMode);
+
+    // Copy the name
+    newEffect->name = this->name + " (Copy)";
+
+    // Copy the source code if it's not file-based
+    if (m_shaderFilePath.empty() || m_shaderFilePath == "dynamic_source" || m_shaderFilePath.rfind("shadertoy://", 0) == 0) {
+        newEffect->m_shaderSourceCode = this->m_shaderSourceCode;
+    }
+
+    // Copy the parameter values by copying the control structures
+    newEffect->m_shadertoyUniformControls = this->m_shadertoyUniformControls;
+    newEffect->m_defineControls = this->m_defineControls;
+    newEffect->m_constControls = this->m_constControls;
+    newEffect->m_colorCycleState = this->m_colorCycleState;
+
+    // The new effect will be loaded by the main loop, which will compile the shader
+    // and create the FBO. We don't copy inputs here, the user can reconnect them.
+
+    return newEffect;
+}
+
 void ShaderEffect::InitializeDummyTexture() {
     if (s_dummyTexture == 0) {
         glGenTextures(1, &s_dummyTexture);

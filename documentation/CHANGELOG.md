@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.2] - 2025-10-01
+
+### Added
+- **Node Context Menu:** Added "Duplicate" and "Unlink" options to the node context menu in the Node Editor.
+
+### Changed
+- **Node Placement:** New nodes are now created at the position of the right-click in the Node Editor.
+- **Refactoring:** Refactored the node creation logic to use a helper function, improving code maintainability and simplifying the process of adding new nodes.
+
 ## [0.3.1] - 2025-10-01
 
 ### Added
