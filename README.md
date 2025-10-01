@@ -21,6 +21,12 @@ Dive in, tweak, explore, and vibe with your shaders!
 *   **Shadertoy Integration:** Fetch and load shaders directly from Shadertoy.com by ID or URL, and they are instantly available as nodes.
 *   **Customizable UI Themes:** Switch between several built-in UI themes to customize the look and feel of the editor.
 
+### Featured Node-Based Shaders
+
+*   **Raymarch Sphere:** A versatile 3D sphere with controllable lighting, rotation, and comprehensive texture mapping controls (scale, offset, rotation).
+*   **Image Loader:** Load JPG or PNG images from disk to use as textures for other connected shaders.
+*   **Circular Audio Visualizer:** A circular bar-graph equalizer that reacts to 4 audio frequency bands, with customizable colors and sensitivity.
+
 ## Dependencies
 
 RaymarchVibe relies on the following libraries, which are fetched automatically using CMake's `FetchContent` where possible:
@@ -83,19 +89,25 @@ While CMake automatically fetches and builds libraries like GLFW, you still need
     ```
 
 
-## License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
-## NOTES
-
-I've temporarily added some sample shaders from the user balkhan (https://www.shadertoy.com/user/balkhan) on Shadertoy, because I thought they looked cool and needed something quick and easy to test with stored locally.
-I'll work on some custom shader samples SOON
-
-This is probably version 0.2 in a beta. There's some features that might crash or not work exactly as intended. This one's fresh out of the oven folks ...
-
 ## In the works
 
 > Switch between mouse input and WASD keys for camera control.
 > Ability to handle larger more complex shaders in a way that preserves that 'instantaneous feel'.
 > Easier macOS and Windows compatability
+
+## Development Notes
+
+### Working with Shaders
+
+The project is configured to automatically copy all files from the source `shaders/` directory to the application's runtime directory every time you build the project using `make`.
+
+If you edit a `.frag` file, simply re-running `make` from the `build/` directory is sufficient to update it for the application.
+
+```bash
+# From within the build/ directory, after editing a shader
+make -j12
+```
+
+You only need to re-run `cmake ..` before `make` if you add or remove C++ source files or change the project's structure in `CMakeLists.txt`.
+
+## License

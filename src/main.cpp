@@ -856,8 +856,28 @@ void RenderNodeEditorWindow() {
                         g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
-                if (ImGui::MenuItem("Sphere")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateSphereEffect();
+                if (ImGui::MenuItem("Raymarch Sphere")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateRaymarchSphereEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
+                    }
+                }
+                if (ImGui::MenuItem("Circular Audio Viz")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateCircularAudioVizEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
+                    }
+                }
+                if (ImGui::MenuItem("Debug Color")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateDebugColorEffect();
                     if (newEffectUniquePtr) {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
@@ -965,6 +985,16 @@ void RenderNodeEditorWindow() {
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Image")) {
+                if (ImGui::MenuItem("Image Loader")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateImageLoaderEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
+                    }
+                }
                 if (ImGui::MenuItem("Texture Passthrough")) {
                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateTexturePassthroughEffect();
                     if (newEffectUniquePtr) {
@@ -1071,17 +1101,6 @@ void RenderNodeEditorWindow() {
 
     ImGui::EndChild(); // End NodeEditorCanvas
 
-    // --- VERTICAL SPLITTER ---
-    ImGui::SameLine();
-    ImGui::InvisibleButton("vsplit", ImVec2(8.0f, ImGui::GetContentRegionAvail().y));
-    if (ImGui::IsItemActive()) {
-        sidebar_width -= ImGui::GetIO().MouseDelta.x;
-        // Clamp width to reasonable values
-        sidebar_width = std::max(250.0f, std::min(sidebar_width, 800.0f));
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-    }
     ImGui::SameLine();
 
     // Sidebar (Right Side) - will contain Properties and Instructions
@@ -1397,6 +1416,7 @@ int main() {
     }
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+    ShaderEffect::InitializeDummyTexture(); // Initialize the dummy texture for all shader effects
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_cursor_position_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
