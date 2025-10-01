@@ -49,6 +49,8 @@ public:
 
     const std::vector<int>& GetDeserializedInputIds() const { return m_deserialized_input_ids; }
 
+    static void InitializeDummyTexture();
+
 private:
     void CompileAndLinkShader();
     void FetchUniformLocations();
@@ -112,4 +114,6 @@ private:
     nlohmann::json m_deserialized_controls;
     std::vector<int> m_deserialized_input_ids;
     std::filesystem::file_time_type m_lastWriteTime;
+
+    static GLuint s_dummyTexture;
 };

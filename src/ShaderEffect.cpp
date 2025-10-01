@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <regex>
 
+// Define the static member
+GLuint ShaderEffect::s_dummyTexture = 0;
+
 // Local GL error checker for ShaderEffect
 static void checkGLErrorInEffect(const std::string& label, const std::string& effectName) {
     GLenum err;
@@ -239,16 +242,16 @@ void ShaderEffect::Render() {
 
     glUseProgram(m_shaderProgram);
 
-    if (!m_inputs.empty() && m_inputs[0] != nullptr) {
-        GLuint inputTextureID = m_inputs[0]->GetOutputTexture();
-        if (inputTextureID != 0 && m_iChannel0SamplerLoc != -1) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, inputTextureID);
-            glUniform1i(m_iChannel0SamplerLoc, 0);
-            if (m_iChannel0ActiveLoc != -1) glUniform1i(m_iChannel0ActiveLoc, 1);
+    // Bind inputs, using a dummy texture for any unbound input channels
+    if (m_iChannel0SamplerLoc != -1) {
+        glActiveTexture(GL_TEXTURE0);
+        if (!m_inputs.empty() && m_inputs[0] != nullptr) {
+            GLuint inputTextureID = m_inputs[0]->GetOutputTexture();
+            glBindTexture(GL_TEXTURE_2D, inputTextureID != 0 ? inputTextureID : s_dummyTexture);
+        } else {
+            glBindTexture(GL_TEXTURE_2D, s_dummyTexture);
         }
-    } else {
-        if (m_iChannel0ActiveLoc != -1) glUniform1i(m_iChannel0ActiveLoc, 0);
+        glUniform1i(m_iChannel0SamplerLoc, 0);
     }
 
     // Set uniforms from parsed controls
@@ -768,4 +771,17 @@ bool ShaderEffect::CheckForUpdatesAndReload() {
     }
 
     return false; // No changes
+}
+
+void ShaderEffect::InitializeDummyTexture() {
+    if (s_dummyTexture == 0) {
+        glGenTextures(1, &s_dummyTexture);
+        glBindTexture(GL_TEXTURE_2D, s_dummyTexture);
+        unsigned char blackPixel[] = {0, 0, 0, 255};
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, blackPixel);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        std::cout << "Initialized Dummy Texture for unbound shader inputs." << std::endl;
+    }
 }

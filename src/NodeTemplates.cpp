@@ -1,5 +1,6 @@
 #include "NodeTemplates.h"
 #include "ShaderEffect.h" // Needs full definition of ShaderEffect
+#include "ImageEffect.h"
 #include "Effect.h"       // For std::unique_ptr<Effect>
 
 // Note: ShaderEffect constructor takes:
@@ -7,6 +8,26 @@
 
 namespace RaymarchVibe {
 namespace NodeTemplates {
+
+std::unique_ptr<Effect> CreateCircularAudioVizEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/viz_circular_audio.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Circular Audio Viz";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateImageLoaderEffect(int initial_width, int initial_height) {
+    // initial_width and initial_height are ignored for now, as image size is determined on load
+    // but they are kept for consistency with the other factory functions.
+    (void)initial_width;
+    (void)initial_height;
+    auto effect = std::make_unique<ImageEffect>();
+    effect->name = "Image Loader";
+    return effect;
+}
 
 std::unique_ptr<Effect> CreateSimpleColorEffect(int initial_width, int initial_height) {
     auto effect = std::make_unique<ShaderEffect>(
@@ -163,13 +184,23 @@ std::unique_ptr<Effect> CreateNoiseEffect(int initial_width, int initial_height)
     return effect;
 }
 
-std::unique_ptr<Effect> CreateSphereEffect(int initial_width, int initial_height) {
+std::unique_ptr<Effect> CreateRaymarchSphereEffect(int initial_width, int initial_height) {
     auto effect = std::make_unique<ShaderEffect>(
-        "shaders/templates/sphere.frag",
+        "shaders/templates/raymarch_sphere.frag",
         initial_width,
         initial_height
     );
-    effect->name = "Sphere";
+    effect->name = "Raymarch Sphere";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateDebugColorEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/debug_color.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Debug Color";
     return effect;
 }
 

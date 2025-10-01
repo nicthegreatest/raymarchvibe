@@ -78,7 +78,19 @@ std::unique_ptr<Effect> CreateNoiseEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
-std::unique_ptr<Effect> CreateSphereEffect(
+std::unique_ptr<Effect> CreateRaymarchSphereEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateDebugColorEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateImageLoaderEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateCircularAudioVizEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 

@@ -219,11 +219,14 @@ add_executable(RaymarchVibe
   src/NodeTemplates.cpp
   src/OutputNode.cpp
   themes.cpp # Added themes.cpp
+  src/stb_image.cpp
+  src/ImageEffect.cpp
 )
 
 target_include_directories(RaymarchVibe PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/stb
   ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imnodes
   ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ImGuiFileDialog
   ${imgui_SOURCE_DIR}
