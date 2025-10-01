@@ -287,7 +287,7 @@ void ShaderEffect::Render() {
         glUniform1f(m_iAudioAmpLoc, m_audioAmp);
     }
     if (m_iAudioBandsLoc != -1) {
-        glUniform1fv(m_iAudioBandsLoc, 4, m_audioBands.data());
+        glUniform4fv(m_iAudioBandsLoc, 1, m_audioBands.data());
     }
 
     Renderer::RenderQuad();

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.1] - 2025-10-01
+
+### Added
+- **Advanced Circular Audio Visualizer:** Replaced the old visualizer with a new, more advanced version (`viz_circular_audio.frag`).
+  - Added individual color controls for each of the 4 frequency bands.
+  - Added a "Band Color Mix" parameter to blend between a circular gradient and the individual band colors.
+  - Added equalization controls (`u_bass_boost`, `u_low_mid_boost`, `u_high_mid_boost`, `u_treble_boost`) to fine-tune the sensitivity of each frequency band.
+
+### Fixed
+- **Audio Reactivity:** Fixed a bug that prevented the `iAudioBands` uniform from being updated correctly, causing shaders to not react to audio frequencies.
+- **Video Recording (Slow Motion):** Fixed a major bug in the video recorder that caused videos to be recorded in slow motion. The frame submission rate is now correctly limited to the specified frame rate.
+- **Video Recording (Audio Sync):** Fixed a slight audio sync issue in the recorded videos by synchronizing the start of the audio and video streams.
+
+### Changed
+- **Cleanup:** Removed old and unused shader templates:
+  - `texture_passthrough.frag`
+  - `shape_circle.frag`
+  - the old `viz_circular_audio.frag`
+
 ## [0.3.0] - 2025-10-01
 
 ### Added

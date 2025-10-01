@@ -30,14 +30,6 @@ std::unique_ptr<Effect> CreatePlasmaBasicEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
-std::unique_ptr<Effect> CreateTexturePassthroughEffect(
-    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
-    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
-
-std::unique_ptr<Effect> CreateCircleShapeEffect(
-    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
-    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
-
 std::unique_ptr<Effect> CreateValueNoiseEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);

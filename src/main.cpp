@@ -836,16 +836,6 @@ void RenderNodeEditorWindow() {
                         g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
-                if (ImGui::MenuItem("Circle Shape")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateCircleShapeEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
                 if (ImGui::MenuItem("Noise Generator")) {
                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateNoiseEffect();
                     if (newEffectUniquePtr) {
@@ -987,16 +977,6 @@ void RenderNodeEditorWindow() {
             if (ImGui::BeginMenu("Image")) {
                 if (ImGui::MenuItem("Image Loader")) {
                     auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateImageLoaderEffect();
-                    if (newEffectUniquePtr) {
-                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
-                        g_scene.push_back(std::move(newEffectUniquePtr));
-                        newEffectRawPtr->Load();
-                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
-                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
-                    }
-                }
-                if (ImGui::MenuItem("Texture Passthrough")) {
-                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateTexturePassthroughEffect();
                     if (newEffectUniquePtr) {
                         Effect* newEffectRawPtr = newEffectUniquePtr.get();
                         g_scene.push_back(std::move(newEffectUniquePtr));
@@ -1611,9 +1591,7 @@ int main() {
                 se->SetDeltaTime(deltaTime);
                 se->IncrementFrameCount();
                 se->SetAudioAmplitude(audioAmp);
-                if (g_enableAudioLink) {
-                    se->SetAudioBands(audioBands);
-                }
+                se->SetAudioBands(audioBands);
             }
             effect_ptr->Update(currentTimeForEffects); 
             effect_ptr->Render();
@@ -1683,7 +1661,7 @@ int main() {
         }
 
         if (g_videoRecorder.is_recording()) {
-            g_videoRecorder.add_video_frame_from_pbo();
+            g_videoRecorder.add_video_frame_from_pbo(deltaTime);
         }
 
         glDisable(GL_BLEND);

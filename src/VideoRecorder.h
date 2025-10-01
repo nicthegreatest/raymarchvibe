@@ -59,7 +59,7 @@ public:
 
     bool start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels);
     void stop_recording();
-    void add_video_frame_from_pbo();
+    void add_video_frame_from_pbo(float deltaTime);
     void add_audio_frame(const float* samples, int num_samples);
     bool is_recording() const;
     void init_pbos();
@@ -88,6 +88,8 @@ private:
     int frame_width;
     int frame_height;
     int frame_rate;
+    double frame_duration;
+    double frame_accumulator = 0.0;
     int input_audio_sample_rate;
     int input_audio_channels;
     int64_t next_video_pts = 0;
@@ -110,6 +112,7 @@ private:
 
     // Frame queues
     std::queue<std::pair<std::vector<uint8_t>, std::chrono::steady_clock::time_point>> video_queue;
+    std::atomic<bool> first_audio_frame_ready;
     std::queue<std::vector<float>> audio_queue;
 };
 
