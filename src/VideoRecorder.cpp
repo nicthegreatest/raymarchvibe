@@ -22,8 +22,16 @@ void VideoRecorder::init_pbos() {
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 }
 
-void VideoRecorder::add_video_frame_from_pbo() {
+void VideoRecorder::add_video_frame_from_pbo(float deltaTime) {
     if (!recording) return;
+
+    frame_accumulator += deltaTime;
+    if (frame_accumulator < frame_duration) {
+        return; // Not time to capture a frame yet
+    }
+
+    frame_accumulator -= frame_duration;
+
     auto capture_time = std::chrono::steady_clock::now();
     int next_pbo_index = (pbo_index + 1) % PBO_COUNT;
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);
@@ -62,6 +70,8 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     frame_width = width;
     frame_height = height;
     frame_rate = fps;
+    frame_duration = 1.0 / static_cast<double>(frame_rate);
+    frame_accumulator = 0.0;
     m_recordAudio = record_audio;
     if (m_recordAudio) {
         this->input_audio_sample_rate = input_audio_sample_rate;
@@ -69,9 +79,11 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     }
     init_pbos();
     recording = true;
+    next_video_pts = 0;
     next_audio_pts = 0;
     last_video_pts = -1;
     recording_start_time = std::chrono::steady_clock::now();
+    first_audio_frame_ready = false;
     encoding_thread = std::thread(&VideoRecorder::encoding_thread_main, this, filename, format);
     return true;
 }
@@ -166,6 +178,11 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
 
         // Video Encoding Loop
         while (!video_queue.empty()) {
+            if (m_recordAudio && !first_audio_frame_ready) {
+                // Drop video frames until the first audio frame is ready
+                video_queue.pop();
+                continue;
+            }
             auto frame_data = video_queue.front();
             video_queue.pop();
             lock.unlock();
@@ -177,15 +194,7 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
             const uint8_t* src_slices[1] = { pixels.data() + (frame_height - 1) * frame_width * 4 };
             sws_scale(sws_ctx.get(), src_slices, src_stride, 0, frame_height, video_frame->data, video_frame->linesize);
             
-            auto elapsed_duration = capture_time - recording_start_time;
-            double elapsed_seconds = std::chrono::duration_cast<std::chrono::duration<double>>(elapsed_duration).count();
-            int64_t pts = static_cast<int64_t>(elapsed_seconds * frame_rate);
-
-            if (pts <= last_video_pts) {
-                pts = last_video_pts + 1;
-            }
-            last_video_pts = pts;
-            video_frame->pts = pts;
+            video_frame->pts = next_video_pts++;
 
             AVPacket pkt;
             av_new_packet(&pkt, 0);
@@ -215,6 +224,9 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
                 const int total_input_samples_needed = input_samples_needed * input_audio_channels;
 
                 while (audio_input_buffer.size() >= total_input_samples_needed) {
+                    if (!first_audio_frame_ready) {
+                        first_audio_frame_ready = true;
+                    }
                     const uint8_t* in_data = (const uint8_t*)audio_input_buffer.data();
                     int out_samples = swr_convert(swr_ctx.get(), audio_frame->data, output_samples_per_frame, &in_data, input_samples_needed);
                     if (out_samples > 0) {
