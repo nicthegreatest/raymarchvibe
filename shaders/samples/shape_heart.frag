@@ -5,18 +5,34 @@
 #endif
 
 // --- UI Uniforms ---
-uniform vec3 u_heartColor = vec3(0.9, 0.02, 0.01); // {"widget":"color", "label":"Heart Color"}
+uniform vec3 u_heartColor = vec3(1.0, 0.0, 0.718); // {"widget":"color", "label":"Heart Color"}
 uniform vec3 u_glowColor = vec3(1.0, 0.8, 0.2);    // {"widget":"color", "label":"Glow Color"}
 uniform vec3 u_bgColor = vec3(1.0, 0.9, 0.7);      // {"widget":"color", "label":"Background"}
 uniform float u_zoom = 1.7;                         // {"label":"Zoom", "default":1.7, "min":0.5, "max":5.0}
+uniform float u_scale = 0.5;                        // {"label":"Scale", "default":0.5, "min":0.1, "max":2.0}
 uniform float u_ao_strength = 2.0;                // {"label":"AO Strength", "default":2.0, "min":0.5, "max":5.0}
 uniform float u_vignette = 0.2;                   // {"label":"Vignette", "default":0.2, "min":0.0, "max":1.0}
 uniform float u_audio_reactivity = 1.5;           // {"label":"Audio Reactivity", "default":1.5, "min":0.0, "max":5.0}
+uniform float u_rotationSpeed = 0.1;              // {"label":"Rotation Speed", "min":-1.0, "max":1.0, "default":0.1}
+uniform float u_rotationAxisX = 0.0;              // {"label":"Rotation Axis X", "min":-1.0, "max":1.0, "default":0.0}
+uniform float u_rotationAxisY = 1.0;              // {"label":"Rotation Axis Y", "min":-1.0, "max":1.0, "default":1.0}
+uniform float u_rotationAxisZ = 0.0;              // {"label":"Rotation Axis Z", "min":-1.0, "max":1.0, "default":0.0}
 
 // Standard app uniforms
 uniform float iAudioAmp;
 
 // --- End UI Uniforms ---
+
+mat3 rotationMatrix(vec3 axis, float angle) {
+    axis = normalize(axis);
+    float s = sin(angle);
+    float c = cos(angle);
+    float oc = 1.0 - c;
+    
+    return mat3(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,
+                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,
+                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c);
+}
 
 float hash1( float n )
 {
@@ -37,7 +53,7 @@ vec3 forwardSF( float i, float n)
 
 vec2 map( vec3 q )
 {
-    q *= 100.0;
+    q *= 100.0 / u_scale;
 
     vec2 res = vec2( q.y, 2.0 );
 
@@ -61,19 +77,20 @@ vec2 map( vec3 q )
     if( d<res.x ) res = vec2( d, 1.0 );
     
     res.x /= 100.0;
+    res.x *= u_scale;
     return res;
 }
 
 vec2 intersect( in vec3 ro, in vec3 rd )
 {
-	const float maxd = 1.0;
+	const float maxd = 20.0;
 
-    vec2 res = vec2(0.0);
-    float t = 0.2;
+    vec2 res = vec2(-1.0);
+    float t = 0.0;
     for( int i=0; i<300; i++ )
     {
 	    vec2 h = map( ro+rd*t );
-        if( (h.x<0.0) || (t>maxd) ) break;
+        if( h.x<0.0001 || t>maxd ) break;
         t += h.x;
         res = vec2( t, h.y );
     }
@@ -112,17 +129,20 @@ vec3 render( in vec2 p )
     // camera
     //-----------------------------------------------------
 	
-	float an = 0.1*iTime;
+	float an = iTime * u_rotationSpeed;
+    vec3 rotationAxis = vec3(u_rotationAxisX, u_rotationAxisY, u_rotationAxisZ);
+    mat3 rotMat = rotationMatrix(rotationAxis, an);
 
-	vec3 ro = vec3(0.4*sin(an),0.25,0.4*cos(an));
+    vec3 initial_ro = vec3(0.0, 0.25, 1.0);
+    vec3 ro = rotMat * initial_ro;
     vec3 ta = vec3(0.0,0.15,0.0);
+
     // camera matrix
     vec3 ww = normalize( ta - ro );
     vec3 uu = normalize( cross(ww,vec3(0.0,1.0,0.0) ) );
     vec3 vv = normalize( cross(uu,ww));
 	// create view ray
 	vec3 rd = normalize( p.x*uu + p.y*vv + u_zoom*ww );
-
 
     //-----------------------------------------------------
 	// render
@@ -131,7 +151,6 @@ vec3 render( in vec2 p )
 	vec3 col = u_bgColor;
 
 	// raymarch
-    vec3 uvw;
     vec2 res = intersect(ro,rd);
     float t = res.x;
 
