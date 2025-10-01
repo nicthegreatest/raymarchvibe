@@ -856,6 +856,16 @@ void RenderNodeEditorWindow() {
                         g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
                     }
                 }
+                if (ImGui::MenuItem("Sphere")) {
+                    auto newEffectUniquePtr = RaymarchVibe::NodeTemplates::CreateSphereEffect();
+                    if (newEffectUniquePtr) {
+                        Effect* newEffectRawPtr = newEffectUniquePtr.get();
+                        g_scene.push_back(std::move(newEffectUniquePtr));
+                        newEffectRawPtr->Load();
+                        g_nodes_requiring_initial_position.insert(newEffectRawPtr->id);
+                        g_new_node_initial_positions[newEffectRawPtr->id] = ImGui::GetMousePos();
+                    }
+                }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Filters")) {
