@@ -867,6 +867,7 @@ void RenderNodeEditorWindow() {
                 if (ImGui::MenuItem("Noise Generator")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateNoiseEffect(), popup_pos);
                 if (ImGui::MenuItem("Raymarch Sphere")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateRaymarchSphereEffect(), popup_pos);
                 if (ImGui::MenuItem("Circular Audio Viz")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateCircularAudioVizEffect(), popup_pos);
+                if (ImGui::MenuItem("Organic Audio Viz")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateOrganicAudioVizEffect(), popup_pos);
                 if (ImGui::MenuItem("Debug Color")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateDebugColorEffect(), popup_pos);
                 ImGui::EndMenu();
             }

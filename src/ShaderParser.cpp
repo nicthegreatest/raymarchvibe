@@ -164,8 +164,8 @@ void ShaderParser::ScanAndPrepareUniformControls(const std::string& shaderCode) 
         }
     }
 
-    std::sort(m_uniformControls.begin(), m_uniformControls.end(),
-              [](const ShaderToyUniformControl& a, const ShaderToyUniformControl& b) { return a.name < b.name; });
+    // std::sort(m_uniformControls.begin(), m_uniformControls.end(),
+    //           [](const ShaderToyUniformControl& a, const ShaderToyUniformControl& b) { return a.name < b.name; });
 }
 
 const std::vector<DefineControl>& ShaderParser::GetDefineControls() const {
