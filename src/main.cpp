@@ -70,7 +70,6 @@ void RenderEffectPropertiesWindow();
 void RenderTimelineWindow();
 void RenderNodeEditorWindow();
 void RenderConsoleWindow();
-void RenderHelpWindow();
 void RenderAudioReactivityWindow();
 void RenderShadertoyWindow();
 
@@ -164,7 +163,6 @@ static bool g_showConsoleWindow = true;
 static bool g_showTimelineWindow = false;
 static bool g_showNodeEditorWindow = false;
 static bool g_showAudioWindow = false;
-static bool g_showHelpWindow = false;
 static bool g_showShadertoyWindow = false;
 
 static char g_shadertoyApiKeyBuffer[256] = ""; // For user's API key
@@ -383,23 +381,6 @@ void RenderMenuBar() {
                 ImGuiFileDialog::Instance()->OpenDialog("LoadSceneDlgKey", "Load Scene File", ".json");
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Exit")) { glfwSetWindowShouldClose(glfwGetCurrentContext(), true); }
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("Shader Editor", nullptr, &g_showShaderEditorWindow);
-            // ImGui::MenuItem("Effect Properties", nullptr, &g_showEffectPropertiesWindow); // Removed
-            ImGui::MenuItem("Console", nullptr, &g_showConsoleWindow);
-            ImGui::Separator();
-            ImGui::MenuItem("Timeline", nullptr, &g_showTimelineWindow);
-            ImGui::MenuItem("Node Editor", nullptr, &g_showNodeEditorWindow);
-            ImGui::MenuItem("Audio Reactivity", nullptr, &g_showAudioWindow);
-            ImGui::MenuItem("Shadertoy", nullptr, &g_showShadertoyWindow);
-            ImGui::Separator();
-            ImGui::MenuItem("Toggle All GUI", "Spacebar", &g_showGui);
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Settings")) { // New Settings Menu
             if (ImGui::BeginMenu("Themes")) {
                 const auto& availableThemes = g_themes.getThemes();
                 // TODO: Get current theme to show a checkmark next to it.
@@ -410,14 +391,22 @@ void RenderMenuBar() {
                 }
                 ImGui::EndMenu();
             }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Exit")) { glfwSetWindowShouldClose(glfwGetCurrentContext(), true); }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Help")) {
-            ImGui::MenuItem("About RaymarchVibe", nullptr, &g_showHelpWindow);
+        if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("Shader Editor", nullptr, &g_showShaderEditorWindow);
+            // ImGui::MenuItem("Effect Properties", nullptr, &g_showEffectPropertiesWindow); // Removed
+            ImGui::MenuItem("Console", nullptr, &g_showConsoleWindow);
+            ImGui::Separator();
+            ImGui::MenuItem("Timeline", nullptr, &g_showTimelineWindow);
+            ImGui::MenuItem("Shadertoy", nullptr, &g_showShadertoyWindow);
+            ImGui::Separator();
+            ImGui::MenuItem("Toggle All GUI", "Spacebar", &g_showGui);
             ImGui::EndMenu();
         }
-
-        if (ImGui::BeginMenu("Recording")) {
+        if (ImGui::BeginMenu("Recording (F1)")) {
             static char filename[128] = "output.mp4";
             ImGui::InputText("Filename", filename, 128);
             ImGui::SameLine();
@@ -518,6 +507,8 @@ void RenderMenuBar() {
 
             ImGui::EndMenu();
         }
+        ImGui::MenuItem("Node Editor (F2)", "F2", &g_showNodeEditorWindow);
+        ImGui::MenuItem("Audio Reactivity (F3)", "F3", &g_showAudioWindow);
 
         ImGui::EndMainMenuBar();
     }
@@ -1077,16 +1068,6 @@ void RenderConsoleWindow() {
     ImGui::End();
 }
 
-void RenderHelpWindow() {
-    ImGui::Begin("About RaymarchVibe", &g_showHelpWindow, ImGuiWindowFlags_AlwaysAutoResize);
-    ImGui::Text("RaymarchVibe Demoscene Tool");
-    ImGui::Separator();
-    ImGui::Text("Created by nicthegreatest & Gemini.");
-    ImGui::Separator();
-    if (ImGui::Button("Close")) { g_showHelpWindow = false; }
-    ImGui::End();
-}
-
 void RenderShadertoyWindow() {
     if (!g_showShadertoyWindow) return;
 
@@ -1513,7 +1494,6 @@ int main() {
             if (g_showTimelineWindow) RenderTimelineWindow();
             if (g_showNodeEditorWindow) RenderNodeEditorWindow();
             if (g_showAudioWindow) RenderAudioReactivityWindow();
-            if (g_showHelpWindow) RenderHelpWindow();
             if (g_showShadertoyWindow) RenderShadertoyWindow();
         }
 
@@ -1590,6 +1570,31 @@ void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
         if (!space_pressed) { g_showGui = !g_showGui; space_pressed = true; }
     } else { space_pressed = false; }
+
+    static bool f1_pressed = false;
+    if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS) {
+        if (!f1_pressed) {
+            if (g_videoRecorder.is_recording()) {
+                g_videoRecorder.stop_recording();
+            } else {
+                g_videoRecorder.start_recording("output.mp4", SCR_WIDTH, SCR_HEIGHT, 60, "mp4", true, g_audioSystem.GetCurrentInputSampleRate(), g_audioSystem.GetCurrentInputChannels());
+                g_recordingStartTime = std::chrono::steady_clock::now();
+            }
+            f1_pressed = true;
+        }
+    } else {
+        f1_pressed = false;
+    }
+
+    static bool f2_pressed = false;
+    if (glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS) {
+        if (!f2_pressed) { g_showNodeEditorWindow = !g_showNodeEditorWindow; f2_pressed = true; }
+    } else { f2_pressed = false; }
+
+    static bool f3_pressed = false;
+    if (glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS) {
+        if (!f3_pressed) { g_showAudioWindow = !g_showAudioWindow; f3_pressed = true; }
+    } else { f3_pressed = false; }
 }
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     (void)window;

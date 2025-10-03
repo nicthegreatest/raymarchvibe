@@ -1,3 +1,19 @@
+## [0.3.3] - 2025-10-03
+
+### Changed
+- **UI:** Main menu has been reorganized for a more intuitive workflow.
+- **UI:** "Settings" menu has been removed and "Themes" moved to the "File" menu.
+- **UI:** "Node Editor" and "Audio Reactivity" have been moved from the "View" menu to the main menu bar.
+- **UI:** "Recording" menu is now "Recording (F1)".
+- **UI:** "Node Editor" is now "Node Editor (F2)".
+- **UI:** "Audio Reactivity" is now "Audio Reactivity (F3)".
+- **Shortcuts:** F1 now starts/stops recording.
+- **Shortcuts:** F2 now toggles the Node Editor window.
+- **Shortcuts:** F3 now toggles the Audio Reactivity window.
+
+### Removed
+- **UI:** "Help" menu and its associated window and code have been removed.
+
 # Changelog
 
 ## [0.3.2] - 2025-10-01
