@@ -54,4 +54,5 @@ main (Copy).cpp # This looks like a temporary copy
 
 # Ignore screenshots in source directories
 app-screenshot.png
-shaders/app-screenshot.png
+shaders/app-screenshot.pngbuild/
+output.mp4

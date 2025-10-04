@@ -8,6 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <regex>
+#include <glm/gtc/type_ptr.hpp>
 
 // Define the static member
 GLuint ShaderEffect::s_dummyTexture = 0;
@@ -290,6 +291,13 @@ void ShaderEffect::Render() {
         glUniform4fv(m_iAudioBandsLoc, 1, m_audioBands.data());
     }
 
+    if (m_iCameraPositionLocation != -1) {
+        glUniform3fv(m_iCameraPositionLocation, 1, glm::value_ptr(m_cameraPosition));
+    }
+    if (m_iCameraMatrixLocation != -1) {
+        glUniformMatrix4fv(m_iCameraMatrixLocation, 1, GL_FALSE, glm::value_ptr(m_cameraMatrix));
+    }
+
     Renderer::RenderQuad();
 }
 
@@ -299,6 +307,11 @@ void ShaderEffect::SetAudioAmplitude(float amp) {
 
 void ShaderEffect::SetAudioBands(const std::array<float, 4>& bands) {
     m_audioBands = bands;
+}
+
+void ShaderEffect::SetCameraState(const glm::vec3& pos, const glm::mat4& viewMatrix) {
+    m_cameraPosition = pos;
+    m_cameraMatrix = viewMatrix;
 }
 
 void ShaderEffect::SetMouseState(float x, float y, float click_x, float click_y) {
@@ -633,6 +646,8 @@ void ShaderEffect::FetchUniformLocations() {
     m_iMouseLocation = glGetUniformLocation(m_shaderProgram, "iMouse");
     m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
     m_iAudioBandsLoc = glGetUniformLocation(m_shaderProgram, "iAudioBands");
+    m_iCameraPositionLocation = glGetUniformLocation(m_shaderProgram, "iCameraPosition");
+    m_iCameraMatrixLocation = glGetUniformLocation(m_shaderProgram, "iCameraMatrix");
 
     // This now runs for ALL effects
     for (auto& control : m_shadertoyUniformControls) {

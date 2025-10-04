@@ -43,6 +43,10 @@
 #include "OutputNode.h" // For the Scene Output node
 #include "Bess/Config/Themes.h" // Added Themes header
 #include "VideoRecorder.h"
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/rotate_vector.hpp>
 
 // Placeholder Audio System has been removed.
 
@@ -58,6 +62,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
 void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
 // New: GLFW error callback function
 void glfw_error_callback(int error, const char* description) {
@@ -151,6 +156,16 @@ static AudioSystem g_audioSystem;
 VideoRecorder g_videoRecorder;
 static Bess::Config::Themes g_themes; // Global Themes object
 static bool g_showGui = true;
+
+// Camera state
+static bool g_cameraControlsEnabled = false;
+static float g_cameraRadius = 5.0f;
+static float g_cameraAzimuth = 0.0f;
+static float g_cameraPolar = glm::pi<float>() / 2.0f;
+static glm::vec3 g_cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
+static bool g_isDragging = false;
+static bool g_isTilting = false;
+static double g_lastMouseX = 0.0, g_lastMouseY = 0.0;
 
 // Recording state
 static std::chrono::steady_clock::time_point g_recordingStartTime;
@@ -402,6 +417,8 @@ void RenderMenuBar() {
             ImGui::Separator();
             ImGui::MenuItem("Timeline", nullptr, &g_showTimelineWindow);
             ImGui::MenuItem("Shadertoy", nullptr, &g_showShadertoyWindow);
+            ImGui::Separator();
+            ImGui::MenuItem("Camera Controls", nullptr, &g_cameraControlsEnabled);
             ImGui::Separator();
             ImGui::MenuItem("Toggle All GUI", "Spacebar", &g_showGui);
             ImGui::EndMenu();
@@ -1280,6 +1297,7 @@ int main() {
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_cursor_position_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 
     g_renderer.Init();
 
@@ -1461,6 +1479,15 @@ int main() {
         float audioAmp = g_enableAudioLink ? g_audioSystem.GetCurrentAmplitude() : 0.0f;
         const auto& audioBands = g_audioSystem.GetAudioBands();
 
+        // Spherical to Cartesian conversion for camera position
+        glm::vec3 cameraPos;
+        cameraPos.x = g_cameraTarget.x + g_cameraRadius * sin(g_cameraPolar) * cos(g_cameraAzimuth);
+        cameraPos.y = g_cameraTarget.y + g_cameraRadius * cos(g_cameraPolar);
+        cameraPos.z = g_cameraTarget.z + g_cameraRadius * sin(g_cameraPolar) * sin(g_cameraAzimuth);
+
+        glm::mat4 viewMatrix = glm::lookAt(cameraPos, g_cameraTarget, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 cameraMatrix = glm::inverse(viewMatrix);
+
         checkGLError("Before Effect Render Loop");
         checkGLError("Before Effect Render Loop");
         checkGLError("Before Effect Render Loop");
@@ -1472,6 +1499,7 @@ int main() {
                 se->IncrementFrameCount();
                 se->SetAudioAmplitude(audioAmp);
                 se->SetAudioBands(audioBands);
+                se->SetCameraState(cameraPos, cameraMatrix);
             }
             effect_ptr->Update(currentTimeForEffects); 
             effect_ptr->Render();
@@ -1609,27 +1637,98 @@ void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos
     (void)window;
     ImGuiIO& io = ImGui::GetIO();
     if (!io.WantCaptureMouse) {
-        int height;
-        glfwGetWindowSize(window, NULL, &height);
-        g_mouseState[0] = (float)xpos;
-        g_mouseState[1] = (float)height - (float)ypos;
+        if (g_cameraControlsEnabled) {
+            float xoffset = xpos - g_lastMouseX;
+            float yoffset = g_lastMouseY - ypos; // reversed since y-coordinates go from top to bottom
+            g_lastMouseX = xpos;
+            g_lastMouseY = ypos;
+
+            if (g_isDragging) { // Right-click drag to pan target
+                float sensitivity = 0.005f;
+                xoffset *= sensitivity;
+                yoffset *= sensitivity;
+
+                // Calculate camera position to get view-aligned axes
+                glm::vec3 cameraPos;
+                cameraPos.x = g_cameraTarget.x + g_cameraRadius * sin(g_cameraPolar) * cos(g_cameraAzimuth);
+                cameraPos.y = g_cameraTarget.y + g_cameraRadius * cos(g_cameraPolar);
+                cameraPos.z = g_cameraTarget.z + g_cameraRadius * sin(g_cameraPolar) * sin(g_cameraAzimuth);
+
+                glm::vec3 viewDir = glm::normalize(g_cameraTarget - cameraPos);
+                glm::vec3 right = glm::normalize(glm::cross(viewDir, glm::vec3(0.0f, 1.0f, 0.0f)));
+                glm::vec3 up = glm::normalize(glm::cross(right, viewDir));
+
+                g_cameraTarget -= right * xoffset;
+                g_cameraTarget += up * yoffset;
+
+            } else if (g_isTilting) { // Left-click drag to orbit
+                float sensitivity = 0.005f;
+                xoffset *= sensitivity;
+                yoffset *= sensitivity;
+
+                g_cameraAzimuth -= xoffset;
+                g_cameraPolar += yoffset;
+
+                // Clamp polar angle to avoid flipping
+                g_cameraPolar = glm::clamp(g_cameraPolar, 0.1f, glm::pi<float>() - 0.1f);
+            }
+        } else {
+            int height;
+            glfwGetWindowSize(window, NULL, &height);
+            g_mouseState[0] = (float)xpos;
+            g_mouseState[1] = (float)height - (float)ypos;
+        }
     }
 }
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     (void)window; (void)mods;
     ImGuiIO& io = ImGui::GetIO();
     if (!io.WantCaptureMouse) {
-        if(button == GLFW_MOUSE_BUTTON_LEFT) {
-            if(action == GLFW_PRESS) {
-                g_mouseState[2] = g_mouseState[0];
-                g_mouseState[3] = g_mouseState[1];
-            } else if (action == GLFW_RELEASE) {
-                g_mouseState[2] = -std::abs(g_mouseState[2]);
-                g_mouseState[3] = -std::abs(g_mouseState[3]);
+        if (g_cameraControlsEnabled) {
+            if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+                if (action == GLFW_PRESS) {
+                    g_isDragging = true;
+                    glfwGetCursorPos(window, &g_lastMouseX, &g_lastMouseY);
+                } else if (action == GLFW_RELEASE) {
+                    g_isDragging = false;
+                }
+            } else if (button == GLFW_MOUSE_BUTTON_LEFT) {
+                if (action == GLFW_PRESS) {
+                    g_isTilting = true;
+                    glfwGetCursorPos(window, &g_lastMouseX, &g_lastMouseY);
+                } else if (action == GLFW_RELEASE) {
+                    g_isTilting = false;
+                }
+            }
+        } else {
+            if(button == GLFW_MOUSE_BUTTON_LEFT) {
+                if(action == GLFW_PRESS) {
+                    g_mouseState[2] = g_mouseState[0];
+                    g_mouseState[3] = g_mouseState[1];
+                } else if (action == GLFW_RELEASE) {
+                    g_mouseState[2] = -std::abs(g_mouseState[2]);
+                    g_mouseState[3] = -std::abs(g_mouseState[3]);
+                }
             }
         }
     }
 }
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    (void)window; (void)xoffset;
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantCaptureMouse) {
+        if (g_cameraControlsEnabled) {
+            float sensitivity = 0.5f;
+            g_cameraRadius -= (float)yoffset * sensitivity;
+            if (g_cameraRadius < 0.1f) {
+                g_cameraRadius = 0.1f;
+            }
+        }
+    }
+}
+
 TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log) {
     TextEditor::ErrorMarkers markers;
     std::stringstream ss(log);

@@ -19,9 +19,9 @@ The application is built in C++17 and OpenGL. It uses a node-based architecture 
 *   **`Renderer`:** A simple class responsible for rendering the final output texture to the screen.
 *   **`AudioSystem`:** Handles audio input, FFT analysis, and provides audio data to shaders.
 *   **`VideoRecorder`:** Handles video and audio recording using FFmpeg.
-*   **`main.cpp`:** The application entry point, managing the main loop, UI rendering, and global state.
+*   **`main.cpp`:** The application entry point, managing the main loop, UI rendering, global state, and the spherical camera system.
 
-**NOTE:** The application uses a significant amount of global state (e.g., `g_scene`, `g_selectedEffect`). While not ideal, it is the current architecture. Be mindful of this when modifying the code.
+**NOTE:** The application uses a significant amount of global state (e.g., `g_scene`, `g_selectedEffect`, `g_cameraRadius`, `g_cameraAzimuth`, `g_cameraPolar`, `g_cameraTarget`). While not ideal, it is the current architecture. Be mindful of this when modifying the code.
 
 ## 2. Agent Personas and Guiding Principles
 
@@ -81,6 +81,7 @@ The project uses CMake to manage the build process and dependencies.
     *   `ApplyShaderCode(const std::string&)`: Re-compiles the shader with new source code.
     *   `RenderUI()`: Renders the dynamically generated UI controls for the shader's uniforms.
     *   `SetInputEffect(int pinIndex, Effect* inputEffect)`: Connects another effect to one of this effect's input pins.
+    *   `SetCameraState(const glm::vec3& pos, const glm::mat4& viewMatrix)`: Sets the camera position and matrix for the shader.
     *   **Common Usage Pattern:** A new `ShaderEffect` is created and added to the scene using the `CreateAndPlaceNode` helper function inside a menu item handler in `main.cpp`.
         ```cpp
         // In main.cpp, inside a menu item handler for the node editor
@@ -139,12 +140,13 @@ The UI is rendered in `main.cpp` using a series of `Render...Window()` functions
 
 ### 3.4 Main Loop Data Flow
 
-1.  **Input & State Update:** The loop starts by processing input and updating state (e.g., shader hot-reloads).
+1.  **Input & State Update:** The loop starts by processing input and updating state (e.g., shader hot-reloads, camera controls).
 2.  **Audio Processing:** `g_audioSystem.ProcessAudio()` is called to update FFT and amplitude data.
-3.  **Topological Sort:** `GetRenderOrder()` is called to determine the correct render order of the nodes.
-4.  **Effect Rendering:** The application iterates through the sorted `renderQueue`, updating uniforms and rendering each effect to its own Framebuffer Object (FBO).
-5.  **Final Output:** The output texture of the final node is rendered to the screen by `g_renderer.RenderFullscreenTexture()`.
-6.  **UI Rendering:** ImGui is rendered on top of the final scene.
+3.  **Camera Calculation:** The camera's Cartesian position is calculated from its spherical coordinates (`g_cameraRadius`, `g_cameraAzimuth`, `g_cameraPolar`) and the `g_cameraTarget`. The view and camera matrices are then created.
+4.  **Topological Sort:** `GetRenderOrder()` is called to determine the correct render order of the nodes.
+5.  **Effect Rendering:** The application iterates through the sorted `renderQueue`, updating uniforms (including camera uniforms) and rendering each effect to its own Framebuffer Object (FBO).
+6.  **Final Output:** The output texture of the final node is rendered to the screen by `g_renderer.RenderFullscreenTexture()`.
+7.  **UI Rendering:** ImGui is rendered on top of the final scene.
 
 ### 3.5 Debugging Tips
 

@@ -6,6 +6,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include <filesystem>
+#include <glm/glm.hpp>
 
 class ShaderEffect : public Effect {
 public:
@@ -35,6 +36,7 @@ public:
     void IncrementFrameCount() { m_frameCount++; }
     void SetAudioAmplitude(float amp);
     void SetAudioBands(const std::array<float, 4>& bands);
+    void SetCameraState(const glm::vec3& pos, const glm::mat4& viewMatrix);
 
     const std::string& GetShaderSource() const { return m_shaderSourceCode; }
     const std::string& GetCompileErrorLog() const { return m_compileErrorLog; }
@@ -96,11 +98,16 @@ private:
     GLint m_iChannel0ActiveLoc = -1;
     GLint m_iAudioAmpLoc = -1;
     GLint m_iAudioBandsLoc = -1;
+    GLint m_iCameraPositionLocation = -1;
+    GLint m_iCameraMatrixLocation = -1;
 
     ShaderParser m_shaderParser;
     std::vector<ShaderToyUniformControl> m_shadertoyUniformControls;
     std::vector<DefineControl> m_defineControls;
     std::vector<ConstVariableControl> m_constControls;
+
+    glm::vec3 m_cameraPosition;
+    glm::mat4 m_cameraMatrix;
 
     struct ColorCycleState {
         bool isEnabled = false;
