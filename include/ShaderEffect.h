@@ -37,6 +37,7 @@ public:
     void SetAudioAmplitude(float amp);
     void SetAudioBands(const std::array<float, 4>& bands);
     void SetCameraState(const glm::vec3& pos, const glm::mat4& viewMatrix);
+    void SetLightPosition(const glm::vec3& pos);
 
     const std::string& GetShaderSource() const { return m_shaderSourceCode; }
     const std::string& GetCompileErrorLog() const { return m_compileErrorLog; }
@@ -100,6 +101,7 @@ private:
     GLint m_iAudioBandsLoc = -1;
     GLint m_iCameraPositionLocation = -1;
     GLint m_iCameraMatrixLocation = -1;
+    GLint m_iLightPositionLocation = -1;
 
     ShaderParser m_shaderParser;
     std::vector<ShaderToyUniformControl> m_shadertoyUniformControls;
@@ -108,6 +110,7 @@ private:
 
     glm::vec3 m_cameraPosition;
     glm::mat4 m_cameraMatrix;
+    glm::vec3 m_lightPosition;
 
     struct ColorCycleState {
         bool isEnabled = false;

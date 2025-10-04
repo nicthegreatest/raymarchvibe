@@ -90,5 +90,9 @@ std::unique_ptr<Effect> CreateOrganicAudioVizEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
+std::unique_ptr<Effect> CreateOrganicFractalTreeEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
 } // namespace NodeTemplates
 } // namespace RaymarchVibe

@@ -3,16 +3,12 @@
 out vec4 FragColor;
 
 // --- Shader Parameters ---
-uniform vec3 u_objectColor = vec3(0.8, 0.5, 0.3);      // {"widget":"color", "label":"Object Color"}
-uniform vec3 u_lightColor = vec3(1.0, 0.9, 0.8);       // {"widget":"color", "label":"Light Color"}
-uniform float u_smoothness = 0.1;                     // {"default":0.1, "min":0.0, "max":1.0, "label":"Smooth Union"}
+uniform vec3 u_objectColor = vec3(1.0, 1.0, 1.0);      // {"widget":"color", "label":"Object Color"}
+uniform vec3 u_lightColor = vec3(1.0, 1.0, 1.0);       // {"widget":"color", "label":"Light Color"}
 uniform bool u_enableAO = true;                       // {"label":"Enable AO"}
 uniform bool u_enableSoftShadows = true;              // {"label":"Enable Soft Shadows"}
 uniform float u_scale = 1.0;                          // {"default": 1.0, "min": 0.1, "max": 2.0, "label": "Scale"}
 uniform float u_timeSpeed = 0.2;                      // {"default": 0.2, "min": 0.0, "max": 2.0, "label": "Time Speed"}
-uniform vec3 u_colorMod = vec3(0.1, 0.1, 0.2);        // {"widget":"color", "label": "Color Modulation"}
-uniform float u_patternScale = 1.0;                   // {"default": 1.0, "min": 0.5, "max": 20.0, "label": "Pattern Scale"}
-uniform vec3 u_lightPosition = vec3(2.0, 3.0, -2.0);  // {"label": "Light Position"}
 
 // --- Standard Uniforms (from your C++ app) ---
 uniform vec2 iResolution;
@@ -21,6 +17,7 @@ uniform sampler2D iChannel0; // Input texture from another effect
 uniform bool iChannel0_active;
 uniform vec3 iCameraPosition;
 uniform mat4 iCameraMatrix;
+uniform vec3 iLightPos;
 
 // --- Helper Functions ---
 float radians(float degrees) {
@@ -80,7 +77,6 @@ float sdDodecahedron(vec3 p, float r_inradius) {
     return d - r_inradius;
 }
 
-// --- Scene Definition ---
 float mapScene(vec3 p, float time) {
     float effectiveTime = time * u_timeSpeed * 0.2; // Slow down overall animation/rotation
 
@@ -167,7 +163,7 @@ void main() {
         vec3 normal = getNormal(hitPos, iTime);
 
         // Lighting
-        vec3 lightDir = normalize(u_lightPosition - hitPos);
+        vec3 lightDir = normalize(iLightPos - hitPos);
         float diffuse = max(0.0, dot(normal, lightDir));
         
         float ao;
@@ -200,9 +196,6 @@ void main() {
         float specular = pow(specAngle, 32.0);
 
         vec3 baseColor = u_objectColor;
-        // Add some color variation based on normals and u_colorMod
-        baseColor += u_colorMod * (0.4 + 0.6 * abs(normal.x * sin(iTime * u_timeSpeed * 0.5 + normal.y * u_patternScale * 5.0)));
-        baseColor = clamp(baseColor, 0.0, 1.0);
 
         // Combine lighting components
         diffuse *= shadow; // Apply shadow to diffuse light

@@ -1,12 +1,20 @@
-feat(camera): implement spherical camera controls
+feat: Enhance audio-reactive shaders and fix core functionalities
 
-Implements a new spherical (orbital) camera control system to provide a more intuitive way to navigate the 3D scene.
+This commit introduces significant enhancements to audio-reactive shaders and addresses several critical bugs:
 
-- Replaces the previous linear pan and tilt with an orbital system.
-- Left-click + drag now orbits the camera around a central target point.
-- Right-click + drag now pans the camera's target point.
-- Mouse wheel now zooms in and out by adjusting the camera's distance from the target.
-- Updates the main loop to calculate the camera's position from spherical coordinates.
-- Adds `iCameraPosition` and `iCameraMatrix` uniforms to shaders.
-- Updates `raymarch_v2.frag` as an example of how to use the new camera uniforms.
-- Updates `GEMINI.md` to document the new camera system.
+- `organic_audio_viz.frag`:
+  - Improved bar edge softening with adaptive `fwidth` and increased rounding influence.
+  - Added a "Bar Rounding" control for more organic shapes.
+- `organic_fractal_tree.frag`:
+  - Transformed into a multi-band audio visualizer with dynamic thickness, angle, and heart shape reactivity.
+  - Implemented audio-reactive coloring for the tree and background.
+  - Added audio-reactive UV warping for psychedelic effects.
+  - Corrected GLSL version compatibility (explicit `#version 330 core`, `out vec4 FragColor`).
+  - Tuned default parameters for a balanced visual experience and reordered UI controls for clarity.
+  - Integrated into Node Editor's "Generators" menu.
+- `src/ShaderParser.cpp`:
+  - Fixed a bug in the uniform parsing regex to correctly detect all UI controls.
+- `src/VideoRecorder.cpp`:
+  - Fixed "off-centre" video output by explicitly setting `glViewport` during frame capture.
+- `GEMINI.md`:
+  - Updated documentation to reflect changes in `VideoRecorder`, `ShaderParser`, and GLSL integration workflow.

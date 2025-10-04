@@ -77,6 +77,7 @@ void RenderNodeEditorWindow();
 void RenderConsoleWindow();
 void RenderAudioReactivityWindow();
 void RenderShadertoyWindow();
+void RenderCameraHelpText();
 
 std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects);
 
@@ -165,6 +166,10 @@ static float g_cameraPolar = glm::pi<float>() / 2.0f;
 static glm::vec3 g_cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
 static bool g_isDragging = false;
 static bool g_isTilting = false;
+static bool g_isRotatingLight = false;
+static float g_lightRadius = 5.0f;
+static float g_lightAzimuth = 0.0f;
+static float g_lightPolar = glm::pi<float>() / 2.0f;
 static double g_lastMouseX = 0.0, g_lastMouseY = 0.0;
 
 // Recording state
@@ -433,6 +438,7 @@ void RenderMenuBar() {
                 ImGuiFileDialog::Instance()->OpenDialog("SaveRecordingDlgKey", "Choose Output File", ".mp4,.mov,.mpg", config);
             }
 
+            ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
             if (ImGuiFileDialog::Instance()->Display("SaveRecordingDlgKey")) {
                 if (ImGuiFileDialog::Instance()->IsOk()) {
                     std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
@@ -448,8 +454,7 @@ void RenderMenuBar() {
                     const bool is_selected = (format_idx == i);
                     if (ImGui::Selectable(formats[i], is_selected))
                         format_idx = i;
-                    if (is_selected)
-                        ImGui::SetItemDefaultFocus();
+                    if (is_selected) ImGui::SetItemDefaultFocus();
                 }
                 ImGui::EndCombo();
             }
@@ -531,6 +536,7 @@ void RenderMenuBar() {
     }
 
     // --- Handle File Dialogs for Shader Load/Save ---
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
     if (ImGuiFileDialog::Instance()->Display("LoadShaderDlgKey")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
@@ -552,10 +558,29 @@ void RenderMenuBar() {
         ImGuiFileDialog::Instance()->Close();
     }
 
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
     if (ImGuiFileDialog::Instance()->Display("SaveShaderAsDlgKey")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
             SaveEditorContentToFile(filePathName, g_editor, dynamic_cast<ShaderEffect*>(g_selectedEffect), g_consoleLog);
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+    if (ImGuiFileDialog::Instance()->Display("SaveSceneDlgKey")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+            SaveScene(filePathName);
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+    if (ImGuiFileDialog::Instance()->Display("LoadSceneDlgKey")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+            LoadScene(filePathName);
         }
         ImGuiFileDialog::Instance()->Close();
     }
@@ -567,6 +592,7 @@ void RenderShaderEditorWindow() {
     // static int currentSampleIndex = 0; // Already static at its use point
     static int lineToGo = 1; // Declaration for Go To Line functionality
 
+    ImGui::SetNextWindowSize(ImVec2(600, 800), ImGuiCond_FirstUseEver);
     ImGui::Begin("Shader Editor");
 
     // Toolbar for Apply, Find, Go To Line
@@ -626,6 +652,7 @@ void RenderShaderEditorWindow() {
 
 
 
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
     // Handle the Save As dialog opened from within Shader Editor window
     if (ImGuiFileDialog::Instance()->Display("SaveShaderAsDlgKey_Editor")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
@@ -754,6 +781,7 @@ void RenderTimelineWindow() {
 }
 
 void RenderNodeEditorWindow() {
+    ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
     ImGui::Begin("Node Editor");
 
     static float sidebar_width = 350.0f;
@@ -876,6 +904,7 @@ void RenderNodeEditorWindow() {
                 if (ImGui::MenuItem("Raymarch Sphere")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateRaymarchSphereEffect(), popup_pos);
                 if (ImGui::MenuItem("Circular Audio Viz")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateCircularAudioVizEffect(), popup_pos);
                 if (ImGui::MenuItem("Organic Audio Viz")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateOrganicAudioVizEffect(), popup_pos);
+                if (ImGui::MenuItem("Organic Fractal Tree")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateOrganicFractalTreeEffect(), popup_pos);
                 if (ImGui::MenuItem("Debug Color")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateDebugColorEffect(), popup_pos);
                 ImGui::EndMenu();
             }
@@ -1076,6 +1105,7 @@ void RenderNodeEditorWindow() {
 }
 
 void RenderConsoleWindow() {
+    ImGui::SetNextWindowSize(ImVec2(800, 200), ImGuiCond_FirstUseEver);
     ImGui::Begin("Console");
     if (ImGui::Button("Clear")) { g_consoleLog = ""; }
     ImGui::SameLine();
@@ -1088,6 +1118,7 @@ void RenderConsoleWindow() {
 void RenderShadertoyWindow() {
     if (!g_showShadertoyWindow) return;
 
+    ImGui::SetNextWindowSize(ImVec2(500, 200), ImGuiCond_FirstUseEver);
     ImGui::Begin("Shadertoy", &g_showShadertoyWindow);
 
     static char shadertoyIdBuffer[256] = "";
@@ -1146,6 +1177,28 @@ void RenderShadertoyWindow() {
     ImGui::End();
 }
 
+void RenderCameraHelpText() {
+    if (!g_cameraControlsEnabled) return;
+
+    const float DISTANCE = 30.0f;
+    ImVec2 window_pos = ImVec2(DISTANCE, DISTANCE);
+    ImVec2 window_pos_pivot = ImVec2(0.0f, 0.0f);
+    ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, window_pos_pivot);
+    ImGui::SetNextWindowBgAlpha(0.35f); // Transparent background
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
+
+    if (ImGui::Begin("Camera Controls Help", NULL, window_flags)) {
+        ImGui::Text("Camera & Light Controls");
+        ImGui::Separator();
+        ImGui::Text("Orbit Camera: Left-Click + Drag");
+        ImGui::Text("Pan Camera: Right-Click + Drag");
+        ImGui::Text("Zoom Camera: Scroll Wheel");
+        ImGui::Text("Orbit Light: Ctrl + Left-Click + Drag");
+    }
+    ImGui::End();
+}
+
 // Helper struct to manage and format time values, like a UI-specific hook.
 struct ChronoTimer {
     float currentTime = 0.0f;
@@ -1173,6 +1226,7 @@ struct ChronoTimer {
 };
 
 void RenderAudioReactivityWindow() {
+    ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
     ImGui::Begin("Audio Reactivity", &g_showAudioWindow);
     ImGui::Checkbox("Enable Audio Link (iAudioAmp)", &g_enableAudioLink);
     ImGui::Separator();
@@ -1252,6 +1306,7 @@ void RenderAudioReactivityWindow() {
         }
     }
 
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
     if (ImGuiFileDialog::Instance()->Display("ChooseAudioFileDlgKey")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
@@ -1305,6 +1360,8 @@ int main() {
     ImGui::CreateContext();
     ImNodes::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.IniFilename = nullptr; // Disable imgui.ini
+    io.IniFilename = nullptr; // Disable imgui.ini
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     // Commenting these out again as they cause "not declared in scope" errors,
     // suggesting a deeper issue with ImGui version/include paths.
@@ -1329,9 +1386,9 @@ int main() {
     g_audioSystem.Initialize();
     g_audioSystem.RegisterListener(&g_videoRecorder); // Connect audio system to video recorder
 
-    // Load raymarch_v1.frag as the default effect
-    auto defaultEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v1.frag", SCR_WIDTH, SCR_HEIGHT);
-    defaultEffect->name = "Raymarch Plasma v1"; // Or derive from filename
+    // Load raymarch_v2.frag as the default effect
+    auto defaultEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v2.frag", SCR_WIDTH, SCR_HEIGHT);
+    defaultEffect->name = "Raymarch Plasma v2"; // Or derive from filename
     defaultEffect->startTime = 0.0f;
     defaultEffect->endTime = g_timelineState.totalDuration_seconds; // Default duration
     g_scene.push_back(std::move(defaultEffect));
@@ -1488,6 +1545,12 @@ int main() {
         glm::mat4 viewMatrix = glm::lookAt(cameraPos, g_cameraTarget, glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 cameraMatrix = glm::inverse(viewMatrix);
 
+        // Spherical to Cartesian conversion for light position
+        glm::vec3 lightPos;
+        lightPos.x = g_lightRadius * sin(g_lightPolar) * cos(g_lightAzimuth);
+        lightPos.y = g_lightRadius * cos(g_lightPolar);
+        lightPos.z = g_lightRadius * sin(g_lightPolar) * sin(g_lightAzimuth);
+
         checkGLError("Before Effect Render Loop");
         checkGLError("Before Effect Render Loop");
         checkGLError("Before Effect Render Loop");
@@ -1500,6 +1563,7 @@ int main() {
                 se->SetAudioAmplitude(audioAmp);
                 se->SetAudioBands(audioBands);
                 se->SetCameraState(cameraPos, cameraMatrix);
+                se->SetLightPosition(lightPos);
             }
             effect_ptr->Update(currentTimeForEffects); 
             effect_ptr->Render();
@@ -1523,6 +1587,7 @@ int main() {
             if (g_showNodeEditorWindow) RenderNodeEditorWindow();
             if (g_showAudioWindow) RenderAudioReactivityWindow();
             if (g_showShadertoyWindow) RenderShadertoyWindow();
+            RenderCameraHelpText();
         }
 
         int display_w, display_h;
@@ -1610,9 +1675,7 @@ void processInput(GLFWwindow *window) {
             }
             f1_pressed = true;
         }
-    } else {
-        f1_pressed = false;
-    }
+    } else { f1_pressed = false; }
 
     static bool f2_pressed = false;
     if (glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS) {
@@ -1671,6 +1734,16 @@ void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos
 
                 // Clamp polar angle to avoid flipping
                 g_cameraPolar = glm::clamp(g_cameraPolar, 0.1f, glm::pi<float>() - 0.1f);
+            } else if (g_isRotatingLight) { // Ctrl + Left-click drag to orbit light
+                float sensitivity = 0.005f;
+                xoffset *= sensitivity;
+                yoffset *= sensitivity;
+
+                g_lightAzimuth -= xoffset;
+                g_lightPolar += yoffset;
+
+                // Clamp polar angle to avoid flipping
+                g_lightPolar = glm::clamp(g_lightPolar, 0.1f, glm::pi<float>() - 0.1f);
             }
         } else {
             int height;
@@ -1681,7 +1754,7 @@ void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos
     }
 }
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    (void)window; (void)mods;
+    (void)window; 
     ImGuiIO& io = ImGui::GetIO();
     if (!io.WantCaptureMouse) {
         if (g_cameraControlsEnabled) {
@@ -1694,10 +1767,15 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
                 }
             } else if (button == GLFW_MOUSE_BUTTON_LEFT) {
                 if (action == GLFW_PRESS) {
-                    g_isTilting = true;
+                    if (mods & GLFW_MOD_CONTROL) {
+                        g_isRotatingLight = true;
+                    } else {
+                        g_isTilting = true;
+                    }
                     glfwGetCursorPos(window, &g_lastMouseX, &g_lastMouseY);
                 } else if (action == GLFW_RELEASE) {
                     g_isTilting = false;
+                    g_isRotatingLight = false;
                 }
             }
         } else {
@@ -1739,11 +1817,11 @@ TextEditor::ErrorMarkers ParseGlslErrorLog(const std::string& log) {
     auto trim_local = [](const std::string& s){ auto f=s.find_first_not_of(" \t\r\n"); return (f==std::string::npos)?"":s.substr(f, s.find_last_not_of(" \t\r\n")-f+1);};
     while(std::getline(ss, line)) {
         if(std::regex_search(line, m, r) && m.size() > 2) {
-            try { markers[std::stoi(m[2].str())] = trim_local(m[3].str()); }
+            try { markers[std::stoi(m[2].str())] = trim_local(m[3].str()); } 
             catch (const std::invalid_argument& ia) { /* g_consoleLog += "GLSL Parser: Invalid argument for stoi: " + std::string(ia.what()) + "\n"; */ }
             catch (const std::out_of_range& oor) { /* g_consoleLog += "GLSL Parser: Out of range for stoi: " + std::string(oor.what()) + "\n"; */ }
         } else if (std::regex_search(line, m, r2) && m.size() > 2) {
-             try { markers[std::stoi(m[2].str())] = trim_local(line); }
+             try { markers[std::stoi(m[2].str())] = trim_local(line); } 
              catch (const std::invalid_argument& ia) { /* g_consoleLog += "GLSL Parser: Invalid argument for stoi: " + std::string(ia.what()) + "\n"; */ }
              catch (const std::out_of_range& oor) { /* g_consoleLog += "GLSL Parser: Out of range for stoi: " + std::string(oor.what()) + "\n"; */ }
         }
