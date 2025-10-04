@@ -298,6 +298,10 @@ void ShaderEffect::Render() {
         glUniformMatrix4fv(m_iCameraMatrixLocation, 1, GL_FALSE, glm::value_ptr(m_cameraMatrix));
     }
 
+    if (m_iLightPositionLocation != -1) {
+        glUniform3fv(m_iLightPositionLocation, 1, glm::value_ptr(m_lightPosition));
+    }
+
     Renderer::RenderQuad();
 }
 
@@ -312,6 +316,10 @@ void ShaderEffect::SetAudioBands(const std::array<float, 4>& bands) {
 void ShaderEffect::SetCameraState(const glm::vec3& pos, const glm::mat4& viewMatrix) {
     m_cameraPosition = pos;
     m_cameraMatrix = viewMatrix;
+}
+
+void ShaderEffect::SetLightPosition(const glm::vec3& pos) {
+    m_lightPosition = pos;
 }
 
 void ShaderEffect::SetMouseState(float x, float y, float click_x, float click_y) {
@@ -648,6 +656,7 @@ void ShaderEffect::FetchUniformLocations() {
     m_iAudioBandsLoc = glGetUniformLocation(m_shaderProgram, "iAudioBands");
     m_iCameraPositionLocation = glGetUniformLocation(m_shaderProgram, "iCameraPosition");
     m_iCameraMatrixLocation = glGetUniformLocation(m_shaderProgram, "iCameraMatrix");
+    m_iLightPositionLocation = glGetUniformLocation(m_shaderProgram, "iLightPos");
 
     // This now runs for ALL effects
     for (auto& control : m_shadertoyUniformControls) {
@@ -657,11 +666,16 @@ void ShaderEffect::FetchUniformLocations() {
 
 void ShaderEffect::ParseShaderControls() {
     if (m_shaderSourceCode.empty()) return;
+
+    // Let the parser scan the source
     m_shaderParser.ScanAndPrepareDefineControls(m_shaderSourceCode);
-    m_defineControls = m_shaderParser.GetDefineControls();
     m_shaderParser.ScanAndPrepareConstControls(m_shaderSourceCode);
-    m_constControls = m_shaderParser.GetConstControls();
     m_shaderParser.ScanAndPrepareUniformControls(m_shaderSourceCode);
+
+    // Now, copy the results into the effect's own storage.
+    // This is the single source of truth for the UI and renderer.
+    m_defineControls = m_shaderParser.GetDefineControls();
+    m_constControls = m_shaderParser.GetConstControls();
     m_shadertoyUniformControls = m_shaderParser.GetUniformControls();
 
     // Apply any deserialized control values
@@ -756,6 +770,7 @@ void ShaderEffect::Deserialize(const nlohmann::json& data) {
 
 void ShaderEffect::ResetParameters() {
     // This function will now effectively re-parse the defaults from the shader source.
+    m_deserialized_controls.clear();
     if (!m_shaderSourceCode.empty()) {
         ApplyShaderCode(m_shaderSourceCode);
     }

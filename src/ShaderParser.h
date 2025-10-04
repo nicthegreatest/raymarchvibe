@@ -35,7 +35,7 @@ struct ShaderToyUniformControl {
     bool bValue = false;
     bool isColor = false; 
 
-    ShaderToyUniformControl(const std::string& n, const std::string& type_str, const json& meta);
+    ShaderToyUniformControl(const std::string& n, const std::string& type_str, const std::string& default_val_str, const json& meta);
 };
 
 struct ConstVariableControl {

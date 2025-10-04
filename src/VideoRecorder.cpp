@@ -35,6 +35,8 @@ void VideoRecorder::add_video_frame_from_pbo(float deltaTime) {
     auto capture_time = std::chrono::steady_clock::now();
     int next_pbo_index = (pbo_index + 1) % PBO_COUNT;
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);
+    // Ensure viewport is set correctly for glReadPixels
+    glViewport(0, 0, frame_width, frame_height);
     glReadPixels(0, 0, frame_width, frame_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_pbo_index]);
     GLubyte* ptr = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);

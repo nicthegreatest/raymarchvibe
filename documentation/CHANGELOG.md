@@ -1,3 +1,16 @@
+## [0.3.4] - 2025-10-04
+
+### Added
+- **Lighting Control:** Added a new control to manipulate the light source position in a spherical manner. The light's position can be changed by holding `Ctrl` and dragging with the left mouse button.
+- **Camera Control Help Text:** Added a text overlay that appears when camera controls are enabled, providing instructions for camera and light manipulation.
+
+### Changed
+- **Default Shader:** The default shader on application startup is now `raymarch_v2.frag`.
+- **Default Colors:** The default object and light colors in `raymarch_v2.frag` are now white.
+
+### Fixed
+- **Default Color Bug:** Fixed a persistent bug where the default object and light colors were not being applied on startup. This was caused by ImGui's `imgui.ini` state-saving feature overriding the shader's default values. The fix involved disabling `imgui.ini` to ensure a clean state on every launch.
+
 ## [0.3.3] - 2025-10-03
 
 ### Changed

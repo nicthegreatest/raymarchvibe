@@ -70,6 +70,12 @@ When your task is to add functions, fix bugs, or modify the application's C++ co
 
 The project uses CMake to manage the build process and dependencies.
 
+### 3.1.1 ShaderParser (`src/ShaderParser.cpp`)
+
+The `ShaderParser` class is responsible for extracting uniform declarations and their associated UI metadata (JSON comments) from GLSL shader code.
+
+*   **Regex Robustness:** The internal regular expression (`uniform_control_regex`) has been refined to be more robust in parsing uniform declarations, especially those with optional default values and varying whitespace. This ensures that all valid uniform controls are correctly detected and exposed to the UI.
+
 *   **Dependencies:** Most dependencies are fetched automatically using CMake's `FetchContent`. This includes `ImGui`, `glfw`, `nlohmann_json`, `miniaudio`, and `cpp-httplib`.
 *   **FFmpeg:** This is a special case. It is built from source as an `ExternalProject`. This means CMake will download and compile FFmpeg during the first build. This process can be slow.
 *   **Adding New Files:** If you add a new `.cpp` file to the `src/` directory, you must add it to the `add_executable(RaymarchVibe ...)` list in `CMakeLists.txt` for it to be compiled.
@@ -115,7 +121,7 @@ The project uses CMake to manage the build process and dependencies.
 *   **`VideoRecorder`**
     *   `start_recording(...)`: Begins the recording process in a separate thread.
     *   `stop_recording()`: Stops recording and finalizes the video file.
-    *   `add_video_frame_from_pbo()`: Called every frame to capture the screen content.
+    *   `add_video_frame_from_pbo()`: Called every frame to capture the screen content. **Note:** Explicitly sets `glViewport` before `glReadPixels` to ensure correct frame capture, preventing off-centre video output.
     *   **Common Usage Pattern:** The global `g_videoRecorder` is controlled by the UI. When "Start Recording" is clicked, `start_recording` is called. Every frame thereafter, `add_video_frame_from_pbo` captures the visuals. `stop_recording` is called when the user stops the recording.
         ```cpp
         // In UI code for the "Start Recording" button
@@ -157,6 +163,18 @@ If you encounter issues, here are some tips for debugging:
 *   **Inspect Shader Uniforms:** When a node is selected in the "Node Editor", the "Node Properties" panel on the right will display all the dynamically generated UI controls for that shader. You can use this to inspect and manipulate uniform values in real-time.
 *   **Isolate the Render Chain:** To debug a complex node graph, temporarily connect an effect from the middle of the chain directly to the `Scene Output` node. This allows you to see the intermediate result of that specific effect without interference from downstream effects.
 
+### 3.6 UI State and `imgui.ini`
+
+**IMPORTANT:** The application is configured to be "stateless" between sessions regarding its UI. This is achieved by disabling ImGui's `.ini` file saving feature (`io.IniFilename = nullptr;` in `main.cpp`).
+
+**Reasoning:**
+Previously, ImGui would save the state of all UI widgets (window positions, slider values, color pickers, etc.) to an `imgui.ini` file. This caused a persistent issue where saved values for shader uniform controls (like colors) would override the default values defined in the shader source code on the next launch. This led to confusing behavior where changing a default color in a `.frag` file would have no apparent effect.
+
+By disabling the `.ini` file, we ensure that the application always starts with a clean, predictable UI state. The shader source code is now the single source of truth for all default parameter values.
+
+**Trade-off:**
+The side effect of this decision is that the position and layout of UI windows will not be saved between sessions. This is considered an acceptable trade-off for the guarantee of predictable and correct default shader values. If this behavior needs to be changed in the future, a more sophisticated state management system for shader uniforms will be required, one that can differentiate between user-tweaked values and shader-defined defaults without being overridden by ImGui's state saving.
+
 ## 4. Workflow: Shader Generation and Integration
 
 This workflow is for the **Generative Artist** persona.
@@ -190,4 +208,9 @@ Only proceed with this method if the user has given you explicit permission afte
         CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateMyNewEffect(), popup_pos);
     }
     ```
+    **Important GLSL Version Note:** When creating new shaders or integrating existing ones, ensure GLSL 3.30 Core Profile compatibility. This means:
+    *   The shader *must* start with `#version 330 core` as its very first line.
+    *   Use `out vec4 FragColor;` to declare the fragment shader output.
+    *   Assign the final color to `FragColor`, not `gl_FragColor`.
+    Failure to adhere to these can result in compilation errors or unexpected behavior due to the compiler defaulting to older GLSL versions.
 5.  **Commit your changes** with a clear and descriptive commit message.

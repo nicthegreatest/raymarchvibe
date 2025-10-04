@@ -20,6 +20,7 @@ uniform int u_bands = 64;              // {"label":"Bands", "default":64, "min":
 uniform float u_bar_height = 0.2;      // {"label":"Bar Height", "default":0.2, "min":0.0, "max":1.0}
 uniform float u_sensitivity = 2.0;     // {"label":"Sensitivity", "default":2.0, "min":0.0, "max":10.0}
 uniform float u_spin_speed = 0.1;      // {"label":"Spin Speed", "default":0.1, "min":-2.0, "max":2.0}
+uniform float u_rounding = 0.5;        // {"label":"Bar Rounding", "default":0.5, "min":0.0, "max":2.0}
 
 // --- Warping ---
 uniform float u_warp_amount = 0.1;     // {"label":"Warp Amount", "default":0.1, "min":0.0, "max":1.0}
@@ -33,6 +34,7 @@ uniform vec3 u_light_pos = vec3(0.5, 0.5, 0.5); // {"label":"Light Position", "d
 
 // --- Glow ---
 uniform float u_glow_power = 0.4;      // {"label":"Glow Power", "default":0.4, "min":0.0, "max":1.0}
+uniform float u_softness = 1.0;        // {"label":"Edge Softness", "default":1.0, "min":0.0, "max":5.0}
 
 // --- Organic Motion ---
 uniform float u_oscillation_amount = 0.02; // {"label":"Organic Motion", "default":0.02, "min":0.0, "max":0.2}
@@ -84,7 +86,9 @@ float sdf_rounded_box(vec2 p, vec2 b, float r) {
 
 // Combined map function for the scene distance
 float map(vec2 p, vec2 bar_dims) {
-    float d = sdf_rounded_box(p, bar_dims, 0.02);
+    // Increase rounding influence to make bars more pill-shaped
+    float radius = bar_dims.x * u_rounding * 1.5;
+    float d = sdf_rounded_box(p, bar_dims, radius);
     // Displace the surface with noise for an organic look
     float displacement = noise(p * u_noise_scale) * u_noise_amount;
     return d - displacement;
@@ -138,6 +142,11 @@ void main() {
     bar_uv.y -= h * 0.5;
     float d = map(bar_uv, bar_dims);
 
+    // --- Fade bar edges to fix 'dart board' effect ---
+    float angle_fade_width = band_angle_width * 0.5;
+    float angle_blend = smoothstep(angle_fade_width * 0.8, angle_fade_width, abs(centered_angle));
+    d = mix(d, 1.0, angle_blend); // Mix distance towards 1.0 (far away/invisible) at the edges
+
     // --- Lighting ---
     vec2 normal = calc_normal(bar_uv, bar_dims);
     vec3 light_dir_3d = normalize(u_light_pos - vec3(bar_uv, 0.0));
@@ -156,15 +165,24 @@ void main() {
     // Apply lighting to the color
     viz_color *= diffuse;
 
-    // --- Final Composition (Glow) ---
+    // --- Final Composition (Softer Edges & Glow) ---
     vec3 final_viz = vec3(0.0);
-    float effective_glow = pow(u_glow_power, 3.0);
-    float outer_glow_alpha = 1.0 - smoothstep(0.0, effective_glow * 2.5, d);
-    final_viz += viz_color * outer_glow_alpha * 0.4;
-    float inner_glow_alpha = 1.0 - smoothstep(0.0, effective_glow * 0.8, d);
-    final_viz += viz_color * inner_glow_alpha * 0.6;
-    float core_alpha = 1.0 - smoothstep(-0.005, 0.005, d);
-    final_viz += viz_color * core_alpha; // Use lit color for the core too
+
+    // 1. Core shape with adaptive soft edges
+    // u_softness provides a controllable blur width on top of the standard fwidth() anti-aliasing.
+    float softness_width = u_softness * 0.05; // Scale down the uniform for finer control
+    float edge_width = fwidth(d) + softness_width;
+    float core_alpha = smoothstep(edge_width, -edge_width, d);
+    
+    // 2. Glow
+    // The glow is a larger, fainter, smoother version of the shape.
+    float glow_falloff = pow(u_glow_power, 2.0) * 0.5 + 0.01; // Map glow power to a usable range
+    float glow_alpha = smoothstep(glow_falloff, 0.0, d);
+
+    // Combine them: Add the glow, then draw the core on top.
+    // We multiply by viz_color to give them color.
+    final_viz = viz_color * glow_alpha * 0.5; // Glow is at 50% opacity
+    final_viz = mix(final_viz, viz_color, core_alpha); // Draw core over the glow
 
     // --- Final Output ---
     if (u_composite_over) {

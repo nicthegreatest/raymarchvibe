@@ -29,6 +29,16 @@ std::unique_ptr<Effect> CreateOrganicAudioVizEffect(int initial_width, int initi
     return effect;
 }
 
+std::unique_ptr<Effect> CreateOrganicFractalTreeEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/organic_fractal_tree.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Organic Fractal Tree";
+    return effect;
+}
+
 std::unique_ptr<Effect> CreateImageLoaderEffect(int initial_width, int initial_height) {
     // initial_width and initial_height are ignored for now, as image size is determined on load
     // but they are kept for consistency with the other factory functions.
