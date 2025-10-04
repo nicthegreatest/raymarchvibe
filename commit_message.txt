@@ -1,0 +1,12 @@
+feat(camera): implement spherical camera controls
+
+Implements a new spherical (orbital) camera control system to provide a more intuitive way to navigate the 3D scene.
+
+- Replaces the previous linear pan and tilt with an orbital system.
+- Left-click + drag now orbits the camera around a central target point.
+- Right-click + drag now pans the camera's target point.
+- Mouse wheel now zooms in and out by adjusting the camera's distance from the target.
+- Updates the main loop to calculate the camera's position from spherical coordinates.
+- Adds `iCameraPosition` and `iCameraMatrix` uniforms to shaders.
+- Updates `raymarch_v2.frag` as an example of how to use the new camera uniforms.
+- Updates `GEMINI.md` to document the new camera system.

@@ -12,9 +12,6 @@ uniform float u_scale = 1.0;                          // {"default": 1.0, "min":
 uniform float u_timeSpeed = 0.2;                      // {"default": 0.2, "min": 0.0, "max": 2.0, "label": "Time Speed"}
 uniform vec3 u_colorMod = vec3(0.1, 0.1, 0.2);        // {"widget":"color", "label": "Color Modulation"}
 uniform float u_patternScale = 1.0;                   // {"default": 1.0, "min": 0.5, "max": 20.0, "label": "Pattern Scale"}
-uniform vec3 u_camPos = vec3(0.0, 1.0, -3.0);         // {"label": "Camera Position"}
-uniform vec3 u_camTarget = vec3(0.0, 0.0, 0.0);       // {"label": "Camera Target"}
-uniform float u_camFOV = 60.0;                        // {"default": 60.0, "min": 15.0, "max": 120.0, "label": "Field of View"}
 uniform vec3 u_lightPosition = vec3(2.0, 3.0, -2.0);  // {"label": "Light Position"}
 
 // --- Standard Uniforms (from your C++ app) ---
@@ -22,6 +19,8 @@ uniform vec2 iResolution;
 uniform float iTime;
 uniform sampler2D iChannel0; // Input texture from another effect
 uniform bool iChannel0_active;
+uniform vec3 iCameraPosition;
+uniform mat4 iCameraMatrix;
 
 // --- Helper Functions ---
 float radians(float degrees) {
@@ -150,26 +149,14 @@ float getSoftShadow(vec3 ro, vec3 rd, float tmin, float tmax, float k, float tim
 }
 
 
-// --- Camera Setup ---
-mat3 setCamera(vec3 ro, vec3 ta, vec3 worldUp) {
-    vec3 f = normalize(ta - ro);
-    vec3 r = normalize(cross(f, worldUp));
-    if (length(r) < 0.0001) { r = normalize(cross(f, vec3(1.0,0.0,0.0))); }
-    vec3 u = normalize(cross(r, f));
-    return mat3(r, u, f);
-}
 
 // --- Main Shader Logic ---
 void main() {
     vec2 p_ndc = (2.0 * gl_FragCoord.xy - iResolution.xy) / iResolution.y;
 
     // Ray Setup
-    vec3 ro = u_camPos;
-    vec3 ta = u_camTarget;
-    mat3 camToWorld = setCamera(ro, ta, vec3(0.0, 1.0, 0.0));
-    float fovFactor = tan(radians(u_camFOV) * 0.5);
-    vec3 rd_local = normalize(vec3(p_ndc.x * fovFactor, p_ndc.y * fovFactor, 1.0));
-    vec3 rd = camToWorld * rd_local;
+    vec3 ro = iCameraPosition;
+    vec3 rd = (iCameraMatrix * vec4(normalize(vec3(p_ndc, -1.0)), 0.0)).xyz;
 
     float t = rayMarch(ro, rd, iTime);
 
