@@ -2,7 +2,7 @@ RaymarchVibe ✨ BETA/EXPERIMENTAL
 
 ![app-screenshot](https://raw.githubusercontent.com/nicthegreatest/raymarchvibe/refs/heads/main/documentation/raymarchvibe_screen.png)
 
-## Vision: A Modern SDF / Raymarching Tool
+## A Modern SDF / Raymarching Tool
 
 This tool is designed for shader exploration and creative coding, inspired by the demoscene spirit. It allows artists and developers to intuitively build complex visual effects by connecting shaders in a graph, manipulating their parameters in real-time, and seeing the results instantly. It aims to lower the barrier to entry for creating generative art and encourages a workflow based on experimentation and discovery.
 
