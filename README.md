@@ -1,6 +1,6 @@
 RaymarchVibe ✨ BETA/EXPERIMENTAL
 
-![app-screenshot](https://github.com/user-attachments/assets/f05a5f99-e497-449d-8df6-46cab469311d)
+![app-screenshot]([https://github.com/user-attachments/assets/f05a5f99-e497-449d-8df6-46cab469311d](https://github.com/nicthegreatest/raymarchvibe/blob/main/documentation/raymarchvibe_screen.png?raw=true))
 
 ## Vision: A Modern SDF / Raymarching Tool
 
