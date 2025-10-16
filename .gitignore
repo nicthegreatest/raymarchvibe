@@ -56,3 +56,4 @@ main (Copy).cpp # This looks like a temporary copy
 app-screenshot.png
 shaders/app-screenshot.pngbuild/
 output.mp4
+documentation/
