@@ -88,6 +88,32 @@ While CMake automatically fetches and builds libraries like GLFW, you still need
     ./RaymarchVibe
     ```
 
+### Building the Milk-Converter
+
+The `Milk-Converter` is a command-line tool that converts MilkDrop presets (`.milk` files) to GLSL shaders (`.frag` files) that are compatible with RaymarchVibe.
+
+1.  Navigate to the `Milk-Converter` directory:
+    ```bash
+    cd Milk-Converter
+    ```
+
+2.  Create a build directory and run cmake:
+    ```bash
+    mkdir build
+    cd build
+    cmake ..
+    ```
+
+3.  Build the project:
+    ```bash
+    make -j12
+    ```
+
+4.  Run the converter:
+    ```bash
+    ./MilkdropConverter /path/to/input.milk /path/to/output.frag
+    ```
+
 
 ## In the works
 

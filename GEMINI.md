@@ -179,6 +179,8 @@ The side effect of this decision is that the position and layout of UI windows w
 
 This workflow is for the **Generative Artist** persona.
 
+For a detailed guide on the RaymarchVibe shader format, see the [RaymarchVibe Shader Specification](documentation/SHADERS.md).
+
 ### Step 1: Generate the Shader Code
 
 Expose parameters as UI controls using JSON comments.
