@@ -1,10 +1,8 @@
 RaymarchVibe ✨ BETA/EXPERIMENTAL
 
-> [**Note:** An animated GIF showcasing the node editor, real-time parameter changes, and audio reactivity would be the ideal showcase for this project.]
+![app-screenshot](https://raw.githubusercontent.com/nicthegreatest/raymarchvibe/refs/heads/main/documentation/raymarchvibe_screen.png)
 
-![app-screenshot](https://github.com/user-attachments/assets/f05a5f99-e497-449d-8df6-46cab469311d)
-
-## Vision: A Modern Demoscene Tool
+## A Modern SDF / Raymarching Tool
 
 This tool is designed for shader exploration and creative coding, inspired by the demoscene spirit. It allows artists and developers to intuitively build complex visual effects by connecting shaders in a graph, manipulating their parameters in real-time, and seeing the results instantly. It aims to lower the barrier to entry for creating generative art and encourages a workflow based on experimentation and discovery.
 
@@ -20,12 +18,6 @@ Dive in, tweak, explore, and vibe with your shaders!
 *   **Full Scene Serialization:** Save and load your entire workspace, including the node graph, shader code, and UI parameters, to a JSON file.
 *   **Shadertoy Integration:** Fetch and load shaders directly from Shadertoy.com by ID or URL, and they are instantly available as nodes.
 *   **Customizable UI Themes:** Switch between several built-in UI themes to customize the look and feel of the editor.
-
-### Featured Node-Based Shaders
-
-*   **Raymarch Sphere:** A versatile 3D sphere with controllable lighting, rotation, and comprehensive texture mapping controls (scale, offset, rotation).
-*   **Image Loader:** Load JPG or PNG images from disk to use as textures for other connected shaders.
-*   **Circular Audio Visualizer:** A circular bar-graph equalizer that reacts to 4 audio frequency bands, with customizable colors and sensitivity.
 
 ## Dependencies
 
@@ -137,3 +129,7 @@ make -j12
 You only need to re-run `cmake ..` before `make` if you add or remove C++ source files or change the project's structure in `CMakeLists.txt`.
 
 ## License
+
+Copyright 2025 https://github.com/nicthegreatest/
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details. See <http://www.gnu.org/licenses/>.
