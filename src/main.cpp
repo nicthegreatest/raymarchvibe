@@ -157,6 +157,8 @@ static AudioSystem g_audioSystem;
 VideoRecorder g_videoRecorder;
 static Bess::Config::Themes g_themes; // Global Themes object
 static bool g_showGui = true;
+static bool g_verboseLogging = false; // Verbose terminal logging flag (set via CLI -verbose=ON)
+static std::string g_initialShaderPath = "shaders/raymarch_v2.frag"; // Initial shader to load (overridable via CLI -load=PATH)
 
 // Camera state
 static bool g_cameraControlsEnabled = false;
@@ -339,6 +341,85 @@ void checkGLError(const std::string& label, bool logToGlobalConsole = true) {
         std::cerr << logMsg << std::endl;
         if (logToGlobalConsole && g_consoleLog.size() < 4096) { // Prevent g_consoleLog from getting too huge
              g_consoleLog += logMsg + "\n";
+        }
+    }
+}
+
+// Verbose logging helper
+static void VLog(const std::string& msg) {
+    if (g_verboseLogging) {
+        std::cout << "[VERBOSE] " << msg << std::endl;
+    }
+}
+
+// Attempt to resolve shader path passed via CLI. Supports a leading '/shaders/..' treated as relative to CWD.
+static std::string ResolveShaderPath(const std::string& input) {
+    if (input.empty()) return input;
+    try {
+        if (std::filesystem::exists(input)) return input;
+        if (!input.empty() && input[0] == '/') {
+            std::string alt1 = "." + input; // try relative to current working dir
+            if (std::filesystem::exists(alt1)) return alt1;
+            std::string alt2 = input.substr(1); // try stripping leading '/'
+            if (std::filesystem::exists(alt2)) return alt2;
+        }
+    } catch (const std::exception&) {
+        // ignore and fallback to original
+    }
+    return input;
+}
+
+// Parse CLI flags like -verbose=ON and -load=PATH
+static void ParseCommandLineArgs(int argc, char** argv) {
+    if (argc <= 1) return;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i] ? std::string(argv[i]) : std::string();
+        if (arg.empty()) continue;
+
+        if (arg.rfind("-verbose", 0) == 0 || arg == "-v" || arg == "--verbose") {
+            bool value = true; // default to ON if flag present
+            size_t eq = arg.find('=');
+            if (eq != std::string::npos) {
+                std::string val = arg.substr(eq + 1);
+                std::string up = val;
+                std::transform(up.begin(), up.end(), up.begin(), [](unsigned char c){ return (char)std::toupper(c); });
+                if (up == "ON" || up == "1" || up == "TRUE" || up == "YES") value = true;
+                else if (up == "OFF" || up == "0" || up == "FALSE" || up == "NO") value = false;
+            }
+            g_verboseLogging = value;
+            if (g_verboseLogging) {
+                std::cout << "[VERBOSE] Verbose logging enabled" << std::endl;
+            }
+            continue;
+        }
+
+        if (arg.rfind("-load", 0) == 0 || arg == "--load") {
+            std::string val;
+            size_t eq = arg.find('=');
+            if (eq != std::string::npos) {
+                val = arg.substr(eq + 1);
+            } else if (arg == "--load" || arg == "-load") {
+                if (i + 1 < argc) { val = argv[++i]; }
+            }
+            if (!val.empty()) {
+                std::string resolved = ResolveShaderPath(val);
+                if (std::filesystem::exists(resolved)) {
+                    g_initialShaderPath = resolved;
+                    VLog(std::string("CLI requested shader load: ") + g_initialShaderPath);
+                } else {
+                    std::cerr << "CLI -load path not found: " << val << std::endl;
+                    std::cerr << "Continuing with default shader: " << g_initialShaderPath << std::endl;
+                }
+            }
+            continue;
+        }
+
+        if (arg == "-h" || arg == "--help") {
+            std::cout << "Usage: RaymarchVibe [-verbose=ON|OFF] [-load=PATH_TO_SHADER]\n";
+            std::cout << "Examples:\n";
+            std::cout << "  ./RaymarchVibe -verbose=ON -load=shaders/new_shader_test.frag\n";
+            std::cout << "  ./RaymarchVibe -v -load=/shaders/new_shader_test.frag\n";
+            continue; // don't exit, still launch the app
         }
     }
 }
@@ -1326,7 +1407,9 @@ void RenderAudioReactivityWindow() {
 }
 
 // Main Application
-int main() {
+int main(int argc, char** argv) {
+    // Parse CLI flags early
+    ParseCommandLineArgs(argc, argv);
     // Set GLFW error callback BEFORE glfwInit()
     glfwSetErrorCallback(glfw_error_callback);
 
@@ -1386,9 +1469,15 @@ int main() {
     g_audioSystem.Initialize();
     g_audioSystem.RegisterListener(&g_videoRecorder); // Connect audio system to video recorder
 
-    // Load raymarch_v2.frag as the default effect
-    auto defaultEffect = std::make_unique<ShaderEffect>("shaders/raymarch_v2.frag", SCR_WIDTH, SCR_HEIGHT);
-    defaultEffect->name = "Raymarch Plasma v2"; // Or derive from filename
+    // Load initial shader (default or CLI-provided)
+    auto defaultEffect = std::make_unique<ShaderEffect>(g_initialShaderPath, SCR_WIDTH, SCR_HEIGHT);
+    if (g_initialShaderPath != "shaders/raymarch_v2.frag") {
+        defaultEffect->name = std::filesystem::path(g_initialShaderPath).filename().string();
+        if (defaultEffect->name.empty()) defaultEffect->name = "Custom Shader";
+        VLog(std::string("Loading shader from: ") + g_initialShaderPath);
+    } else {
+        defaultEffect->name = "Raymarch Plasma v2";
+    }
     defaultEffect->startTime = 0.0f;
     defaultEffect->endTime = g_timelineState.totalDuration_seconds; // Default duration
     g_scene.push_back(std::move(defaultEffect));
