@@ -1,3 +1,17 @@
+## [0.3.5] - 2025-10-19
+
+### Added
+- Command-line flags to improve debugging and startup workflows:
+  - `-verbose=ON|OFF` (or `-v`, `--verbose`) to toggle verbose terminal logging.
+  - `-load=PATH` (or `--load PATH`) to load a custom fragment shader at startup.
+- Examples:
+  - `./RaymarchVibe -verbose=ON -load=shaders/new_shader_test.frag`
+  - `./RaymarchVibe -v --load /shaders/new_shader_test.frag`
+
+### Notes
+- When `-load` is provided, the app creates the initial effect from that file instead of the default `shaders/raymarch_v2.frag`.
+- A path beginning with `/shaders/...` is treated as relative to the current working directory for convenience (e.g. `./shaders/...`).
+
 ## [0.3.4] - 2025-10-04
 
 ### Added
