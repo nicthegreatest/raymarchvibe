@@ -80,6 +80,29 @@ While CMake automatically fetches and builds libraries like GLFW, you still need
     ./RaymarchVibe
     ```
 
+#### Command-line flags
+
+RaymarchVibe supports optional flags to speed up debugging and iteration:
+
+- `-verbose=ON|OFF` (also `-v`, `--verbose`): Enables verbose terminal logging. If a value is omitted, the presence of the flag enables verbose mode.
+  Examples:
+  ```bash
+  ./RaymarchVibe -verbose=ON
+  ./RaymarchVibe -v
+  ```
+
+- `-load=PATH` (also `--load PATH` or `--load=PATH`): Load a fragment shader on startup.
+  Examples:
+  ```bash
+  ./RaymarchVibe -load=shaders/new_shader_test.frag
+  ./RaymarchVibe --load /absolute/path/to/shader.frag
+  ```
+
+Notes:
+- Paths beginning with `/shaders/...` are treated as relative to the current working directory (e.g. `./shaders/...`).
+- If the provided shader fails to compile, the app will still start and show the error in the Console and mark lines in the editor.
+- If no flag is provided, the default shader is `shaders/raymarch_v2.frag`.
+
 ### Building the Milk-Converter
 
 The `Milk-Converter` is a command-line tool that converts MilkDrop presets (`.milk` files) to GLSL shaders (`.frag` files) that are compatible with RaymarchVibe.
