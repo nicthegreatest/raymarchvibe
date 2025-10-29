@@ -1,5 +1,6 @@
 # Build artifacts
 /build/
+/build-ci/
 /libglad_lib.a
 /RaymarchVibe
 /CMakeCache.txt
@@ -46,14 +47,16 @@ Thumbs.db
 
 # User-specific configuration (if any exist that shouldn't be version controlled)
 imgui.ini # If this is a user-specific config and not project essential
-main (Copy).cpp # This looks like a temporary copy
 
-# Ignore copied files
+# Ignore copied files (temporary backups)
 * (Copy).cpp
 * (copy).cpp
+* (Copy).frag
+* (copy).frag
 
-# Ignore screenshots in source directories
+# Ignore screenshots and outputs
 app-screenshot.png
-shaders/app-screenshot.pngbuild/
+shaders/app-screenshot.png
 output.mp4
-Milk-Converter/
+*.mp4
+*.mov

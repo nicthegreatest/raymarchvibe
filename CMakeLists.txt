@@ -218,7 +218,7 @@ add_executable(RaymarchVibe
   src/ShadertoyIntegration.cpp
   src/NodeTemplates.cpp
   src/OutputNode.cpp
-  themes.cpp # Added themes.cpp
+  src/themes.cpp # Added themes.cpp
   src/stb_image.cpp
   src/ImageEffect.cpp
 )

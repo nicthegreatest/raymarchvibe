@@ -130,11 +130,24 @@ The `Milk-Converter` is a command-line tool that converts MilkDrop presets (`.mi
     ```
 
 
-## In the works
+## Planned Features
 
-> Switch between mouse input and WASD keys for camera control.
-> Ability to handle larger more complex shaders in a way that preserves that 'instantaneous feel'.
-> Easier macOS and Windows compatability
+See the [TODO.md](documentation/TODO.md) for a complete list of planned features and improvements, including:
+
+- Switch between mouse input and WASD keys for camera control
+- Improved handling of larger, more complex shaders while maintaining real-time performance
+- Enhanced macOS and Windows compatibility
+- Text rendering effects
+- AppImage compilation for easier Linux distribution
+
+## Documentation
+
+For detailed information about the project, see the `documentation/` directory:
+
+- **[SHADERS.md](documentation/SHADERS.md)** - Complete shader specification and creative guidelines (essential reading for shader authors!)
+- **[CHANGELOG.md](documentation/CHANGELOG.md)** - Version history and release notes
+- **[TODO.md](documentation/TODO.md)** - Planned features and improvements
+- **[CODE_REVIEW.md](documentation/CODE_REVIEW.md)** - Architectural overview and code quality assessment
 
 ## Development Notes
 
