@@ -4,9 +4,9 @@ out vec4 FragColor;
 uniform vec2 iResolution;
 uniform float iTime;
 
-uniform int   u_mode;       // {"default": 0, "min": 0, "max": 2, "step": 1, "label": "Mode (0=Worley, 1=Simplex, 2=Perlin)"}
-uniform float u_scale;      // {"default": 5.0, "min": 1.0, "max": 50.0, "step": 1.0, "label": "Scale"}
-uniform float u_timeFactor; // {"default": 0.2, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Time Factor"}
+uniform int   u_mode;       // {"widget":"slider", "default": 0, "min": 0, "max": 2, "step": 1, "label": "Mode (0=Worley, 1=Simplex, 2=Perlin)"}
+uniform float u_scale;      // {"widget":"slider", "default": 5.0, "min": 1.0, "max": 50.0, "step": 1.0, "label": "Scale"}
+uniform float u_timeFactor; // {"widget":"slider", "default": 0.2, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Time Factor"}
 
 // --- Utility Functions ---
 float random (vec2 st) {

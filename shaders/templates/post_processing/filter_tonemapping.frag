@@ -4,7 +4,7 @@ out vec4 FragColor;
 uniform sampler2D iChannel0;
 uniform vec2 iResolution;
 
-uniform int u_mode; // {"default": 0, "min": 0, "max": 2, "step": 1, "label": "Mode (0=ACES, 1=Reinhard, 2=Filmic)"}
+uniform int u_mode; // {"widget":"slider", "default": 0, "min": 0, "max": 2, "step": 1, "label": "Mode (0=ACES, 1=Reinhard, 2=Filmic)"}
 
 // ACES tone mapping (approximate)
 vec3 aces(vec3 x) {

@@ -4,9 +4,9 @@ out vec4 FragColor;
 uniform sampler2D iChannel0;
 uniform vec2 iResolution;
 
-uniform float u_exposure;    // {"default": 0.0, "min": -2.0, "max": 2.0, "step": 0.05, "label": "Exposure"}
-uniform float u_contrast;    // {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Contrast"}
-uniform float u_saturation;  // {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Saturation"}
+uniform float u_exposure;    // {"widget":"slider", "default": 0.0, "min": -2.0, "max": 2.0, "step": 0.05, "label": "Exposure"}
+uniform float u_contrast;    // {"widget":"slider", "default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Contrast"}
+uniform float u_saturation;  // {"widget":"slider", "default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Saturation"}
 uniform vec3  u_tint;        // {"default": [1.0, 1.0, 1.0], "widget": "color", "label": "Tint"}
 
 vec3 change_saturation(vec3 color, float saturation) {

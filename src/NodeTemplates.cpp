@@ -2,6 +2,7 @@
 #include "ShaderEffect.h" // Needs full definition of ShaderEffect
 #include "ImageEffect.h"
 #include "Effect.h"       // For std::unique_ptr<Effect>
+#include <filesystem>
 
 // Note: ShaderEffect constructor takes:
 // ShaderEffect(const std::string& initialShaderPath = "", int initialWidth = 800, int initialHeight = 600, bool isShadertoy = false);
@@ -46,6 +47,15 @@ std::unique_ptr<Effect> CreateImageLoaderEffect(int initial_width, int initial_h
     (void)initial_height;
     auto effect = std::make_unique<ImageEffect>();
     effect->name = "Image Loader";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateImageLoaderEffect(const std::string& imagePath, int initial_width, int initial_height) {
+    (void)initial_width;
+    (void)initial_height;
+    auto effect = std::make_unique<ImageEffect>();
+    effect->name = std::filesystem::path(imagePath).filename().string();
+    effect->LoadImage(imagePath);
     return effect;
 }
 

@@ -4,7 +4,7 @@ out vec4 FragColor;
 uniform sampler2D iChannel0;
 uniform vec2 iResolution;
 
-uniform float u_amount; // {"default": 1.0, "min": 0.0, "max": 5.0, "step": 0.1, "label": "Amount"}
+uniform float u_amount; // {"widget":"slider", "default": 1.0, "min": 0.0, "max": 5.0, "step": 0.1, "label": "Amount"}
 
 void main()
 {

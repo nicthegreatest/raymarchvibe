@@ -21,6 +21,7 @@
 #include <nlohmann/json.hpp> // For scene save/load
 #include <filesystem> // For std::filesystem::path
 #include <chrono> // For recording timer
+#include <cstdlib> // For exit
 
 // --- Core App Headers ---
 #include "Effect.h"
@@ -576,7 +577,9 @@ void RenderMenuBar() {
                     if (std::filesystem::exists(filename)) {
                         ImGui::OpenPopup("Overwrite File?");
                     } else {
-                        g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx], g_recordAudio,
+                        int fb_width, fb_height;
+                        glfwGetFramebufferSize(glfwGetCurrentContext(), &fb_width, &fb_height);
+                        g_videoRecorder.start_recording(filename, fb_width, fb_height, 60, formats[format_idx], g_recordAudio,
                                                     g_audioSystem.GetCurrentInputSampleRate(),
                                                     g_audioSystem.GetCurrentInputChannels());
                         g_recordingStartTime = std::chrono::steady_clock::now();
@@ -595,7 +598,9 @@ void RenderMenuBar() {
                     if (g_recordAudio && g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::Microphone && !g_audioSystem.IsCaptureDeviceInitialized()) {
                         g_audioSystem.InitializeAndStartSelectedCaptureDevice();
                     }
-                    g_videoRecorder.start_recording(filename, SCR_WIDTH, SCR_HEIGHT, 60, formats[format_idx], g_recordAudio,
+                    int fb_width, fb_height;
+                    glfwGetFramebufferSize(glfwGetCurrentContext(), &fb_width, &fb_height);
+                    g_videoRecorder.start_recording(filename, fb_width, fb_height, 60, formats[format_idx], g_recordAudio,
                                                 g_audioSystem.GetCurrentInputSampleRate(),
                                                 g_audioSystem.GetCurrentInputChannels());
                     g_recordingStartTime = std::chrono::steady_clock::now();
@@ -662,6 +667,27 @@ void RenderMenuBar() {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
             LoadScene(filePathName);
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    // Handle dialog for loading texture into a shader iChannel
+    if (ImGuiFileDialog::Instance()->Display("LoadTextureForIChannelDlgKey")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
+            if (g_selectedEffect) {
+                if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+                    int channelIndex = se->GetChannelPendingTextureLoad();
+                    if (channelIndex != -1) {
+                        auto newImageEffect = RaymarchVibe::NodeTemplates::CreateImageLoaderEffect(filePath);
+                        ImVec2 pos = ImNodes::GetNodeScreenSpacePos(se->id);
+                        CreateAndPlaceNode(std::move(newImageEffect), pos + ImVec2(0, 150));
+                        Effect* rawImageEffect = g_scene.back().get();
+                        se->SetInputEffect(channelIndex, rawImageEffect);
+                        se->ClearChannelPendingTextureLoad();
+                    }
+                }
+            }
         }
         ImGuiFileDialog::Instance()->Close();
     }
@@ -1300,7 +1326,7 @@ struct ChronoTimer {
         timeInSeconds -= minutes * 60;
         int seconds = static_cast<int>(timeInSeconds);
         
-        char buffer[12];
+        char buffer[32];
         snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", hours, minutes, seconds);
         return std::string(buffer);
     }
@@ -1410,6 +1436,10 @@ void RenderAudioReactivityWindow() {
 int main(int argc, char** argv) {
     // Parse CLI flags early
     ParseCommandLineArgs(argc, argv);
+
+    // Always log the parsed flags for verification
+    std::cout << "Command line parsed: verbose=" << (g_verboseLogging ? "ON" : "OFF")
+              << ", load='" << g_initialShaderPath << "'" << std::endl;
     // Set GLFW error callback BEFORE glfwInit()
     glfwSetErrorCallback(glfw_error_callback);
 
@@ -1759,7 +1789,9 @@ void processInput(GLFWwindow *window) {
             if (g_videoRecorder.is_recording()) {
                 g_videoRecorder.stop_recording();
             } else {
-                g_videoRecorder.start_recording("output.mp4", SCR_WIDTH, SCR_HEIGHT, 60, "mp4", true, g_audioSystem.GetCurrentInputSampleRate(), g_audioSystem.GetCurrentInputChannels());
+                int fb_width, fb_height;
+                glfwGetFramebufferSize(window, &fb_width, &fb_height);
+                g_videoRecorder.start_recording("output.mp4", fb_width, fb_height, 60, "mp4", true, g_audioSystem.GetCurrentInputSampleRate(), g_audioSystem.GetCurrentInputChannels());
                 g_recordingStartTime = std::chrono::steady_clock::now();
             }
             f1_pressed = true;

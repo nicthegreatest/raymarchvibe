@@ -4,8 +4,8 @@ out vec4 FragColor;
 uniform sampler2D iChannel0;
 uniform vec2 iResolution;
 
-uniform float u_threshold; // {"default": 0.8, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Threshold"}
-uniform float u_intensity; // {"default": 1.0, "min": 0.0, "max": 5.0, "step": 0.1, "label": "Intensity"}
+uniform float u_threshold; // {"widget":"slider", "default": 0.8, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Threshold"}
+uniform float u_intensity; // {"widget":"slider", "default": 1.0, "min": 0.0, "max": 5.0, "step": 0.1, "label": "Intensity"}
 
 void main()
 {
