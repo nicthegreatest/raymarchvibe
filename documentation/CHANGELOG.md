@@ -1,3 +1,15 @@
+## [0.3.7] - 2025-10-30
+
+### Added
+- Introduced an advanced `shape_soap_bubble_advanced.frag` template with UI metadata for interactive parameter control.
+
+### Changed
+- Refined repository structure by moving ImGui theme logic into `src/themes.cpp` and cleaning up stale development artifacts.
+- Updated `.gitignore` rules to prevent temporary shader backups from being committed.
+- Clarified planned features in the README, pointing to the project TODO list for ongoing work.
+
+---
+
 ## [0.3.6] - 2025-10-23
 
 ### Added
