@@ -1,6 +1,7 @@
 #include "ShaderEffect.h"
 #include "Renderer.h"
 #include "imgui.h"
+#include "ImGuiFileDialog.h"
 #include <cmath> // For sin, cos in color cycling
 #include <fstream>
 #include <iostream>
@@ -12,23 +13,6 @@
 
 // Define the static member
 GLuint ShaderEffect::s_dummyTexture = 0;
-
-// Local GL error checker for ShaderEffect
-static void checkGLErrorInEffect(const std::string& label, const std::string& effectName) {
-    GLenum err;
-    while((err = glGetError()) != GL_NO_ERROR) {
-        std::string errorStr;
-        switch(err) {
-            case GL_INVALID_ENUM: errorStr = "INVALID_ENUM"; break;
-            case GL_INVALID_VALUE: errorStr = "INVALID_VALUE"; break;
-            case GL_INVALID_OPERATION: errorStr = "INVALID_OPERATION"; break;
-            case GL_OUT_OF_MEMORY: errorStr = "OUT_OF_MEMORY"; break;
-            case GL_INVALID_FRAMEBUFFER_OPERATION: errorStr = "INVALID_FRAMEBUFFER_OPERATION"; break;
-            default: errorStr = "UNKNOWN_ERROR (" + std::to_string(err) + ")"; break;
-        }
-        std::cerr << "GL_ERROR (Effect: " << effectName << ", Op: " << label << "): " << errorStr << std::endl;
-    }
-}
 
 // Helper function declarations
 static GLuint CompileShader(const char* source, GLenum type, std::string& errorLogString);
@@ -55,7 +39,11 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
       m_fboHeight(initialHeight),
       m_lastWriteTime{}
 {
-    m_inputs.resize(1, nullptr);
+    if (m_isShadertoyMode) {
+        m_inputs.resize(4, nullptr);
+    } else {
+        m_inputs.resize(1, nullptr);
+    }
 
     std::fill_n(m_mouseState, 4, 0.0f);
     m_audioBands.fill(0.0f);
@@ -172,11 +160,6 @@ void ShaderEffect::Load() {
             m_shaderLoaded = false;
             return;
         }
-        if (m_shaderSourceCode.find("mainImage") != std::string::npos) {
-            m_isShadertoyMode = true;
-        } else {
-            m_isShadertoyMode = false;
-        }
     }
 
     if (!m_shaderSourceCode.empty()) {
@@ -189,11 +172,21 @@ void ShaderEffect::Load() {
 
 void ShaderEffect::ApplyShaderCode(const std::string& newShaderCode) {
     m_shaderSourceCode = newShaderCode;
+    bool oldMode = m_isShadertoyMode;
     if (m_shaderSourceCode.find("mainImage") != std::string::npos) {
         m_isShadertoyMode = true;
     } else {
         m_isShadertoyMode = false;
     }
+
+    if (oldMode != m_isShadertoyMode) {
+        if (m_isShadertoyMode) {
+            m_inputs.resize(4, nullptr);
+        } else {
+            m_inputs.resize(1, nullptr);
+        }
+    }
+
     m_compileErrorLog.clear();
     CompileAndLinkShader();
     if (m_shaderProgram != 0) {
@@ -211,6 +204,11 @@ void ShaderEffect::ApplyShaderCode(const std::string& newShaderCode) {
 void ShaderEffect::SetShadertoyMode(bool mode) {
     if (m_isShadertoyMode != mode) {
         m_isShadertoyMode = mode;
+        if (m_isShadertoyMode) {
+            m_inputs.resize(4, nullptr);
+        } else {
+            m_inputs.resize(1, nullptr);
+        }
         if (m_shaderProgram != 0) {
             FetchUniformLocations();
             ParseShaderControls();
@@ -244,15 +242,18 @@ void ShaderEffect::Render() {
     glUseProgram(m_shaderProgram);
 
     // Bind inputs, using a dummy texture for any unbound input channels
-    if (m_iChannel0SamplerLoc != -1) {
-        glActiveTexture(GL_TEXTURE0);
-        if (!m_inputs.empty() && m_inputs[0] != nullptr) {
-            GLuint inputTextureID = m_inputs[0]->GetOutputTexture();
-            glBindTexture(GL_TEXTURE_2D, inputTextureID != 0 ? inputTextureID : s_dummyTexture);
-        } else {
-            glBindTexture(GL_TEXTURE_2D, s_dummyTexture);
+    GLint samplerLocs[] = {m_iChannel0SamplerLoc, m_iChannel1SamplerLoc, m_iChannel2SamplerLoc, m_iChannel3SamplerLoc};
+    for (int i = 0; i < 4; ++i) {
+        if (samplerLocs[i] != -1) {
+            glActiveTexture(GL_TEXTURE0 + i);
+            if (static_cast<size_t>(i) < m_inputs.size() && m_inputs[i] != nullptr) {
+                GLuint inputTextureID = m_inputs[i]->GetOutputTexture();
+                glBindTexture(GL_TEXTURE_2D, inputTextureID != 0 ? inputTextureID : s_dummyTexture);
+            } else {
+                glBindTexture(GL_TEXTURE_2D, s_dummyTexture);
+            }
+            glUniform1i(samplerLocs[i], i);
         }
-        glUniform1i(m_iChannel0SamplerLoc, 0);
     }
 
     // Set uniforms from parsed controls
@@ -435,6 +436,35 @@ void ShaderEffect::RenderUI() {
     }
     ImGui::Separator();
 
+    if (ImGui::CollapsingHeader("Inputs##EffectInputs")) {
+        for (size_t i = 0; i < m_inputs.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::Text("iChannel%zu", i);
+            ImGui::SameLine();
+
+            if (m_inputs[i]) {
+                // Input is connected
+                ImGui::Text("Connected: %s", m_inputs[i]->name.c_str());
+                ImGui::SameLine();
+                if (ImGui::Button("Unlink")) {
+                    m_inputs[i] = nullptr;
+                }
+                GLuint textureID = m_inputs[i]->GetOutputTexture();
+                if (textureID != 0) {
+                    ImGui::Image((void*)(intptr_t)textureID, ImVec2(64, 64), ImVec2(0,1), ImVec2(1,0)); // Flipped UVs for OpenGL texture
+                }
+            } else {
+                // Input is not connected
+                if (ImGui::Button("Load Texture")) {
+                    SetChannelPendingTextureLoad(i);
+                    ImGuiFileDialog::Instance()->OpenDialog("LoadTextureForIChannelDlgKey", "Choose Texture File", ".png,.jpg,.jpeg,.bmp,.tga", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
+                }
+            }
+            ImGui::PopID();
+            ImGui::Separator();
+        }
+    }
+
     if (ImGui::CollapsingHeader("Parsed Uniforms##EffectParsedUniforms", ImGuiTreeNodeFlags_DefaultOpen)) {
         RenderParsedUniformsUI();
     }
@@ -604,6 +634,17 @@ void ShaderEffect::CompileAndLinkShader() {
 
     std::string finalFragmentCode = m_shaderSourceCode;
     if (m_isShadertoyMode && m_shaderSourceCode.find("void main()") == std::string::npos) {
+        const std::string shadertoy_helpers =
+            "#ifndef GEMINI_SHADER_HELPERS\n"
+            "#define GEMINI_SHADER_HELPERS\n"
+            "// Compatibility shim for texture2D function\n"
+            "vec4 texture2D(sampler2D s, vec2 uv) { return texture(s, uv); }\n"
+            "vec4 texture2D(sampler2D s, vec3 uvw) { return texture(s, uvw.xy); }\n"
+            "vec4 texture2D(sampler2D s, vec4 uvw) { return texture(s, uvw.xy / uvw.w); }\n"
+            "#endif\n\n";
+
+        std::string processedSource = std::regex_replace(m_shaderSourceCode, std::regex("\\btexture\\("), "texture2D(");
+
         finalFragmentCode = 
             "#version 330 core\n"
             "out vec4 FragColor;\n"
@@ -612,8 +653,12 @@ void ShaderEffect::CompileAndLinkShader() {
             "uniform float iTimeDelta;\n"
             "uniform int iFrame;\n"
             "uniform vec4 iMouse;\n"
+            "uniform sampler2D iChannel0;\n"
+            "uniform sampler2D iChannel1;\n"
+            "uniform sampler2D iChannel2;\n"
+            "uniform sampler2D iChannel3;\n"
             "uniform float iUserFloat1;\n"
-            "uniform vec3 iUserColor1;\n" + m_shaderSourceCode +
+            "uniform vec3 iUserColor1;\n" + shadertoy_helpers + processedSource +
             "\nvoid main() {\n"
             "    mainImage(FragColor, gl_FragCoord.xy);\n"
             "}\n";
@@ -645,7 +690,14 @@ void ShaderEffect::CompileAndLinkShader() {
 void ShaderEffect::FetchUniformLocations() {
     if (m_shaderProgram == 0) return;
     m_iChannel0SamplerLoc = glGetUniformLocation(m_shaderProgram, "iChannel0");
+    m_iChannel1SamplerLoc = glGetUniformLocation(m_shaderProgram, "iChannel1");
+    m_iChannel2SamplerLoc = glGetUniformLocation(m_shaderProgram, "iChannel2");
+    m_iChannel3SamplerLoc = glGetUniformLocation(m_shaderProgram, "iChannel3");
+
     m_iChannel0ActiveLoc = glGetUniformLocation(m_shaderProgram, "iChannel0_active");
+    m_iChannel1ActiveLoc = glGetUniformLocation(m_shaderProgram, "iChannel1_active");
+    m_iChannel2ActiveLoc = glGetUniformLocation(m_shaderProgram, "iChannel2_active");
+    m_iChannel3ActiveLoc = glGetUniformLocation(m_shaderProgram, "iChannel3_active");
 
     m_iResolutionLocation = glGetUniformLocation(m_shaderProgram, "iResolution");
     m_iTimeLocation = glGetUniformLocation(m_shaderProgram, "iTime");

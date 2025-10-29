@@ -1,3 +1,20 @@
+## [0.3.6] - 2025-10-23
+
+### Added
+- **Shadertoy iChannels:** Expanded Shadertoy compatibility to support all four texture input channels (`iChannel0` to `iChannel3`).
+- **Direct Texture Loading:** Added a "Load Texture" button to each iChannel input slot in the Node Properties panel, allowing for direct loading of an image file which automatically creates and connects an `Image Loader` node.
+- **Input Thumbnails:** The Node Properties panel now displays a thumbnail preview of the connected texture for each iChannel, providing immediate visual feedback.
+- **Input Unlinking:** Added an "Unlink" button next to each connected iChannel input for quick disconnection.
+
+### Fixed
+- **iChannel Loading Bug:** Fixed a critical bug where Shadertoy shaders would incorrectly load with only one input channel instead of the required four. The inputs now appear correctly on initial load.
+
+### Changed
+- Added a new `ichannel_visualizer.frag` shader for testing and visualizing all four iChannel inputs.
+
+### Removed
+- Deleted the old, incomplete `ichannel_test.frag` shader.
+
 ## [0.3.5] - 2025-10-19
 
 ### Added

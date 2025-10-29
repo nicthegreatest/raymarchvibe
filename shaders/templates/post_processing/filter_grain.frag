@@ -5,8 +5,8 @@ uniform sampler2D iChannel0;
 uniform vec2 iResolution;
 uniform float iTime;
 
-uniform float u_intensity; // {"default": 0.1, "min": 0.0, "max": 1.0, "step": 0.01, "label": "Intensity"}
-uniform float u_size;      // {"default": 1.0, "min": 1.0, "max": 10.0, "step": 0.1, "label": "Size"}
+uniform float u_intensity; // {"widget":"slider", "default": 0.1, "min": 0.0, "max": 1.0, "step": 0.01, "label": "Intensity"}
+uniform float u_size;      // {"widget":"slider", "default": 1.0, "min": 1.0, "max": 10.0, "step": 0.1, "label": "Size"}
 
 // Simple random function
 float rand(vec2 co){

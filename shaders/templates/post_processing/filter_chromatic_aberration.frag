@@ -3,6 +3,7 @@ out vec4 FragColor;
 
 uniform sampler2D iChannel0;
 uniform vec2 iResolution;
+uniform float iTime;
 
 uniform float u_aberration;   // {"default": 0.01, "min": -0.1, "max": 0.1, "step": 0.001, "label": "Aberration"}
 uniform float u_smoothness;   // {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "label": "Smoothness"}

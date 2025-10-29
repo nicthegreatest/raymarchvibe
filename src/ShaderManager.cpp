@@ -191,15 +191,38 @@ bool ShaderManager::applyShaderCode(const std::string& fragmentShaderCode, bool 
         }
         m_shaderParser.ScanAndPrepareConstControls(fragmentShaderCode);
 
+        // VERBOSE LOGGING: Check for GLSL version and Milkdrop-specific patterns
+        std::cerr << "[ShaderManager] DEBUG: Applying converted shader successfully: program=" << newShaderProgram << std::endl;
+        std::cerr << "[ShaderManager] DEBUG: Fragment shader length: " << fragmentShaderCode.length() << " characters" << std::endl;
+        if (fragmentShaderCode.find("iChannel0") != std::string::npos) {
+            std::cerr << "[ShaderManager] DEBUG: Shader uses feedback buffer (iChannel0)" << std::endl;
+        }
+        if (fragmentShaderCode.find("draw_wave") != std::string::npos) {
+            std::cerr << "[ShaderManager] DEBUG: Shader contains Milkdrop waveform code (draw_wave)" << std::endl;
+        }
+        if (fragmentShaderCode.find("zoomDenominator") != std::string::npos) {
+            std::cerr << "[ShaderManager] DEBUG: Shader has coordinate transformation with zoom calculations" << std::endl;
+        }
+        std::cerr << "[ShaderManager] DEBUG: Checking for potential hang sources..." << std::endl;
+        if (fragmentShaderCode.find("pow(") != std::string::npos) {
+            std::cerr << "[ShaderManager] DEBUG: Shader uses pow() functions - checking for negative/zero base issues" << std::endl;
+        }
+        if (fragmentShaderCode.find("for (") != std::string::npos) {
+            std::cerr << "[ShaderManager] DEBUG: Shader contains loops - checking iteration bounds" << std::endl;
+        }
+        std::cerr << "[ShaderManager] DEBUG: Shader validation complete, proceeding to uniform setup" << std::endl;
+
         // Call the new member function to fetch and store locations
         fetchAndStoreUniformLocations(m_activeRaymarchProgram, isShadertoyMode, uniformWarnings);
 
         if (!uniformWarnings.empty()) {
             m_generalStatus = "Applied with warnings:\n" + uniformWarnings;
             m_shaderCompileErrorLog = m_generalStatus; // Or just keep it for uniform warnings
+            std::cerr << "[ShaderManager] Shader applied with warnings: " << uniformWarnings << std::endl;
         } else {
             m_generalStatus = "Applied from editor!";
             m_shaderCompileErrorLog.clear();
+            std::cerr << "[ShaderManager] Shader applied successfully with no warnings" << std::endl;
         }
         return true;
     } else {
