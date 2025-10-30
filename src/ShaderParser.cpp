@@ -15,15 +15,17 @@ ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std
     // Helper to parse numbers from strings like "vec3(1.0, 0.5, 0.2)"
     auto extract_numbers = [](const std::string& s, int count) -> std::vector<float> {
         std::vector<float> nums;
-        std::regex num_regex(R"([-+]?[0-9]*\.?[0-9]+f?)");
+        std::regex num_regex(R"((?:\bvec[2-4]\s*\()|([-+]?[0-9]*\.?[0-9]+f?))");
         auto words_begin = std::sregex_iterator(s.begin(), s.end(), num_regex);
         auto words_end = std::sregex_iterator();
         for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
-            if (nums.size() < (size_t)count) {
-                try {
-                    nums.push_back(std::stof((*i).str()));
-                } catch (...) {
-                    // Ignore conversion errors
+            if ((*i)[1].matched) { // Check if the float-capturing group matched
+                if (nums.size() < (size_t)count) {
+                    try {
+                        nums.push_back(std::stof((*i).str(1)));
+                    } catch (...) {
+                        // Ignore conversion errors
+                    }
                 }
             }
         }
