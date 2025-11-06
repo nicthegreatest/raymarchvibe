@@ -244,185 +244,588 @@ Converted shaders should reproduce original MilkDrop preset behavior including:
 3. **UI controls** expose appropriate parameters
 4. **Visual fidelity** matches MilkDrop rendering
 
-### 9. Generative Artist Persona & Creative Philosophy
-When creating shaders for RaymarchVibe, you are not merely coding - you are composing visual music. Each shader should feel alive, breathing with the audio, evolving through time like a living organism. Channel the spirit of pioneering visual artists: the organic chaos of Kandinsky, the mathematical beauty of Escher, the flowing dynamism of Pollock, the psychedelic depth of 1960s liquid light shows.
+### 9. Advanced Shader Architecture & Professional Techniques
 
-### 9.1 Core Creative Principles
-Depth Over Flatness: Build Worlds, Not Wallpapers
-Every pixel should suggest infinite space. Use:
+This section bridges the gap between basic shaders and production-quality visuals. The inspiration shaders demonstrate techniques that create stunning, professional results. Master these patterns to elevate your work beyond simple effects to immersive visual experiences.
 
-Layered parallax - multiple planes moving at different speeds
-Atmospheric perspective - distant elements fade, blur, or shift hue
-Recursive structures - fractals, nested shapes, self-similar patterns
-Z-depth illusions - overlapping translucent forms create volumetric presence
+### 9.1 Mathematical Foundations for Complex Scenes
 
-Example: Instead of a single rotating shape, create 5-7 layers of shapes at different scales, each with slightly offset rotation speeds and opacity, with background layers moving slower and desaturating toward blues/grays.
-Organic Motion: Nature Over Machinery
-Motion should feel fluid, imperfect, alive - not robotic. Combine multiple time-based functions:
+#### 9.1.1 Advanced SDF Operations
+Move beyond basic primitives to create complex, organic structures:
 
-Layer sin(), cos(), and noise functions with non-integer frequency ratios (1.0, 1.618, 2.414)
-Add micro-movements: subtle wobbles, breathing effects, gentle drift
-Use easing curves: smoothstep() for acceleration/deceleration
-Introduce controlled chaos: perlin noise, turbulence, random offsets
+```glsl
+// Gyroid lattice - creates organic, flowing structures
+float gyroid(vec3 p) {
+    return dot(cos(p*1.5707963), sin(p.yzx*1.5707963));
+}
 
-Example: pos += vec2(sin(iTime * 1.3 + noise * 0.5) * 0.02, cos(iTime * 0.7) * 0.03) creates organic drift instead of circular paths.
-Chiaroscuro & Luminance: Paint with Light
-Think like a cinematographer. Light creates mood, depth, and focus:
+// Smooth minimum with controlled blending
+float smin(float a, float b, float k) {
+    float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+    return mix(b, a, h) - k*h*(1.0-h);
+}
 
-Rim lighting on edges of shapes (dot(normal, viewDir) patterns)
-God rays through translucent forms
-Bloom and glow using feedback buffer accumulation
-Darkness as canvas - don't be afraid of deep blacks to make bright elements pop
-HDR thinking - values can exceed 1.0 for over-bright highlights
+// Space warping for organic deformation
+vec3 warpSpace(vec3 p, float time) {
+    p += cos(p.zxy*1.5707963)*0.2; // Subtle organic mutation
+    p.xy += sin(time + p.z*0.1) * 0.1; // Flowing distortion
+    return p;
+}
 
-Example: color += pow(edgeFactor, 4.0) * 2.0 * glowColor creates electric rim lighting on boundaries.
-Color as Emotion: Beyond the Rainbow
-Avoid garish primary colors. Think in palettes and gradients:
+// Domain repetition for infinite patterns
+float opRepetition(vec3 p, vec3 c) {
+    vec3 q = mod(p, c) - 0.5*c;
+    return map(q); // Your base SDF here
+}
+```
 
-Analogous schemes: colors next to each other on the wheel (blue→cyan→teal)
-Duotone/tritone: 2-3 key colors that blend
-Temperature shifts: warm cores (orange/pink) to cool edges (blue/purple)
-Desaturation for sophistication: mix(color, vec3(luminance), 0.3)
-Audio-to-hue mapping: hue = 0.5 + iAudioBands.x * 0.3 for subtle reactive color shifts
+#### 9.1.2 Lattice Structures & Architectural Patterns
+Create complex geometric frameworks that define scene architecture:
 
-Example palette: Deep indigo backgrounds (#1a0f2e) → electric cyan accents (#00d9ff) → warm magenta highlights (#ff006e)
-Audio Reactivity: Visual Synesthesia
-Audio shouldn't just scale things - it should modulate every dimension:
+```glsl
+// Body-centered cubic lattice (from inspiration shaders)
+float bccLattice(vec3 p) {
+    p = abs(p - (p.x + p.y + p.z)*0.3333);
+    return (p.x + p.y + p.z)*0.5 - thickness;
+}
 
-Bass (iAudioBands.x): Scale, thickness, bloom intensity, camera shake
-Mids (iAudioBands.y): Hue rotation, shape morphing, rotation speed
-Treble (iAudioBands.z): Particle emission, edge sharpness, high-frequency detail
-Attack (iAudioBandsAtt): Smooth, laggy response for flowing motion
-Threshold gating: smoothstep(0.3, 0.5, iAudioBands.x) so quiet moments have calm
+// Octahedral joins for lattice connections
+float octahedralJoin(vec3 p) {
+    p = abs(fract(p + vec3(0.5)) - 0.5);
+    return (p.x + p.y + p.z) - size;
+}
 
-Example:
-float pulse = iAudioBandsAtt.x * 2.0;
-scale *= 1.0 + pulse * 0.3;
-glow *= 0.5 + pulse;
-hue += iAudioBands.y * 0.1;
+// Combined lattice structure
+float complexLattice(vec3 p) {
+    float lattice = bccLattice(p);
+    float joins = octahedralJoin(p);
+    return min(lattice, joins);
+}
+```
 
-### 9.2 Compositional Techniques
-The Rule of Thirds (but break it sometimes)
+### 9.2 Professional Color Theory & Palette Design
 
-Center focal points at 1/3 intersections when appropriate
-Use golden ratio (1.618) for pleasing spatial divisions
-Create asymmetric balance - heavier visual weight on one side balanced by negative space
+#### 9.2.1 HSV-Based Color Systems
+Work in HSV for more intuitive color control, then convert to RGB:
 
-Guided Visual Flow
-Eyes should travel through the composition:
+```glsl
+// Efficient HSV to RGB conversion
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
 
-Leading lines: use gradients, particle trails, or geometric paths
-Contrast pools: areas of high contrast draw attention
-Animation paths: moving elements guide the gaze
+// Sophisticated palette generation
+vec3 generatePalette(float t, vec3 baseHue) {
+    // Analogous harmony with temperature variation
+    vec3 color1 = hsv2rgb(baseHue + vec3(0.0, 0.8, 0.9));
+    vec3 color2 = hsv2rgb(baseHue + vec3(0.1, 0.7, 0.8));
+    vec3 color3 = hsv2rgb(baseHue + vec3(-0.05, 0.6, 0.7));
+    
+    return mix(mix(color1, color2, t), color3, t*t);
+}
 
-Texture and Grain
-Perfection is sterile. Add:
+// Temperature-based color mapping
+vec3 temperatureColor(float temp) {
+    // temp: 0.0 = cool (blue), 1.0 = warm (orange)
+    vec3 cool = hsv2rgb(vec3(0.6, 0.8, 0.9));  // Blue-cyan
+    vec3 warm = hsv2rgb(vec3(0.08, 0.9, 1.0)); // Orange-yellow
+    return mix(cool, warm, temp);
+}
+```
 
-Film grain: color += (rand(uv + iTime) - 0.5) * 0.02
-Noise overlays: subtle perlin noise at low opacity
-Chromatic aberration: slight RGB channel offset for analog feel
-Vignetting: darken edges to focus center
+#### 9.2.2 Cinematic Color Grading
+Apply professional color grading techniques:
 
-### 9.3 Narrative Arc & Temporal Evolution
-Great shaders have a story across time:
+```glsl
+// ACES tone mapping for filmic look
+vec3 acesFilm(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+}
 
-0-10 seconds: Introduction - establish core elements
-10-30 seconds: Development - complexity builds, patterns emerge
-30+ seconds: Transformation - scene evolves using mod(iTime, 60.0) for cycles
-Use progress: If iProgress is available, create climactic buildups
+// Lift-Gamma-Gain color correction
+vec3 liftGammaGain(vec3 color, vec3 lift, vec3 gamma, vec3 gain) {
+    color = pow(color, 1.0/gamma);
+    color = color * gain;
+    color = color + lift;
+    return color;
+}
 
-### 9.4 Reference Aesthetics
-Draw inspiration from:
+// Film grain for organic texture
+vec3 filmGrain(vec2 uv, float time) {
+    float grain = fract(sin(dot(uv + time, vec2(12.9898, 78.233))) * 43758.5453);
+    return vec3(grain * 0.02 - 0.01); // Subtle grain
+}
+```
 
-Demoscene (Second Reality, FR-08): Technical brilliance meets artistic vision
-VJ culture (Resolume, MilkDrop classics): Hypnotic loops, psychedelic forms
-Nature documentaries: Bioluminescence, crystal formation, fluid dynamics, aurora borealis
-Brutalist/Vaporwave/Cyberpunk: Contemporary digital aesthetics
-Abstract expressionism: Rothko's color fields, Pollock's controlled chaos
+### 9.3 Advanced Lighting & Material Systems
 
-### 9.5 The "Stop-and-Stare" Test
-A great shader makes people:
+#### 9.3.1 Multi-Light Cinematic Setup
+Create professional lighting with multiple sources:
 
-Stop scrolling - immediately visually arresting
-Lose track of time - hypnotic, meditative quality
-Want to touch it - feels tangible, responsive, alive
-See something new - details reveal themselves over multiple viewings
+```glsl
+// Multiple light sources with different colors
+struct Light {
+    vec3 position;
+    vec3 color;
+    float intensity;
+    float radius; // For soft shadows
+};
 
-Ask yourself: "Would I watch this for 5 minutes at a music festival?"
+vec3 computeLighting(vec3 pos, vec3 normal, vec3 viewDir, vec3 baseColor) {
+    Light lights[3];
+    lights[0] = Light(vec3(4.0, 3.0, 1.5), vec3(1.0, 0.2, 0.8), 1.0, 0.1);
+    lights[1] = Light(vec3(-2.0, -3.0, -4.0), vec3(0.0, 0.8, 1.0), 0.7, 0.15);
+    lights[2] = Light(vec3(0.0, 10.0, 0.0), vec3(1.0, 1.0, 0.95), 0.3, 0.5);
+    
+    vec3 totalLighting = vec3(0.0);
+    
+    for(int i = 0; i < 3; i++) {
+        vec3 lightDir = normalize(lights[i].position - pos);
+        float distance = length(lights[i].position - pos);
+        float attenuation = 1.0 / (1.0 + 0.1*distance + 0.01*distance*distance);
+        
+        // Diffuse
+        float diff = max(dot(normal, lightDir), 0.0);
+        
+        // Specular with proper energy conservation
+        vec3 reflectDir = reflect(-lightDir, normal);
+        float spec = pow(max(dot(viewDir, reflectDir), 0.0), 64.0);
+        
+        totalLighting += (diff * baseColor + spec * 0.5) * lights[i].color * 
+                        lights[i].intensity * attenuation;
+    }
+    
+    return totalLighting;
+}
+```
 
-### 9.6 Anti-Patterns: What NOT to Do
-Avoid these common creative pitfalls that result in forgettable visuals:
-❌ Static, Symmetrical Compositions
+#### 9.3.2 Advanced Material Effects
+Create sophisticated surface properties:
 
-Perfect bilateral symmetry feels sterile and predictable
-Static centering with no motion = boring
-Instead: Use asymmetry, golden ratio positioning, dynamic rebalancing over time
+```glsl
+// Iridescence effect
+vec3 iridescence(vec3 normal, vec3 viewDir, float intensity) {
+    float fresnel = pow(1.0 - dot(normal, viewDir), 2.0);
+    vec3 iridColor = hsv2rgb(vec3(fresnel * 2.0, 0.8, 1.0));
+    return iridColor * intensity * fresnel;
+}
 
-❌ Pure Primary Colors
+// Subsurface scattering simulation
+vec3 subsurfaceScattering(vec3 lightDir, vec3 normal, vec3 viewDir, float thickness) {
+    float scattering = pow(max(dot(-viewDir, lightDir) + thickness, 0.0), 2.0);
+    return vec3(scattering * 0.5); // Warm glow
+}
 
-Raw vec3(1.0, 0.0, 0.0) red looks like a debugging error
-Unmixed RGB primaries feel harsh and digital
-Instead: Blend colors, add white/black tints, use hex-inspired palettes
+// Atmospheric fog with height variation
+vec3 atmosphericFog(vec3 color, float distance, float height) {
+    float fogAmount = 1.0 - exp(-distance * 0.02);
+    float heightFog = exp(-height * 0.1);
+    vec3 fogColor = mix(vec3(0.6, 0.8, 1.0), vec3(1.0, 0.9, 0.7), heightFog);
+    return mix(color, fogColor, fogAmount);
+}
+```
 
-❌ Linear, Constant-Speed Motion
+### 9.4 Organic Motion & Temporal Effects
 
-rotation = iTime creates robotic, predictable movement
-Constant velocity = visual monotony
-Instead: Layer multiple speeds, add easing, introduce randomness and pause-and-burst rhythms
+#### 9.4.1 Layered Animation Systems
+Create complex, natural motion patterns:
 
-❌ Single-Parameter Audio Reactivity
+```glsl
+// Multi-frequency oscillator for organic movement
+float organicOscillator(float time, vec2 p) {
+    float osc1 = sin(time * 1.3 + p.x * 0.5) * 0.5;
+    float osc2 = cos(time * 0.7 + p.y * 0.3) * 0.3;
+    float osc3 = sin(time * 1.618 + length(p) * 0.2) * 0.2;
+    return osc1 + osc2 + osc3;
+}
 
-Only scaling one shape with bass = wasted potential
-Audio data should touch multiple aspects of the scene
-Instead: Map bass to scale, mids to hue, treble to detail intensity, attack to glow
+// Noise-based organic deformation
+vec3 organicDeformation(vec3 pos, float time) {
+    float noise1 = snoise(pos * 0.5 + time * 0.1);
+    float noise2 = snoise(pos * 1.0 + time * 0.2);
+    float noise3 = snoise(pos * 2.0 + time * 0.3);
+    
+    return pos + vec3(noise1, noise2, noise3) * 0.05;
+}
 
-❌ No Depth or Atmosphere
+// Easing functions for natural motion
+float easeInOutCubic(float t) {
+    return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0;
+}
 
-Flat 2D shapes floating on black = lacks presence
-Everything at the same z-depth = no spatial interest
-Instead: Layer elements, add fog/haze, use parallax, create foreground/midground/background
+// Audio-reactive organic motion
+vec3 audioReactiveMotion(vec3 pos, float time) {
+    float bassPhase = iAudioBands.x * 6.28318;
+    float midPhase = iAudioBands.y * 6.28318;
+    float treblePhase = iAudioBands.z * 6.28318;
+    
+    pos.x += sin(bassPhase + time) * iAudioBandsAtt.x * 0.1;
+    pos.y += cos(midPhase + time * 1.5) * iAudioBandsAtt.y * 0.05;
+    pos.z += sin(treblePhase + time * 2.0) * iAudioBandsAtt.z * 0.02;
+    
+    return pos;
+}
+```
 
-❌ Overcomplication Without Purpose
+#### 9.4.2 Temporal Effects & Feedback
+Use the feedback buffer for temporal continuity:
 
-Adding noise/effects just because you can
-Visual chaos with no focal point or breathing room
-Instead: Every element should serve the composition; subtract until it hurts, then add back one thing
+```glsl
+// Motion blur using feedback buffer
+vec3 motionBlur(vec2 uv, vec3 velocity) {
+    vec2 blurDir = velocity.xy * 0.02;
+    vec3 accumulated = vec3(0.0);
+    float samples = 5.0;
+    
+    for(float i = 0.0; i < samples; i++) {
+        float t = (i / (samples - 1.0) - 0.5) * 2.0;
+        vec2 sampleUV = uv + blurDir * t;
+        accumulated += texture(iChannel0, sampleUV).rgb;
+    }
+    
+    return accumulated / samples;
+}
 
-❌ Ignoring the Feedback Buffer
+// Trails and persistence effect
+vec3 temporalTrails(vec2 uv, vec3 newColor, float persistence) {
+    vec3 previous = texture(iChannel0, uv).rgb;
+    return mix(previous, newColor, persistence);
+}
 
-Not using iChannel0 means missing temporal continuity
-Starting from scratch each frame loses the "visual history"
-Instead: Blend with previous frames for trails, echoes, and organic accumulation
+// Temporal noise for organic variation
+float temporalNoise(vec2 p, float time) {
+    return snoise(vec3(p * 0.1, time * 0.1));
+}
+```
 
-### 9.7 Practical Creative Workflow
+### 9.5 Post-Processing Pipeline
 
-Start with motion: Get something moving beautifully before adding complexity
-Build in layers: Add one element at a time, commit when it feels right
-Audio-first passes: Hook up audio early, let it guide the evolution
-Happy accidents: When a bug looks cool, explore it
-Subtract to perfection: Remove elements that don't serve the vision
+#### 9.5.1 Complete Color Pipeline
+Implement a professional post-processing chain:
 
-### 9.8 Creativity Checklist
-Before considering a shader complete, verify:
+```glsl
+// Complete post-processing pipeline
+vec3 postProcess(vec3 color, vec2 uv, float time) {
+    // 1. Tone mapping
+    color = acesFilm(color);
+    
+    // 2. Gamma correction
+    color = pow(color, vec3(1.0/2.2));
+    
+    // 3. Color grading
+    color = liftGammaGain(color, vec3(0.0), vec3(1.0, 1.1, 0.9), vec3(1.1, 1.0, 0.95));
+    
+    // 4. Film grain
+    color += filmGrain(uv, time);
+    
+    // 5. Vignette
+    float vignette = 1.0 - length(uv * 0.8);
+    vignette = smoothstep(0.0, 1.0, vignette);
+    color *= vignette;
+    
+    // 6. Chromatic aberration (subtle)
+    float ca = length(uv) * 0.001;
+    color.r = texture(iChannel0, uv + vec2(ca, 0.0)).r;
+    color.b = texture(iChannel0, uv - vec2(ca, 0.0)).b;
+    
+    return color;
+}
+```
 
- Does it have 3+ layers of depth? (foreground, midground, background elements)
- Does motion feel organic? (non-linear timing, multiple oscillators, imperfection)
- Are colors sophisticated? (blended palettes, not pure primaries, temperature variation)
- Does audio modulate 3+ parameters? (not just size - also color, position, rotation, glow, etc.)
- Is there visual evolution over time? (30+ seconds shows something new/different)
- Does it use the feedback buffer creatively? (trails, echoes, temporal effects)
- Would I watch this for 5 minutes? (hypnotic quality, rewards sustained viewing)
- Is there a clear focal point or flow? (eyes know where to look, composition guides attention)
- Does it have texture/grain/imperfection? (not clinically perfect, has character)
- Does it pass the "stop-and-stare" test? (would make someone pause and engage)
+### 9.6 Scene Architecture Patterns
+
+#### 9.6.1 Layered Composition
+Structure your scenes with depth and complexity:
+
+```glsl
+// Multi-layer scene composition
+vec3 renderLayeredScene(vec2 uv, float time) {
+    // Background layer (atmosphere, sky)
+    vec3 background = renderAtmosphere(uv, time);
+    
+    // Midground layer (main structures)
+    vec3 midground = renderMainStructures(uv, time);
+    
+    // Foreground layer (particles, effects)
+    vec3 foreground = renderParticles(uv, time);
+    
+    // Atmospheric perspective
+    float depth = getDepth(uv);
+    vec3 atmosphericColor = mix(vec3(0.6, 0.8, 1.0), vec3(1.0, 0.9, 0.7), depth);
+    
+    // Composite with depth-based blending
+    vec3 final = mix(background, midground, 0.7);
+    final = mix(final, foreground, 0.3);
+    final = mix(final, atmosphericColor, depth * 0.3);
+    
+    return final;
+}
+```
+
+### 9.7 Performance Optimization for Complex Scenes
+
+#### 9.7.1 Efficient Raymarching
+Maintain quality while keeping performance acceptable:
+
+```glsl
+// Adaptive raymarching step count
+float raymarch(vec3 ro, vec3 rd, float maxDist) {
+    float d = 0.0;
+    float total = 0.0;
+    int maxSteps = 100;
+    
+    for(int i = 0; i < maxSteps; i++) {
+        // Adaptive step size based on distance
+        float stepSize = mix(0.001, 0.1, total/maxDist);
+        d = map(ro + rd * total) * 0.8; // Slight overshoot reduction
+        
+        if(d < stepSize) break;
+        if(total > maxDist) break;
+        
+        total += d;
+    }
+    
+    return total;
+}
+
+// Level of detail system
+float lodMap(vec3 p, float distance) {
+    float detail = 1.0;
+    if(distance > 5.0) detail = 0.5;
+    if(distance > 10.0) detail = 0.25;
+    
+    return map(p * detail) / detail;
+}
+```
+
+### 9.8 Creative Philosophy & Artistic Direction
+
+When creating shaders for RaymarchVibe, you are composing visual music that breathes with audio and evolves through time. The inspiration shaders demonstrate how mathematical precision and artistic intuition combine to create immersive experiences.
+
+#### 9.8.1 The "Wow Factor" Checklist
+Before considering a shader complete, verify it has:
+
+- **3+ layers of visual depth** (foreground, midground, background)
+- **Organic, multi-frequency motion** (not just simple rotation)
+- **Sophisticated color palette** (analogous schemes, temperature variation)
+- **Multi-dimensional audio reactivity** (scale, color, position, glow)
+- **Temporal evolution** (30+ seconds reveals new elements)
+- **Professional post-processing** (tone mapping, color grading)
+- **Atmospheric effects** (fog, haze, volumetric lighting)
+- **Material sophistication** (iridescence, subsurface scattering)
+
+#### 9.8.2 Anti-Patterns to Avoid
+- Static, perfectly symmetric compositions
+- Pure primary colors without blending
+- Linear, constant-speed motion
+- Single-parameter audio reactivity
+- Flat 2D shapes without depth
+- Overcomplication without compositional purpose
+- Ignoring the feedback buffer for temporal effects
+
+#### 9.8.3 The "Stop-and-Stare" Test
+A great shader should make people:
+- Stop scrolling immediately (visually arresting)
+- Lose track of time (hypnotic, meditative quality)
+- Want to interact (feels alive and responsive)
+- Discover new details (rewards sustained viewing)
+- Feel emotion (evokes mood and atmosphere)
+
+Remember: Technical perfection without artistic vision creates forgettable visuals. A shader with heart and motion will captivate audiences even with minor technical imperfections. Trust your artistic instincts while implementing these professional techniques.
+
+### 10. Implementation Templates & Starter Code
+
+#### 10.1 Professional Shader Template
+Use this as a starting point for production-quality shaders:
+
+```glsl
+#version 330 core
+out vec4 FragColor;
+
+// Standard RaymarchVibe uniforms
+uniform vec2 iResolution;
+uniform float iTime;
+uniform float iFps;
+uniform float iFrame;
+uniform float iProgress;
+uniform vec4 iAudioBands;
+uniform vec4 iAudioBandsAtt;
+uniform sampler2D iChannel0;
+uniform sampler2D iChannel1;
+uniform sampler2D iChannel2;
+uniform sampler2D iChannel3;
+
+// --- Creative Parameters ---
+uniform vec3 u_baseHue = vec3(0.6, 0.8, 0.9); // {"widget":"color", "label":"Base Hue"}
+uniform float u_complexity = 1.0; // {"label":"Complexity", "min":0.0, "max":2.0}
+uniform float u_organicMotion = 1.0; // {"label":"Organic Motion", "min":0.0, "max":2.0}
+uniform float u_audioReactivity = 1.0; // {"label":"Audio Reactivity", "min":0.0, "max":2.0}
+
+// Mathematical constants
+const float PI = 3.14159265359;
+const float TAU = 2.0 * PI;
+
+// --- Core Functions (from sections above) ---
+// Include: hsv2rgb, smin, gyroid, snoise, etc.
+
+// Scene SDF with complexity layers
+float map(vec3 p) {
+    // Apply organic deformation
+    p = organicDeformation(p, iTime * u_organicMotion);
+    
+    // Apply audio-reactive motion
+    p = audioReactiveMotion(p, iTime);
+    
+    // Base structure (customize this)
+    float structure = gyroid(p) * u_complexity;
+    
+    // Add detail layers
+    float detail = snoise(p * 4.0 + iTime) * 0.1;
+    
+    return structure + detail;
+}
+
+// Advanced lighting
+vec3 computeLighting(vec3 pos, vec3 normal, vec3 viewDir, vec3 baseColor) {
+    // Implement multi-light setup from section 9.3.1
+    vec3 lighting = baseColor * 0.1; // Ambient
+    
+    // Add iridescence
+    lighting += iridescence(normal, viewDir, 0.5);
+    
+    return lighting;
+}
+
+// Main render function
+vec3 render(vec2 uv) {
+    // Camera setup
+    vec3 ro = vec3(0.0, 0.0, 3.0);
+    vec3 rd = normalize(vec3(uv, -1.0));
+    
+    // Raymarch
+    float t = raymarch(ro, rd, 20.0);
+    vec3 pos = ro + rd * t;
+    vec3 normal = calcNormal(pos);
+    vec3 viewDir = normalize(ro - pos);
+    
+    // Base color from palette
+    vec3 baseColor = generatePalette(iTime * 0.1, u_baseHue);
+    
+    // Lighting
+    vec3 color = computeLighting(pos, normal, viewDir, baseColor);
+    
+    // Atmospheric effects
+    color = atmosphericFog(color, t, pos.y);
+    
+    return color;
+}
+
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+    
+    // Render main scene
+    vec3 color = render(uv);
+    
+    // Post-processing
+    color = postProcess(color, uv, iTime);
+    
+    // Temporal effects
+    color = temporalTrails(uv, color, 0.9);
+    
+    FragColor = vec4(color, 1.0);
+}
+```
+
+#### 10.2 Progressive Enhancement Path
+Follow this sequence to build complex shaders:
+
+1. **Foundation (Week 1)**: Basic SDF + simple lighting
+2. **Motion (Week 2)**: Add organic animation systems
+3. **Color (Week 3)**: Implement HSV palettes + grading
+4. **Lighting (Week 4)**: Multi-light setup + materials
+5. **Atmosphere (Week 5)**: Fog, haze, volumetric effects
+6. **Post-Process (Week 6)**: Tone mapping + temporal effects
+7. **Polish (Week 7)**: Performance optimization +细节完善
+
+### 11. Quality Assurance & Testing
+
+#### 11.1 Visual Quality Checklist
+- [ ] Multiple depth layers visible
+- [ ] Organic, non-linear motion patterns
+- [ ] Sophisticated color palette (no pure primaries)
+- [ ] Audio affects 3+ parameters simultaneously
+- [ ] Scene evolves over 30+ seconds
+- [ ] Professional post-processing applied
+- [ ] Atmospheric depth present
+- [ ] Materials show complexity (iridescence, etc.)
+- [ ] Performance > 30fps on target hardware
+- [ ] Passes "stop-and-stare" test
+
+#### 11.2 Performance Benchmarks
+- **Simple scenes**: 60+ fps, <5ms per frame
+- **Medium complexity**: 45+ fps, <10ms per frame  
+- **Complex scenes**: 30+ fps, <15ms per frame
+- **Maximum complexity**: 20+ fps, <20ms per frame
+
+#### 11.3 Audio Reactivity Testing
+Test with different music genres:
+- **Electronic**: Check bass response and stroboscopic effects
+- **Classical**: Verify dynamic range and subtle response
+- **Rock**: Test impact and energy response
+- **Ambient**: Ensure gentle, flowing reactivity
+
+### 12. Inspiration Analysis & Learning
+
+The inspiration shaders demonstrate these key patterns:
+
+#### 12.1 Common Mathematical Techniques
+- Gyroid surfaces for organic structures
+- Lattice architectures for complexity
+- Multi-octave noise for natural variation
+- Space warping for fluid deformation
+
+#### 12.2 Signature Visual Elements
+- Atmospheric perspective and depth
+- Temperature-based color gradients
+- Multi-source lighting setups
+- Temporal continuity through feedback
+
+#### 12.3 Motion Characteristics
+- Non-integer frequency ratios (1.3, 1.618, 2.414)
+- Noise-based organic deformation
+- Easing functions for natural movement
+- Layered oscillation systems
+
+Study these patterns, understand the underlying mathematics, then apply them with your own artistic vision. The goal is not to copy, but to learn the techniques and create something uniquely yours.
+
+---
+
+**Remember**: The inspiration shaders set a high bar, but they're achievable through systematic application of these techniques. Start simple, add complexity gradually, and always prioritize artistic impact over technical complexity.
 
 
-Remember: Technical perfection without soul is forgettable. A slightly "broken" shader with heart and motion will captivate audiences. Trust your artistic instincts and push boundaries.
+## 13. Change Log
 
+- **v2.0** (Current): Major upgrade - Professional shader architecture guide
+  - Added comprehensive mathematical foundations section
+  - Implemented professional color theory and palette design guidance
+  - Added advanced lighting and material systems
+  - Included organic motion and temporal effects techniques
+  - Added complete post-processing pipeline guidance
+  - Implemented scene architecture patterns
+  - Added performance optimization strategies
+  - Created professional shader template
+  - Added quality assurance and testing frameworks
+  - Analyzed inspiration shaders for learning patterns
+  - Established progressive enhancement path for skill development
 
-## 10. Change Log
-
-- **v1.0** (Current): Established single source of truth specification
-- Supersedes all previous shader documentation
-- Consolidated Milk-Converter requirements
-- Standardized uniform naming and UI syntax
+- **v1.0** (Previous): Established single source of truth specification
+  - Superseded all previous shader documentation
+  - Consolidated Milk-Converter requirements
+  - Standardized uniform naming and UI syntax
