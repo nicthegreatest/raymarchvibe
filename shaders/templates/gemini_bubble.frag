@@ -1,39 +1,52 @@
 #version 330 core
 out vec4 FragColor;
 
+// --- Mandatory Uniforms ---
 uniform vec2 iResolution;
 uniform float iTime;
+uniform vec4 iAudioBands;     // x:bass, y:mids, z:treble, w:all
+uniform float iFps;
+uniform float iFrame;
+uniform float iProgress;
+uniform vec4 iAudioBandsAtt;   // Attack-smoothed audio bands
 uniform sampler2D iChannel0;
 uniform bool iChannel0_active;
-uniform float iAudioAmp;
-uniform vec4 iAudioBands;
 
-// --- Shader Parameters -- -
-uniform vec3 u_baseColor = vec3(0.1, 0.0, 0.2);         // {"widget":"color", "label":"Base Color"}
-uniform float u_iridescence = 2.5;                      // {"default":2.5, "min":0.0, "max":5.0, "label":"Iridescence"}
-uniform float u_iridescenceSpeed = 0.3;                 // {"default":0.3, "min":0.0, "max":2.0, "label":"Iridescence Speed"}
-uniform float u_refraction = 0.05;                      // {"default":0.05, "min":0.0, "max":0.5, "label":"Refraction"}
-uniform float u_bubble_density = 1.0;                   // {"default":1.0, "min":0.5, "max":4.0, "label":"Bubble Density"}
+// --- Advanced Shader Parameters ---
+uniform vec3 u_baseColor = vec3(0.05, 0.0, 0.15);         // {"widget":"color", "label":"Base Color"}
+uniform float u_iridescence = 1.5;                      // {"widget":"slider", "min":0.0, "max":5.0, "label":"Iridescence"}
+uniform float u_iridescenceSpeed = 0.5;                 // {"widget":"slider", "min":0.0, "max":2.0, "label":"Iridescence Speed"}
+uniform float u_refraction = 0.08;                      // {"widget":"slider", "min":0.0, "max":0.5, "label":"Refraction"}
+uniform float u_bubble_density = 2.0;                   // {"widget":"slider", "min":0.5, "max":6.0, "label":"Bubble Density"}
+uniform float u_complexity = 8.0;                       // {"widget":"slider", "min":1.0, "max":15.0, "label":"Complexity"}
 
-// --- Lighting Parameters -- -
-uniform vec3 u_lightPosition = vec3(2.0, 3.0, -4.0);    // {"label":"Light Position"}
-uniform vec3 u_lightColor = vec3(1.0, 0.2, 0.8);         // {"widget":"color", "label":"Light Color 1"}
-uniform vec3 u_lightPosition2 = vec3(-2.0, -3.0, -4.0);   // {"label":"Light Position 2"}
-uniform vec3 u_lightColor2 = vec3(0.0, 0.8, 1.0);        // {"widget":"color", "label":"Light Color 2"}
-uniform float u_diffuseStrength = 0.8;                  // {"default":0.8, "min":0.0, "max":2.0, "label":"Diffuse"}
-uniform float u_specularStrength = 0.7;                 // {"default":0.7, "min":0.0, "max":2.0, "label":"Specular"}
-uniform float u_shininess = 64.0;                       // {"default":64.0, "min":2.0, "max":256.0, "label":"Shininess"}
+// --- Advanced Lighting Parameters ---
+uniform vec3 u_lightPosition1 = vec3(3.0, 4.0, -2.0);   // {"label":"Light Position 1"}
+uniform vec3 u_lightColor1 = vec3(1.0, 0.3, 0.7);        // {"widget":"color", "label":"Light Color 1"}
+uniform vec3 u_lightPosition2 = vec3(-3.0, -2.0, -3.0);  // {"label":"Light Position 2"}
+uniform vec3 u_lightColor2 = vec3(0.2, 0.8, 1.0);        // {"widget":"color", "label":"Light Color 2"}
+uniform vec3 u_lightPosition3 = vec3(0.0, 5.0, 2.0);      // {"label":"Light Position 3"}
+uniform vec3 u_lightColor3 = vec3(0.9, 0.9, 0.3);        // {"widget":"color", "label":"Light Color 3"}
+uniform float u_diffuseStrength = 1.2;                  // {"widget":"slider", "min":0.0, "max":3.0, "label":"Diffuse"}
+uniform float u_specularStrength = 1.5;                 // {"widget":"slider", "min":0.0, "max":3.0, "label":"Specular"}
+uniform float u_shininess = 128.0;                       // {"widget":"slider", "min":2.0, "max":512.0, "label":"Shininess"}
+uniform float u_metallic = 0.3;                          // {"widget":"slider", "min":0.0, "max":1.0, "label":"Metallic"}
+uniform float u_roughness = 0.2;                          // {"widget":"slider", "min":0.0, "max":1.0, "label":"Roughness"}
 
-uniform float u_time_multiplier = 1.0; // {"widget":"slider", "min":0.0, "max":5.0, "step":0.1}
+// --- Advanced Noise & Audio Parameters ---
+uniform float u_noise_scale = 15.0;                      // {"widget":"slider", "min":0.1, "max":50.0, "label":"Noise Scale"}
+uniform float u_noise_strength = 0.05;                   // {"widget":"slider", "min":0.0, "max":0.3, "label":"Noise Strength"}
+uniform float u_audio_scale_reactivity = 0.5;            // {"widget":"slider", "min":0.0, "max":3.0, "label":"Audio Scale Reactivity"}
+uniform float u_audio_reactivity = 0.8;                 // {"widget":"slider", "min":0.0, "max":3.0, "label":"Audio Reactivity"}
+uniform float u_time_multiplier = 1.2;                   // {"widget":"slider", "min":0.0, "max":5.0, "step":0.1, "label":"Time Multiplier"}
 
-// --- Noise & Audio Parameters -- -
-uniform float u_noise_scale = 12.0;                      // {"default":12.0, "min":0.1, "max":30.0, "label":"Noise Scale"}
-uniform float u_noise_strength = 0.03;                  // {"default":0.03, "min":0.0, "max":0.2, "label":"Noise Strength"}
-uniform float u_audio_scale_reactivity = 0.3;           // {"default":0.3, "min":0.0, "max":3.0, "label":"Audio Scale Reactivity"}
-uniform float u_audio_reactivity = 0.5;               // {"default":0.5, "min":0.0, "max":2.0, "label":"Audio Reactivity"}
+// --- Mathematical Constants ---
+const float PI = 3.14159265359;
+const float TAU = 6.28318530718;
+const int MAX_REFLECTIONS = 2;
+const float MISS = 1e6;
 
-
-// --- Noise & Hashing Functions -- -
+// --- Advanced Noise & Hashing Functions ---
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -91,136 +104,391 @@ float hash1(vec3 p) {
     return fract((p.x + p.y) * p.z);
 }
 
-// --- SDF Scene -- -
+// Worley noise for cellular patterns
+float worley(vec2 p) {
+    vec2 ip = floor(p);
+    vec2 fp = fract(p);
+    float d = 1.0;
+    for(int xo = -1; xo <= 1; xo++)
+    for(int yo = -1; yo <= 1; yo++) {
+        vec2 cellPos = vec2(float(xo), float(yo));
+        vec2 point = fract(sin(dot(ip + cellPos, vec2(12.9898, 78.233))) * 43758.5453);
+        float dist = length(fp - cellPos - point);
+        d = min(d, dist);
+    }
+    return d;
+}
+
+// --- Advanced Color Theory ---
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 blackbody(float temperature) {
+    vec3 color = vec3(255.0);
+    color.x = 56100000.0 * pow(temperature, -3.0 / 2.0) + 148.0;
+    color.y = 100.04 * log(temperature) - 623.6;
+    if(temperature > 6500.0) {
+        color.y = 35200000.0 * pow(temperature, -3.0 / 2.0) + 184.0;
+    }
+    color.z = 194.18 * log(temperature) - 1448.6;
+    color = clamp(color, 0.0, 255.0) / 255.0;
+    if(temperature < 1000.0) {
+        color *= temperature / 1000.0;
+    }
+    return color;
+}
+
+vec3 acesFilm(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+}
+
+// --- Advanced SDF Operations ---
 float sdSphere(vec3 p, float s) {
     return length(p) - s;
 }
 
-float map_particles(vec3 pos) {
-    float time = iTime * u_time_multiplier;
-    pos.y += time * 2.0; // Faster movement
-    pos.z += time * 0.5;
-    vec3 grid_id = floor(pos * 5.0);
-    vec3 cell_pos = fract(pos * 5.0) * 2.0 - 1.0;
-    
-    if (hash1(grid_id) > 0.95) { // Lower density
-        float size = hash1(grid_id + 1.0) * 0.02 + 0.01;
-        return sdSphere(cell_pos, size);
-    }
-    return 1.0;
+float smin(float a, float b, float k) {
+    float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+    return mix(b, a, h) - k*h*(1.0-h);
 }
 
-vec2 map(vec3 pos) {
-    float time = iTime * u_time_multiplier;
-    pos.y += time * 0.2;
-    pos.x += sin(pos.y * 0.5 + time) * 0.1;
+// Gyroid lattice for organic bubble structures
+float gyroid(vec3 p, float scale) {
+    return dot(cos(p*scale), sin(p.yzx*scale)) / scale;
+}
 
+// Space warping for organic deformation
+vec3 warpSpace(vec3 p, float time, float audio_factor) {
+    p += cos(p.zxy*2.0 + time) * 0.1 * audio_factor;
+    p.xy += sin(time * 0.7 + p.z * 0.2) * 0.15;
+    return p;
+}
+
+// --- Advanced Raymarching ---
+float rayMarch(vec3 ro, vec3 rd, float time, float maxDist) {
+    float t = 0.0;
+    float nearest = 1e6;
+    
+    for(int i = 0; i < 120; i++) {
+        vec3 pos = ro + rd * t;
+        float d = map(pos, time).x;
+        nearest = min(nearest, d);
+        
+        // Logarithmic termination for efficiency
+        if(log(t * t / d / 1e5) > 0.0 || d < 0.0001 || t > maxDist) {
+            break;
+        }
+        
+        t += d * 0.8;
+    }
+    
+    return t < maxDist ? t : -1.0;
+}
+
+// --- Advanced Scene Mapping ---
+vec2 map(vec3 pos, float time) {
+    float effectiveTime = time * u_time_multiplier;
+    
+    // Audio-reactive parameters
+    float bass = iAudioBandsAtt.x;
+    float mids = iAudioBandsAtt.y;
+    float treble = iAudioBandsAtt.z;
+    float audio_total = (bass + mids + treble) * 0.33;
+    
+    // Apply organic space warping
+    pos = warpSpace(pos, effectiveTime * 0.3, audio_total);
+    
+    // Main bubble field
     vec3 grid_id = floor(pos * u_bubble_density);
     vec3 cell_pos = fract(pos * u_bubble_density) * 2.0 - 1.0;
     
-    // Bubble size now pulses with audio
-    float base_bubble_size = hash1(grid_id) * 0.3 + 0.2;
-    float bubble_size = base_bubble_size + iAudioAmp * u_audio_scale_reactivity;
-
-    vec3 bubble_offset = vec3(hash1(grid_id+0.1)-0.5, hash1(grid_id+0.2)-0.5, hash1(grid_id+0.3)-0.5) * 0.4;
+    // Dynamic bubble size with audio reactivity
+    float base_bubble_size = hash1(grid_id) * 0.25 + 0.15;
+    float audio_size_boost = bass * u_audio_scale_reactivity * 0.3;
+    float bubble_size = base_bubble_size + audio_size_boost;
     
-    // Noise strength is no longer affected by audio
-    float total_noise_strength = u_noise_strength * (hash1(grid_id * 1.2) * 0.5 + 0.5) + iAudioBands.z * u_audio_reactivity * 0.1;
-    float noise = snoise(pos * u_noise_scale + vec3(0.0, 0.0, time * 0.3)) * total_noise_strength;
+    // Organic bubble positioning
+    vec3 bubble_offset = vec3(
+        hash1(grid_id + 0.1) - 0.5,
+        hash1(grid_id + 0.2) - 0.5,
+        hash1(grid_id + 0.3) - 0.5
+    ) * 0.4;
     
-    float d_bubble = sdSphere(cell_pos - bubble_offset, bubble_size) + noise;
+    // Add gyroid distortion for organic shapes
+    float gyroid_dist = gyroid(pos * 2.0 + effectiveTime, 1.0) * 0.05;
     
-    float d_particles = map_particles(pos);
-
-    if (d_bubble < d_particles) {
-        return vec2(d_bubble / u_bubble_density, 1.0);
-    } else {
-        return vec2(d_particles, 2.0);
-    }
+    // Complex noise system
+    float noise1 = snoise(pos * u_noise_scale + vec3(0.0, 0.0, effectiveTime * 0.3));
+    float noise2 = snoise(pos * u_noise_scale * 2.1 + effectiveTime * 0.2);
+    float noise3 = snoise(pos * u_noise_scale * 0.7 - effectiveTime * 0.1);
+    
+    float total_noise_strength = u_noise_strength * (hash1(grid_id * 1.2) * 0.5 + 0.5);
+    total_noise_strength += audio_total * u_audio_reactivity * 0.15;
+    float combined_noise = (noise1 * 0.5 + noise2 * 0.3 + noise3 * 0.2) * total_noise_strength;
+    
+    // Final bubble SDF
+    float d_bubble = sdSphere(cell_pos - bubble_offset, bubble_size);
+    d_bubble += combined_noise + gyroid_dist;
+    
+    // Add complexity with additional bubble layers
+    float complexity_factor = 1.0 + u_complexity * 0.1;
+    vec3 secondary_grid = floor(pos * u_bubble_density * complexity_factor);
+    vec3 secondary_cell = fract(pos * u_bubble_density * complexity_factor) * 2.0 - 1.0;
+    float secondary_bubble = sdSphere(secondary_cell, 0.08);
+    
+    // Combine primary and secondary bubbles
+    float d_combined = smin(d_bubble / u_bubble_density, secondary_bubble / (u_bubble_density * complexity_factor), 0.15);
+    
+    return vec2(d_combined, 1.0);
 }
 
-vec3 getNormal(vec3 p) {
-    const float e = 0.001;
+// --- Advanced Normal Calculation ---
+vec3 getNormal(vec3 p, float time) {
+    const float e = 0.0002;
     vec2 d = vec2(e, 0.0);
     return normalize(vec3(
-        map(p + d.xyy).x - map(p - d.xyy).x,
-        map(p + d.yxy).x - map(p - d.yxy).x,
-        map(p + d.yyx).x - map(p - d.yyx).x
+        map(p + d.xyy, time).x - map(p - d.xyy, time).x,
+        map(p + d.yxy, time).x - map(p - d.yxy, time).x,
+        map(p + d.yyx, time).x - map(p - d.yyx, time).x
     ));
 }
 
-// --- Main Logic -- -
+// --- Advanced Multi-Light System ---
+struct Light {
+    vec3 position;
+    vec3 color;
+    float intensity;
+    float radius;
+};
+
+vec3 computeAdvancedLighting(vec3 pos, vec3 normal, vec3 viewDir, vec3 baseColor, float time) {
+    // Audio-reactive light positions and intensities
+    float bass = iAudioBandsAtt.x;
+    float mids = iAudioBandsAtt.y;
+    float treble = iAudioBandsAtt.z;
+    
+    Light lights[3];
+    lights[0] = Light(
+        u_lightPosition1 + vec3(sin(time * 0.4 + bass) * 2.0, 0.0, cos(time * 0.3 + mids) * 1.5),
+        u_lightColor1,
+        1.0 + bass * 0.8,
+        0.1
+    );
+    lights[1] = Light(
+        u_lightPosition2 + vec3(cos(time * 0.5 + mids) * 1.8, sin(time * 0.6 + treble) * 1.2, 0.0),
+        u_lightColor2,
+        0.8 + mids * 0.6,
+        0.15
+    );
+    lights[2] = Light(
+        u_lightPosition3 + vec3(0.0, sin(time * 0.3 + treble) * 2.5, cos(time * 0.4 + bass) * 2.0),
+        u_lightColor3,
+        0.6 + treble * 0.9,
+        0.2
+    );
+    
+    vec3 totalLighting = vec3(0.0);
+    
+    for(int i = 0; i < 3; i++) {
+        vec3 lightDir = normalize(lights[i].position - pos);
+        float distance = length(lights[i].position - pos);
+        float attenuation = 1.0 / (1.0 + 0.1*distance + 0.01*distance*distance);
+        
+        // Diffuse with energy conservation
+        float diff = max(dot(normal, lightDir), 0.0);
+        
+        // Advanced specular with roughness
+        vec3 reflectDir = reflect(-lightDir, normal);
+        float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_shininess * (1.0 - u_roughness));
+        
+        // Fresnel effect for metallic materials
+        float fresnel = pow(1.0 - dot(viewDir, normal), 2.0);
+        
+        totalLighting += (diff * baseColor + spec * u_metallic + fresnel * 0.1) * 
+                        lights[i].color * lights[i].intensity * attenuation;
+    }
+    
+    return totalLighting;
+}
+
+// --- Advanced Iridescence ---
+vec3 advancedIridescence(vec3 normal, vec3 viewDir, vec3 pos, float time, float audio_factor) {
+    float fresnel = pow(1.0 - dot(normal, viewDir), 2.5);
+    
+    // Multi-layer iridescence with audio modulation
+    vec3 noisyPos = pos * 15.0;
+    float audio_r = bass * u_audio_reactivity;
+    
+    vec3 iridescentColor = hsv2rgb(vec3(
+        fract(noisyPos.x + time * (u_iridescenceSpeed + audio_r) * 0.5),
+        0.8 + bass * 0.2,
+        0.9 + treble * 0.1
+    ));
+    
+    vec3 iridescentColor2 = hsv2rgb(vec3(
+        fract(noisyPos.y + time * (u_iridescenceSpeed + audio_r) * 0.7 + 2.094),
+        0.7 + mids * 0.3,
+        0.8
+    ));
+    
+    vec3 iridescentColor3 = hsv2rgb(vec3(
+        fract(noisyPos.z + time * (u_iridescenceSpeed + audio_r) * 0.3 + 4.188),
+        0.9 + treble * 0.1,
+        0.7 + bass * 0.2
+    ));
+    
+    vec3 combinedIridescence = mix(iridescentColor, iridescentColor2, 0.5);
+    combinedIridescence = mix(combinedIridescence, iridescentColor3, 0.3);
+    
+    return combinedIridescence * fresnel * u_iridescence;
+}
+
+// --- Multi-Bounce Reflections for Glass ---
+vec3 renderGlassReflections(vec3 ro, vec3 rd, float time) {
+    vec3 finalColor = vec3(0.0);
+    float aggRefFactor = 0.8; // Starting reflection factor for glass
+    
+    for(int bounce = 0; bounce < MAX_REFLECTIONS; bounce++) {
+        if(aggRefFactor < 0.05) break;
+        
+        float t = rayMarch(ro, rd, time, 20.0);
+        
+        if(t >= MISS) {
+            // Hit sky with audio-reactive coloring
+            float temperature = mix(3000.0, 9000.0, iAudioBandsAtt.w);
+            finalColor += aggRefFactor * blackbody(temperature) * 0.2;
+            break;
+        }
+        
+        vec3 pos = ro + rd * t;
+        vec3 normal = getNormal(pos, time);
+        vec3 viewDir = normalize(ro - pos);
+        
+        // Material properties
+        vec3 baseColor = u_baseColor;
+        vec3 iridColor = advancedIridescence(normal, viewDir, pos, time, iAudioBandsAtt.w);
+        baseColor = mix(baseColor, baseColor + iridColor, u_iridescence);
+        
+        // Advanced lighting
+        vec3 lighting = computeAdvancedLighting(pos, normal, viewDir, baseColor, time);
+        finalColor += aggRefFactor * lighting * 0.7;
+        
+        // Prepare for next bounce with fresnel-based reflection factor
+        float fresnel = pow(1.0 - dot(viewDir, normal), 1.0);
+        aggRefFactor *= fresnel * (0.3 + u_metallic * 0.5);
+        ro = pos + normal * 0.001;
+        rd = reflect(rd, normal);
+    }
+    
+    return finalColor;
+}
+
+// --- Main Shader Logic ---
 void main() {
     vec2 uv = (2.0 * gl_FragCoord.xy - iResolution.xy) / iResolution.y;
-    vec3 ro = vec3(0.0, 0.0, -3.0);
+    vec3 ro = vec3(0.0, 0.0, -4.0);
     vec3 rd = normalize(vec3(uv, 1.0));
-
-    float t = 0.0;
-    float d = 1.0;
-
-    for(int i = 0; i < 90; i++) {
-        vec3 p = ro + rd * t;
-        d = map(p).x;
-        if (d < 0.001 || t > 6.0) break;
-        t += d * 0.8;
-    }
-
+    
+    // Add camera movement with audio
+    ro.x += sin(iTime * 0.2) * 0.3 + iAudioBandsAtt.x * 0.1;
+    ro.y += cos(iTime * 0.15) * 0.2 + iAudioBandsAtt.y * 0.05;
+    
     vec4 finalColor;
-    if (d < 0.001) {
+    
+    // Raymarch to find bubbles
+    float t = rayMarch(ro, rd, iTime, 15.0);
+    
+    if (t > -0.5) {
         vec3 hitPos = ro + rd * t;
-        float material_id = map(hitPos).y;
-
-        if (material_id == 2.0) {
-            finalColor = vec4(1.0, 1.0, 1.0, 1.0); // Bright white particles
+        vec3 normal = getNormal(hitPos, iTime);
+        vec3 viewDir = normalize(ro - hitPos);
+        
+        // Advanced material properties with iridescence
+        vec3 baseColor = u_baseColor;
+        vec3 iridColor = advancedIridescence(normal, viewDir, hitPos, iTime, iAudioBandsAtt.w);
+        baseColor = mix(baseColor, baseColor + iridColor, u_iridescence);
+        
+        // Advanced multi-light system
+        vec3 lighting = computeAdvancedLighting(hitPos, normal, viewDir, baseColor, iTime);
+        
+        // Glass-like reflections
+        vec3 reflections = renderGlassReflections(hitPos + normal * 0.001, reflect(rd, normal), iTime);
+        
+        // Refraction for background sampling
+        vec2 refr_uv = gl_FragCoord.xy / iResolution.xy - normal.xy * u_refraction;
+        vec4 bgColor;
+        if (iChannel0_active) {
+            bgColor = texture(iChannel0, refr_uv);
         } else {
-            vec3 n = getNormal(hitPos);
-            vec3 viewDir = normalize(ro - hitPos);
-
-            // 1. Lighting
-            vec3 lightDir = normalize(u_lightPosition - hitPos);
-            vec3 halfwayDir = normalize(lightDir + viewDir);
-            float diffuse = max(dot(n, lightDir), 0.0) * u_diffuseStrength;
-            float spec = pow(max(dot(n, halfwayDir), 0.0), u_shininess);
-            vec3 specular = u_specularStrength * spec * u_lightColor;
-
-            vec3 lightDir2 = normalize(u_lightPosition2 - hitPos);
-            vec3 halfwayDir2 = normalize(lightDir2 + viewDir);
-            float diffuse2 = max(dot(n, lightDir2), 0.0) * u_diffuseStrength;
-            float spec2 = pow(max(dot(n, halfwayDir2), 0.0), u_shininess);
-            vec3 specular2 = u_specularStrength * spec2 * u_lightColor2;
-
-            specular += specular2;
-            diffuse += diffuse2;
-
-            // 2. Surface Color (Iridescence)
-            float fresnel = pow(1.0 - abs(dot(viewDir, n)), 2.5);
-            vec3 noisyPos = hitPos * 10.0;
-            float audio_r = iAudioBands.x * u_audio_reactivity;
-            vec3 iridescentColor = vec3(
-                0.5 + 0.5 * sin(noisyPos.x + iTime * (u_iridescenceSpeed + audio_r)),
-                0.5 + 0.5 * sin(noisyPos.y + iTime * (u_iridescenceSpeed + audio_r) + 2.094),
-                0.5 + 0.5 * sin(noisyPos.z + iTime * (u_iridescenceSpeed + audio_r) + 4.188)
-            );
-            vec3 surfaceColor = mix(u_baseColor, iridescentColor, fresnel * u_iridescence);
-
-            // 3. Background (Refraction)
-            vec2 refr_uv = gl_FragCoord.xy / iResolution.xy - n.xy * u_refraction;
-            vec4 bgColor = texture(iChannel0, refr_uv);
-            if (!iChannel0_active) {
-                bgColor = vec4(vec3(0.05, 0.1, 0.2) * (1.0 - length(uv) * 0.4), 1.0);
-            }
-
-            // 4. Final Combination
-            vec3 litBubble = (diffuse * surfaceColor * u_lightColor) + specular + (surfaceColor * 0.1);
-            finalColor = mix(bgColor, vec4(litBubble, 1.0), fresnel * 0.8 + 0.2);
+            // Advanced procedural background
+            float bg_gradient = smoothstep(-1.0, 1.0, uv.y);
+            vec3 bg_base = mix(vec3(0.02, 0.05, 0.15), vec3(0.05, 0.02, 0.08), bg_gradient);
+            
+            // Add noise to background
+            float bg_noise = snoise(vec3(uv * 3.0, iTime * 0.1)) * 0.5 + 0.5;
+            bg_base += vec3(0.02, 0.01, 0.05) * bg_noise * (1.0 + iAudioBandsAtt.w * 0.3);
+            
+            bgColor = vec4(bg_base, 1.0);
         }
+        
+        // Fresnel-based blending
+        float fresnel = pow(1.0 - dot(viewDir, normal), 1.5);
+        
+        // Combine all layers
+        vec3 glassSurface = lighting * u_diffuseStrength + reflections * u_specularStrength + baseColor * 0.1;
+        finalColor = mix(bgColor, vec4(glassSurface, 1.0), fresnel * 0.9 + 0.1);
+        
     } else {
+        // Background with advanced effects
         if (iChannel0_active) {
             finalColor = texture(iChannel0, gl_FragCoord.xy / iResolution.xy);
         } else {
-            finalColor = vec4(vec3(0.05, 0.1, 0.2) * (1.0 - length(uv) * 0.4), 1.0);
+            // Procedural background with audio reactivity
+            float bg_gradient = smoothstep(-1.0, 1.0, uv.y);
+            vec3 bg_base = mix(vec3(0.02, 0.05, 0.15), vec3(0.05, 0.02, 0.08), bg_gradient);
+            
+            // Worley noise pattern
+            float worley_pattern = worley(uv * 4.0 + iTime * 0.1);
+            bg_base += vec3(0.03, 0.02, 0.08) * worley_pattern * (1.0 + iAudioBandsAtt.w * 0.4);
+            
+            // Audio-reactive glow
+            float temperature = mix(2000.0, 8000.0, iAudioBandsAtt.w);
+            bg_base += blackbody(temperature) * 0.1;
+            
+            finalColor = vec4(bg_base, 1.0);
         }
     }
-
-    FragColor = finalColor;
+    
+    // Advanced post-processing
+    vec3 col = finalColor.rgb;
+    
+    // Chromatic aberration
+    float ca_strength = length(uv) * 0.002 * (1.0 + iAudioBandsAtt.w * 0.5);
+    col.r = mix(col.r, col.r * (1.0 + ca_strength), 0.5);
+    col.b = mix(col.b, col.b * (1.0 - ca_strength), 0.5);
+    
+    // Film grain
+    float grain = fract(sin(dot(gl_FragCoord.xy + iTime, vec2(12.9898, 78.233))) * 43758.5453);
+    col += vec3(grain * 0.01 - 0.005);
+    
+    // Vignette
+    float vignette = 1.0 - pow(length(uv) * 0.8, 2.0);
+    vignette = mix(vignette, 1.0, iAudioBandsAtt.x * 0.3);
+    col *= vignette;
+    
+    // ACES tone mapping
+    col = acesFilm(col);
+    
+    // Gamma correction
+    col = pow(col, vec3(0.9));
+    
+    FragColor = vec4(col, finalColor.a);
 }
