@@ -94,6 +94,146 @@ void main() {
 
 **To avoid issues, follow this simple rule:** Unless you are specifically writing a shader for Shadertoy compatibility, **do not** name any function `mainImage`. Place all your code in `main()`. This will ensure your shader works correctly within the standard RaymarchVibe environment.
 
+### 2.4 ⚠️ CRITICAL: Distance Function Return Types (Shadertoy Adaptation Warning)
+
+**This is one of the most common errors when adapting shaders from Shadertoy or other sources.**
+
+#### The Problem
+
+Shadertoy and many shader libraries use a **Scene Distance Function (SDF)** named `map` that returns a **single `float`** representing the shortest distance from a point to any object in the scene:
+
+```glsl
+// Shadertoy-style map function - returns a float
+float map(vec3 p) {
+    float d = sdSphere(p, 1.0);
+    d = min(d, sdBox(p - vec3(2.0, 0.0, 0.0), vec3(0.5)));
+    return d;  // Single float return
+}
+```
+
+However, **RaymarchVibe requires the `map` function to return a `vec2`**, where:
+- **`.x` component**: The distance (equivalent to the Shadertoy float)
+- **`.y` component**: A material ID (integer identifier for determining object properties, colors, etc.)
+
+```glsl
+// RaymarchVibe-compliant map function - returns a vec2
+vec2 map(vec3 p) {
+    float d = sdSphere(p, 1.0);
+    float material = 1.0;
+    
+    float dBox = sdBox(p - vec3(2.0, 0.0, 0.0), vec3(0.5));
+    if(dBox < d) {
+        d = dBox;
+        material = 2.0;
+    }
+    
+    return vec2(d, material);  // vec2 return: (distance, material_id)
+}
+```
+
+#### The Error
+
+When adapting Shadertoy code, developers often forget to access the `.x` component when calling `map()` in functions like `rayMarch()` or `getNormal()`. This causes a type mismatch:
+
+```glsl
+// ❌ WRONG - Shadertoy-style call, expects float but gets vec2
+float distance = map(current_position);
+// ERROR: initializer of type 'vec2' cannot be assigned to variable of type 'float'
+
+// ❌ WRONG - Trying to assign vec2 to float
+float t = map(ro + rd * distance);
+```
+
+#### The Solution
+
+**Always access the `.x` component when using the result of `map()`:**
+
+```glsl
+// ✅ CORRECT - Access the .x component for distance
+float distance = map(current_position).x;
+
+// ✅ CORRECT - In raymarching loops
+for(int i = 0; i < MAX_STEPS; i++) {
+    vec3 pos = ro + rd * t;
+    float d = map(pos).x;  // Extract distance
+    if(d < 0.0001) break;
+    t += d * 0.8;
+}
+
+// ✅ CORRECT - In normal calculation (use .x for all map calls)
+vec3 getNormal(vec3 p) {
+    const float e = 0.0001;
+    vec2 d = vec2(e, 0.0);
+    return normalize(vec3(
+        map(p + d.xyy).x - map(p - d.xyy).x,
+        map(p + d.yxy).x - map(p - d.yxy).x,
+        map(p + d.yyx).x - map(p - d.yyx).x
+    ));
+}
+
+// ✅ CORRECT - Using material ID when needed (access .y for material)
+vec2 result = map(position);
+float dist = result.x;
+float materialID = result.y;
+vec3 color = getMaterialColor(int(materialID));
+```
+
+#### When Adapting Shadertoy Shaders
+
+When converting a Shadertoy shader to RaymarchVibe:
+
+1. **Define `map()` to return `vec2`** instead of `float`:
+   ```glsl
+   vec2 map(vec3 p) {
+       // ... your distance calculations ...
+       return vec2(distance, materialID);
+   }
+   ```
+
+2. **Update all `map()` calls** to access `.x`:
+   - Search for every occurrence of `map(` in your code
+   - If assigning to a `float` variable, append `.x`
+   - If you need material information, extract `.y` as well
+
+3. **Update `rayMarch()` function**:
+   ```glsl
+   float rayMarch(vec3 ro, vec3 rd) {
+       float t = 0.0;
+       for(int i = 0; i < MAX_STEPS; i++) {
+           float d = map(ro + rd * t).x;  // Don't forget .x
+           if(d < EPSILON) break;
+           t += d;
+       }
+       return t;
+   }
+   ```
+
+4. **Update normal calculation**:
+   ```glsl
+   vec3 getNormal(vec3 p) {
+       const float e = 0.0001;
+       vec2 d = vec2(e, 0.0);
+       return normalize(vec3(
+           map(p + d.xyy).x - map(p - d.xyy).x,
+           map(p + d.yxy).x - map(p - d.yxy).x,
+           map(p + d.yyx).x - map(p - d.yyx).x
+       ));
+   }
+   ```
+
+#### Prevention Checklist
+
+When writing or adapting raymarching shaders:
+
+- [ ] Define `map()` to return `vec2(distance, materialID)`
+- [ ] Every `map()` call that expects a float uses `.x` (e.g., `map(p).x`)
+- [ ] Normal calculation accesses `.x` for all `map()` calls
+- [ ] Raymarching loop uses `.x` when comparing with epsilon
+- [ ] Material-dependent coloring accesses `.y` when needed
+- [ ] Test in RaymarchVibe to confirm no compilation errors
+
+**Key Takeaway**: The `.x` component is mandatory when using the result of `map()` for distance calculations. This is the single most important difference between RaymarchVibe and Shadertoy raymarching code.
+
 ## 3. Mandatory Built-in Uniforms
 
 These uniforms are automatically provided by RaymarchVibe's ShaderEffect class and must be referenced exactly as documented:
