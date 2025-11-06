@@ -115,8 +115,8 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
     video_codec_ctx->time_base = {1, frame_rate};
     video_codec_ctx->framerate = {frame_rate, 1};
     video_codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    av_opt_set(video_codec_ctx->priv_data, "preset", "fast", 0);
-    av_opt_set(video_codec_ctx->priv_data, "crf", "23", 0);
+    av_opt_set(video_codec_ctx->priv_data, "preset", "medium", 0);
+    av_opt_set(video_codec_ctx->priv_data, "crf", "18", 0);
     if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) video_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     if (avcodec_open2(video_codec_ctx.get(), video_codec, nullptr) < 0) { std::cerr << "Could not open video codec" << std::endl; return; }
     avcodec_parameters_from_context(video_stream->codecpar, video_codec_ctx.get());
@@ -128,7 +128,7 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
         audio_stream = avformat_new_stream(format_ctx.get(), audio_codec);
         audio_codec_ctx.reset(avcodec_alloc_context3(audio_codec));
         audio_codec_ctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-        audio_codec_ctx->bit_rate = 128000;
+        audio_codec_ctx->bit_rate = 192000;
         audio_codec_ctx->sample_rate = 44100;
         av_channel_layout_from_string(&audio_codec_ctx->ch_layout, "stereo");
         audio_codec_ctx->time_base = {1, audio_codec_ctx->sample_rate};

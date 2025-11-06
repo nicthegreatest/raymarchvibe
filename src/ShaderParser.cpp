@@ -8,79 +8,165 @@
 #include <iostream>
 
 ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std::string& type_str, const std::string& default_val_str, const json& meta)
+
     : name(n), glslType(type_str), metadata(meta) {
+
     location = -1; 
+
     isColor = metadata.value("widget", "") == "color" || metadata.value("type", "") == "color";
+    smooth = metadata.value("smooth", false);
+
+
 
     // Helper to parse numbers from strings like "vec3(1.0, 0.5, 0.2)"
+
     auto extract_numbers = [](const std::string& s, int count) -> std::vector<float> {
+
         std::vector<float> nums;
+
         std::regex num_regex(R"([-+]?[0-9]*\.?[0-9]+f?)");
+
         auto words_begin = std::sregex_iterator(s.begin(), s.end(), num_regex);
+
         auto words_end = std::sregex_iterator();
+
         for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
+
             if (nums.size() < (size_t)count) {
+
                 try {
+
                     nums.push_back(std::stof((*i).str()));
+
                 } catch (...) {
+
                     // Ignore conversion errors
+
                 }
+
             }
+
         }
+
         while (nums.size() < (size_t)count) {
+
             nums.push_back(0.0f);
+
         }
+
         return nums;
+
     };
 
+
+
     // 1. Set initial values from GLSL default string
+
     if (!default_val_str.empty()) {
+
         if (glslType == "float") {
+
             try { fValue = std::stof(default_val_str); } catch (...) { fValue = 0.0f; }
+
         } else if (glslType == "int" || glslType == "bool") {
+
             try { iValue = std::stoi(default_val_str); } catch (...) { iValue = 0; }
+
             if (glslType == "bool") bValue = (iValue != 0);
+
         } else if (glslType == "vec2") {
+
             auto nums = extract_numbers(default_val_str, 2);
+
             v2Value[0] = nums[0]; v2Value[1] = nums[1];
+
         } else if (glslType == "vec3") {
+
             auto nums = extract_numbers(default_val_str, 3);
+
             v3Value[0] = nums[0]; v3Value[1] = nums[1]; v3Value[2] = nums[2];
+
         } else if (glslType == "vec4") {
+
             auto nums = extract_numbers(default_val_str, 4);
+
             v4Value[0] = nums[0]; v4Value[1] = nums[1]; v4Value[2] = nums[2]; v4Value[3] = nums[3];
+
         }
+
     } else {
+
         // Fallback to zero if no GLSL default is present
+
         fValue = 0.0f; iValue = 0; bValue = false;
+
         std::fill_n(v2Value, 2, 0.0f);
+
         std::fill_n(v3Value, 3, 0.0f);
+
         std::fill_n(v4Value, 4, 0.0f);
+
     }
 
+
+
     // 2. Override with JSON "default" value if it exists
-    if (metadata.contains("default") && metadata["default"].is_array()) {
-        const auto& def_arr = metadata["default"];
-        if (glslType == "float") {
-            fValue = metadata.value("default", fValue);
-        } else if (glslType == "int") {
-            iValue = metadata.value("default", iValue);
-        } else if (glslType == "bool") {
-            bValue = metadata.value("default", bValue);
-        } else if (glslType == "vec2" && def_arr.size() >= 2) {
-            v2Value[0] = def_arr[0].get<float>();
-            v2Value[1] = def_arr[1].get<float>();
-        } else if (glslType == "vec3" && def_arr.size() >= 3) {
-            v3Value[0] = def_arr[0].get<float>();
-            v3Value[1] = def_arr[1].get<float>();
-            v3Value[2] = def_arr[2].get<float>();
-        } else if (glslType == "vec4" && def_arr.size() >= 4) {
-            v4Value[0] = def_arr[0].get<float>();
-            v4Value[1] = def_arr[1].get<float>();
-            v4Value[2] = def_arr[2].get<float>();
-            v4Value[3] = def_arr[3].get<float>();
+
+    if (metadata.contains("default")) {
+
+        if (metadata["default"].is_number()) {
+
+            if (glslType == "float") {
+
+                fValue = metadata.value("default", fValue);
+
+            } else if (glslType == "int") {
+
+                iValue = metadata.value("default", iValue);
+
+            }
+
+        } else if (metadata["default"].is_boolean()) {
+
+            if (glslType == "bool") {
+
+                bValue = metadata.value("default", bValue);
+
+            }
+
+        } else if (metadata["default"].is_string()) {
+
+            // Handle string defaults, especially for vec types
+
+            std::string default_str = metadata["default"].get<std::string>();
+
+            if (glslType == "vec2") {
+
+                auto nums = extract_numbers(default_str, 2);
+
+                v2Value[0] = nums[0]; v2Value[1] = nums[1];
+
+            } else if (glslType == "vec3") {
+
+                auto nums = extract_numbers(default_str, 3);
+
+                v3Value[0] = nums[0]; v3Value[1] = nums[1]; v3Value[2] = nums[2];
+
+            } else if (glslType == "vec4") {
+
+                auto nums = extract_numbers(default_str, 4);
+
+                v4Value[0] = nums[0]; v4Value[1] = nums[1]; v4Value[2] = nums[2]; v4Value[3] = nums[3];
+
+            }
+
         }
+
     }
+
+
+
+    fCurrentValue = fValue;
 }
 
 ConstVariableControl::ConstVariableControl(const std::string& n, const std::string& type, int lIndex, const std::string& valStr)
@@ -99,7 +185,7 @@ void ShaderParser::ScanAndPrepareDefineControls(const std::string& shaderCode) {
     std::istringstream iss(shaderCode);
     std::string line;
     int currentLineNumber = 0;
-    std::regex defineRegex(R"(^\s*(//)?\s*#define\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\s+([^\n\r]*))?.*)");
+    std::regex defineRegex(R"(^\s*(//)?\s*#define\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\s+(.*))?)");
     std::smatch match;
 
     while (std::getline(iss, line)) {
@@ -113,7 +199,18 @@ void ShaderParser::ScanAndPrepareDefineControls(const std::string& shaderCode) {
             dc.originalLine = currentLineNumber;
 
             if (match[3].matched) { 
-                dc.originalValueString = Utils::Trim(match[3].str());
+                std::string restOfLine = match[3].str();
+                size_t commentPos = restOfLine.find("//");
+                if (commentPos != std::string::npos) {
+                    dc.originalValueString = Utils::Trim(restOfLine.substr(0, commentPos));
+                    std::string jsonStr = Utils::Trim(restOfLine.substr(commentPos + 2));
+                    try {
+                        dc.metadata = json::parse(jsonStr);
+                    } catch (...) { /* ignore parse error */ }
+                } else {
+                    dc.originalValueString = Utils::Trim(restOfLine);
+                }
+
                 dc.hasValue = !dc.originalValueString.empty();
                 if (dc.hasValue) {
                     try {
@@ -181,9 +278,9 @@ void ShaderParser::ScanAndPrepareUniformControls(const std::string& shaderCode) 
     std::istringstream iss(shaderCode);
     std::string line;
 
-    // Stricter regex: explicitly requires a default value for uniforms.
-    // It captures: 1:type, 2:name, 3:default value, 4:json blob
-    std::regex uniform_control_regex(R"(uniform\s+(float|int|bool|vec2|vec3|vec4)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^;]+);\s*//\s*(\{.*\}))");
+    // Regex to find uniforms with optional default values.
+    // It captures: 1:type, 2:name, 3:default value (optional), 4:json blob
+    std::regex uniform_control_regex(R"(uniform\s+(float|int|bool|vec2|vec3|vec4)\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\s*=\s*([^;]+))?;\s*//\s*(\{.*\}))");
 
     while (std::getline(iss, line)) {
         std::smatch match;

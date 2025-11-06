@@ -37,6 +37,63 @@ void main() {
 
 **NOTE:** Shaders should calculate UV coordinates from `gl_FragCoord.xy / iResolution.xy`, not using an `in vec2 uv` attribute. This provides proper 0-1 normalized coordinates.
 
+### 2.3 `main()` vs. `mainImage()` and "Shadertoy Mode"
+
+**CRITICAL:** The application's behavior changes based on the name of your main rendering function. This is the most common source of `GL_ERROR: INVALID_OPERATION` and other hard-to-debug issues.
+
+*   **Use `void main()` for Standard RaymarchVibe Shaders:**
+    *   This is the **recommended and default** method.
+    *   The application will provide uniforms like `iResolution` as a `vec2`.
+    *   All rendering logic should be placed directly inside `void main()`.
+
+    ```glsl
+    // Correct structure for a standard shader
+    #version 330 core
+
+    out vec4 FragColor;
+
+    // Standard uniforms
+    uniform vec2 iResolution;
+    uniform float iTime;
+    // ... other uniforms
+
+    void main() {
+        vec2 uv = gl_FragCoord.xy / iResolution.xy;
+        // ... your logic ...
+        FragColor = vec4(uv, 0.5, 1.0);
+    }
+    ```
+
+*   **Use `void mainImage(out vec4, in vec2)` for Shadertoy Compatibility:**
+    *   If your shader contains a function with the signature `void mainImage(...)`, the application will automatically enter **"Shadertoy Mode"**.
+    *   In this mode, the application assumes you are writing a shader compatible with the Shadertoy website.
+    *   **Crucially, `iResolution` will be provided as a `vec3` (`x`, `y`, `aspect_ratio`), not a `vec2`.** Declaring it as `vec2` in your shader while in this mode will cause a uniform mismatch and `GL_ERROR`.
+    *   The application will also automatically provide other Shadertoy-specific uniforms like `iMouse`, `iFrame`, etc.
+
+    ```glsl
+    // Correct structure for a Shadertoy-compatible shader
+    #version 330 core
+
+    // Note: iResolution is vec3 in Shadertoy mode!
+    uniform vec3 iResolution;
+    uniform float iTime;
+    // ... other uniforms
+
+    // Shadertoy entry point
+    void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+        vec2 uv = fragCoord.xy / iResolution.xy;
+        // ... your logic ...
+        fragColor = vec4(uv, 0.5, 1.0);
+    }
+
+    // You must still provide a main() function to call mainImage
+    void main() {
+        mainImage(FragColor, gl_FragCoord.xy);
+    }
+    ```
+
+**To avoid issues, follow this simple rule:** Unless you are specifically writing a shader for Shadertoy compatibility, **do not** name any function `mainImage`. Place all your code in `main()`. This will ensure your shader works correctly within the standard RaymarchVibe environment.
+
 ## 3. Mandatory Built-in Uniforms
 
 These uniforms are automatically provided by RaymarchVibe's ShaderEffect class and must be referenced exactly as documented:
@@ -78,6 +135,11 @@ uniform int u_count = 5; // {"widget":"slider", "min":1, "max":20}
 
 #### Color Picker (`"widget":"color"`)
 - **Applicable types:** `vec3`, `vec4`
+
+#### Smoothing (`"smooth":true`)
+- **Optional parameter:** `smooth` (default: `false`)
+- **Applicable types:** `float`
+- When set to `true`, the uniform's value will smoothly interpolate towards the target value over time, rather than snapping immediately. This creates a more organic and less jarring visual transition.
 
 ```glsl
 uniform vec3 u_color = vec3(1.0, 0.0, 0.0); // {"widget":"color"}
@@ -157,6 +219,14 @@ uniform float u_q1 = 1.0; // {"widget":"slider", "min":0.0, "max":1.0, "step":0.
 1. **Test on different hardware** (desktop, laptop GPUs)
 2. **Use GLSL 3.30 features only** (no extensions)
 3. **Avoid vendor-specific optimizations**
+
+### 7.4 Handling `iChannel` Uniforms
+The `GL_INVALID_OPERATION` error can occur if `iChannel` uniforms (e.g., `iChannel0`, `iChannel1`, etc.) are declared in the shader but are not properly handled in the C++ `ShaderEffect` class. This typically happens when:
+- A shader declares an `iChannelX` uniform, but the corresponding texture unit is not activated or a valid texture is not bound to it.
+- The `ShaderEffect`'s rendering logic attempts to bind textures for all four `iChannel`s, even if the shader only uses a subset of them.
+
+**Best Practice:**
+If your shader declares `iChannelX` uniforms, ensure that the C++ `ShaderEffect` class correctly initializes the uniform locations (e.g., to `-1` if the uniform is not found in the shader) and that a valid texture (even a dummy 1x1 black texture) is bound to the corresponding texture unit (`GL_TEXTURE0 + X`) before rendering. This prevents OpenGL from encountering an invalid state.
 
 ## 8. Testing and Validation
 

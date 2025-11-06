@@ -22,10 +22,6 @@ std::unique_ptr<Effect> CreateSimpleColorEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
-std::unique_ptr<Effect> CreateInvertColorEffect(
-    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
-    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
-
 std::unique_ptr<Effect> CreatePlasmaBasicEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
@@ -34,9 +30,7 @@ std::unique_ptr<Effect> CreateValueNoiseEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
-std::unique_ptr<Effect> CreateBrightnessContrastEffect(
-    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
-    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
 
 std::unique_ptr<Effect> CreateVignetteEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
@@ -62,7 +56,27 @@ std::unique_ptr<Effect> CreateBloomEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
+std::unique_ptr<Effect> CreateDitherEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateMasterColorEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
 std::unique_ptr<Effect> CreateToneMappingEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreatePosterizeEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateMovementEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateKaleidoscopeEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
@@ -90,6 +104,10 @@ std::unique_ptr<Effect> CreateOrganicAudioVizEffect(
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 
 std::unique_ptr<Effect> CreateOrganicFractalTreeEffect(
+    int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
+    int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
+
+std::unique_ptr<Effect> CreateBezierFractalVisualizerEffect(
     int initial_width = DEFAULT_TEMPLATE_EFFECT_WIDTH,
     int initial_height = DEFAULT_TEMPLATE_EFFECT_HEIGHT);
 

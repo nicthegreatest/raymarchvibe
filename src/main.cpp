@@ -579,6 +579,8 @@ void RenderMenuBar() {
                     } else {
                         int fb_width, fb_height;
                         glfwGetFramebufferSize(glfwGetCurrentContext(), &fb_width, &fb_height);
+                        fb_width &= ~1;
+                        fb_height &= ~1;
                         g_videoRecorder.start_recording(filename, fb_width, fb_height, 60, formats[format_idx], g_recordAudio,
                                                     g_audioSystem.GetCurrentInputSampleRate(),
                                                     g_audioSystem.GetCurrentInputChannels());
@@ -600,6 +602,8 @@ void RenderMenuBar() {
                     }
                     int fb_width, fb_height;
                     glfwGetFramebufferSize(glfwGetCurrentContext(), &fb_width, &fb_height);
+                    fb_width &= ~1;
+                    fb_height &= ~1;
                     g_videoRecorder.start_recording(filename, fb_width, fb_height, 60, formats[format_idx], g_recordAudio,
                                                 g_audioSystem.GetCurrentInputSampleRate(),
                                                 g_audioSystem.GetCurrentInputChannels());
@@ -703,7 +707,8 @@ void RenderShaderEditorWindow() {
     ImGui::Begin("Shader Editor");
 
     // Toolbar for Apply, Find, Go To Line
-    if (ImGui::Button("Apply (F5)")) {
+    if (ImGui::Button("Apply")) {
+        g_consoleLog += "Apply button clicked.\n";
         if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
             se->ApplyShaderCode(g_editor.GetText());
             const std::string& log = se->GetCompileErrorLog();
@@ -713,6 +718,18 @@ void RenderShaderEditorWindow() {
             } else {
                 ClearErrorMarkers();
                 g_consoleLog = "Shader applied successfully!";
+            }
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Refresh (F5)") || (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F5, false))) {
+        g_consoleLog += "Refresh button clicked.\n";
+        if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
+            const std::string& currentPath = se->GetSourceFilePath();
+            if (!currentPath.empty() && currentPath != "dynamic_source" && currentPath.rfind("shadertoy://", 0) != 0) {
+                LoadShaderFromFileToEditor(currentPath, se, g_editor, g_consoleLog);
+            } else {
+                g_consoleLog = "Cannot refresh a shader that was not loaded from a file.";
             }
         }
     }
@@ -1012,12 +1029,12 @@ void RenderNodeEditorWindow() {
                 if (ImGui::MenuItem("Circular Audio Viz")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateCircularAudioVizEffect(), popup_pos);
                 if (ImGui::MenuItem("Organic Audio Viz")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateOrganicAudioVizEffect(), popup_pos);
                 if (ImGui::MenuItem("Organic Fractal Tree")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateOrganicFractalTreeEffect(), popup_pos);
+                if (ImGui::MenuItem("Bezier Fractal Visualizer")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateBezierFractalVisualizerEffect(), popup_pos);
                 if (ImGui::MenuItem("Debug Color")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateDebugColorEffect(), popup_pos);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Filters")) {
-                if (ImGui::MenuItem("Invert Color")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateInvertColorEffect(), popup_pos);
-                if (ImGui::MenuItem("Brightness/Contrast")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateBrightnessContrastEffect(), popup_pos);
+                if (ImGui::MenuItem("Master Color")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateMasterColorEffect(), popup_pos);
                 if (ImGui::MenuItem("Color Correction")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateColorCorrectionEffect(), popup_pos);
                 if (ImGui::MenuItem("Sharpen")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateSharpenEffect(), popup_pos);
                 if (ImGui::MenuItem("Grain")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateGrainEffect(), popup_pos);
@@ -1026,6 +1043,10 @@ void RenderNodeEditorWindow() {
             }
             if (ImGui::BeginMenu("Post-Processing")) {
                 if (ImGui::MenuItem("Bloom")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateBloomEffect(), popup_pos);
+                if (ImGui::MenuItem("Dither")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateDitherEffect(), popup_pos);
+                if (ImGui::MenuItem("Kaleidoscope")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateKaleidoscopeEffect(), popup_pos);
+                if (ImGui::MenuItem("Movement")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateMovementEffect(), popup_pos);
+                if (ImGui::MenuItem("Posterize")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreatePosterizeEffect(), popup_pos);
                 if (ImGui::MenuItem("Tone Mapping")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateToneMappingEffect(), popup_pos);
                 if (ImGui::MenuItem("Vignette")) CreateAndPlaceNode(RaymarchVibe::NodeTemplates::CreateVignetteEffect(), popup_pos);
                 ImGui::EndMenu();
@@ -1791,6 +1812,8 @@ void processInput(GLFWwindow *window) {
             } else {
                 int fb_width, fb_height;
                 glfwGetFramebufferSize(window, &fb_width, &fb_height);
+                fb_width &= ~1;
+                fb_height &= ~1;
                 g_videoRecorder.start_recording("output.mp4", fb_width, fb_height, 60, "mp4", true, g_audioSystem.GetCurrentInputSampleRate(), g_audioSystem.GetCurrentInputChannels());
                 g_recordingStartTime = std::chrono::steady_clock::now();
             }

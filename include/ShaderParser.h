@@ -19,23 +19,26 @@ struct DefineControl {
     bool hasValue = false;
     bool isEnabled = true;
     int originalLine = -1;
+    json metadata;        
 };
 
 struct ShaderToyUniformControl {
     std::string name;
-    std::string glslType;
-    GLint location = -1;
-    json metadata;
+    std::string glslType; 
+    GLint location = -1;  
+    json metadata;        
 
     float fValue = 0.0f;
+    float fCurrentValue = 0.0f;
     float v2Value[2] = {0.0f, 0.0f};
     float v3Value[3] = {0.0f, 0.0f, 0.0f};
     float v4Value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     int iValue = 0;
     bool bValue = false;
-    bool isColor = false;
+    bool isColor = false; 
+    bool smooth = false;
 
-    ShaderToyUniformControl(const std::string& n, const std::string& type_str, const json& meta);
+    ShaderToyUniformControl(const std::string& n, const std::string& type_str, const std::string& default_val_str, const json& meta);
 };
 
 struct ConstVariableControl {
