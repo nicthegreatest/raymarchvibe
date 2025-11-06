@@ -40,6 +40,16 @@ std::unique_ptr<Effect> CreateOrganicFractalTreeEffect(int initial_width, int in
     return effect;
 }
 
+std::unique_ptr<Effect> CreateBezierFractalVisualizerEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/bezier_fractal_visualizer.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Bezier Fractal Visualizer";
+    return effect;
+}
+
 std::unique_ptr<Effect> CreateImageLoaderEffect(int initial_width, int initial_height) {
     // initial_width and initial_height are ignored for now, as image size is determined on load
     // but they are kept for consistency with the other factory functions.
@@ -72,17 +82,6 @@ std::unique_ptr<Effect> CreateSimpleColorEffect(int initial_width, int initial_h
     return effect;
 }
 
-std::unique_ptr<Effect> CreateInvertColorEffect(int initial_width, int initial_height) {
-    auto effect = std::make_unique<ShaderEffect>(
-        "shaders/templates/invert_color.frag",
-        initial_width,
-        initial_height
-    );
-    effect->name = "Invert Color";
-    // effect->Load();
-    return effect;
-}
-
 std::unique_ptr<Effect> CreatePlasmaBasicEffect(int initial_width, int initial_height) {
     auto effect = std::make_unique<ShaderEffect>(
         "shaders/templates/plasma_basic.frag",
@@ -104,15 +103,7 @@ std::unique_ptr<Effect> CreateValueNoiseEffect(int initial_width, int initial_he
     return effect;
 }
 
-std::unique_ptr<Effect> CreateBrightnessContrastEffect(int initial_width, int initial_height) {
-    auto effect = std::make_unique<ShaderEffect>(
-        "shaders/templates/filter_brightness_contrast.frag",
-        initial_width,
-        initial_height
-    );
-    effect->name = "Brightness/Contrast";
-    return effect;
-}
+
 
 std::unique_ptr<Effect> CreateVignetteEffect(int initial_width, int initial_height) {
     auto effect = std::make_unique<ShaderEffect>(
@@ -174,6 +165,26 @@ std::unique_ptr<Effect> CreateBloomEffect(int initial_width, int initial_height)
     return effect;
 }
 
+std::unique_ptr<Effect> CreateDitherEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_dither.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Dither";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateMasterColorEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_master_color.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Master Color";
+    return effect;
+}
+
 std::unique_ptr<Effect> CreateToneMappingEffect(int initial_width, int initial_height) {
     auto effect = std::make_unique<ShaderEffect>(
         "shaders/templates/post_processing/filter_tonemapping.frag",
@@ -181,6 +192,36 @@ std::unique_ptr<Effect> CreateToneMappingEffect(int initial_width, int initial_h
         initial_height
     );
     effect->name = "Tone Mapping";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreatePosterizeEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_posterize.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Posterize";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateMovementEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_movement.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Movement";
+    return effect;
+}
+
+std::unique_ptr<Effect> CreateKaleidoscopeEffect(int initial_width, int initial_height) {
+    auto effect = std::make_unique<ShaderEffect>(
+        "shaders/templates/post_processing/filter_kaleidoscope.frag",
+        initial_width,
+        initial_height
+    );
+    effect->name = "Kaleidoscope";
     return effect;
 }
 

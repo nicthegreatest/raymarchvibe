@@ -1,5 +1,7 @@
 # TODO
 
+- [ ] **Add Voronoi Noise Generator Music Visualizer:** Create a new music visualizer based on the bezier curve shader, incorporating Voronoi noise generation.
+
 - [ ] **Verify Audio Reactivity:** The new Circular Audio Visualizer appears static. Confirm that the user is enabling the global "Enable Audio Link" checkbox in the "Audio Reactivity" window. If the issue persists, investigate uniform passing.
 
 - [ ] **Verify Compositing:** The user reported being unable to see the sphere behind the visualizer. The latest C++ fix should have resolved this, but it needs to be tested and confirmed.

@@ -84,6 +84,7 @@ private:
     std::vector<Effect*> m_inputs;
 
     float m_time;
+    float m_internalTime = 0.0f;
     float m_deltaTime;
     int m_frameCount;
     float m_mouseState[4];

@@ -32,6 +32,9 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
       m_iAudioBandsLoc(-1),
       m_shaderParser(),
       m_iChannel0SamplerLoc(-1),
+      m_iChannel1SamplerLoc(-1),
+      m_iChannel2SamplerLoc(-1),
+      m_iChannel3SamplerLoc(-1),
       m_fboID(0),
       m_fboTextureID(0),
       m_rboID(0),
@@ -217,7 +220,20 @@ void ShaderEffect::SetShadertoyMode(bool mode) {
 }
 
 void ShaderEffect::Update(float currentTime) {
-    m_time = currentTime;
+    float speed = 1.0f;
+    for (auto& control : m_shadertoyUniformControls) {
+        if (control.name == "u_speed") {
+            speed = control.fValue;
+        }
+        if (control.smooth) {
+            if (control.glslType == "float") {
+                control.fCurrentValue += (control.fValue - control.fCurrentValue) * 0.05f;
+            }
+            // Add smoothing for other types here if needed
+        }
+    }
+    m_internalTime += m_deltaTime * speed;
+    m_time = m_internalTime;
 
     if (m_colorCycleState.isEnabled) {
         m_colorCycleState.cycleTime += m_deltaTime * m_colorCycleState.speed;
@@ -257,10 +273,14 @@ void ShaderEffect::Render() {
     }
 
     // Set uniforms from parsed controls
-    for (const auto& control : m_shadertoyUniformControls) {
+    for (auto& control : m_shadertoyUniformControls) {
         if (control.location != -1) {
             if (control.glslType == "float") {
-                glUniform1f(control.location, control.fValue);
+                if (control.smooth) {
+                    glUniform1f(control.location, control.fCurrentValue);
+                } else {
+                    glUniform1f(control.location, control.fValue);
+                }
             } else if (control.glslType == "int") {
                 glUniform1i(control.location, control.iValue);
             } else if (control.glslType == "vec2") {
@@ -469,7 +489,7 @@ void ShaderEffect::RenderUI() {
         RenderParsedUniformsUI();
     }
 
-    if (ImGui::CollapsingHeader("Shader Defines##EffectDefines")) {
+    if (ImGui::CollapsingHeader("Shader Defines##EffectDefines", ImGuiTreeNodeFlags_DefaultOpen)) {
         RenderDefineControlsUI();
     }
 
@@ -533,7 +553,17 @@ void ShaderEffect::RenderDefineControlsUI() {
         ImGui::PushID(static_cast<int>(i) + 1000);
 
         if (control.hasValue) {
-            if (ImGui::InputFloat(control.name.c_str(), &control.floatValue)) {
+            bool valueChanged = false;
+            if (!control.metadata.is_null() && control.metadata.value("widget", "") == "slider") {
+                std::string label = control.metadata.value("label", control.name);
+                float min_val = control.metadata.value("min", 0.0f);
+                float max_val = control.metadata.value("max", 1.0f);
+                valueChanged = ImGui::SliderFloat(label.c_str(), &control.floatValue, min_val, max_val);
+            } else {
+                valueChanged = ImGui::InputFloat(control.name.c_str(), &control.floatValue);
+            }
+
+            if (valueChanged) {
                 std::string modifiedCode = m_shaderParser.UpdateDefineValueInString(m_shaderSourceCode, control.name, control.floatValue);
                 if (!modifiedCode.empty()) {
                     ApplyShaderCode(modifiedCode);

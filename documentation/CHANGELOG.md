@@ -1,3 +1,20 @@
+## [0.3.8] - 2025-11-03
+
+### Added
+- Implemented generic uniform smoothing for 'float' types, controlled by '{"smooth": true}' metadata in shader uniform comments.
+- Added a 'Refresh' button with F5 keybinding to the Shader Editor for faster iteration.
+
+### Fixed
+- Resolved compilation errors caused by duplicate 'ShaderParser.h' files and incorrect header/source file synchronization.
+- Corrected video recording errors related to non-even frame dimensions by ensuring framebuffer dimensions are divisible by 2.
+- Improved video and audio recording quality by adjusting FFmpeg encoder settings (x264 preset from "fast" to "medium", CRF from 23 to 18, audio bitrate to 192kbps).
+- Debugged and fixed the 'bezier_fractal_visualizer.frag' shader: corrected uniform types, adjusted UV source, changed 'iAudioBands' to 'vec4', and applied uniform smoothing to 'u_complexity'.
+
+### Changed
+- Updated 'documentation/SHADERS.md' to clarify shader structure and the implications of 'main()' vs. 'mainImage()' for "Shadertoy Mode" and uniform handling.
+
+---
+
 ## [0.3.7] - 2025-10-30
 
 ### Added
