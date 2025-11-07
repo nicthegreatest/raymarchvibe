@@ -193,7 +193,7 @@ float sdSphere(vec3 p, float s) {
 }
 
 // --- Advanced Scene Mapping ---
-float mapScene(vec3 p, float time) {
+vec2 mapScene(vec3 p, float time) {
     float effectiveTime = time * u_timeSpeed;
     
     // Audio-reactive parameters
@@ -225,14 +225,23 @@ float mapScene(vec3 p, float time) {
     // Gyroid distortion
     float gyroidDist = gyroid(p_transformed * 3.0 + effectiveTime) * 0.1;
     
+    // Material ID based on which primitive is closest
+    float materialID = 1.0;
+    float combined = dodecaDist;
+    
+    if (lattice < combined) {
+        combined = lattice;
+        materialID = 2.0;
+    }
+    
     // Combine with smooth minimum
-    float combined = smin(dodecaDist, lattice, 0.2);
+    combined = smin(combined, lattice, 0.2);
     combined = smin(combined, gyroidDist, 0.1);
     
     // Add distortion field
     combined += distortField(p, effectiveTime) * 0.05;
     
-    return combined;
+    return vec2(combined, materialID);
 }
 
 // --- Normal Calculation ---
@@ -240,9 +249,9 @@ vec3 getNormal(vec3 p, float time) {
     float epsilon = 0.0001;
     vec2 e = vec2(epsilon, 0.0);
     return normalize(vec3(
-        mapScene(p + e.xyy, time) - mapScene(p - e.xyy, time),
-        mapScene(p + e.yxy, time) - mapScene(p - e.yxy, time),
-        mapScene(p + e.yyx, time) - mapScene(p - e.yyx, time)
+        mapScene(p + e.xyy, time).x - mapScene(p - e.xyy, time).x,
+        mapScene(p + e.yxy, time).x - mapScene(p - e.yxy, time).x,
+        mapScene(p + e.yyx, time).x - mapScene(p - e.yyx, time).x
     ));
 }
 
@@ -251,7 +260,7 @@ float rayMarch(vec3 ro, vec3 rd, float time) {
     float t = 0.0;
     for (int i = 0; i < 128; i++) {
         vec3 p = ro + rd * t;
-        float dist = mapScene(p, time);
+        float dist = mapScene(p, time).x;
         if (dist < (0.0001 * t) || dist < 0.0001) {
             return t;
         }
@@ -329,7 +338,7 @@ float getSoftShadow(vec3 ro, vec3 rd, float tmin, float tmax, float k, float tim
     float t = tmin;
     for(int i = 0; i < 48; i++) {
         if(t < tmax) {
-            float h = mapScene(ro + rd * t, time);
+            float h = mapScene(ro + rd * t, time).x;
             if(h < 0.001) return 0.0;
             res = min(res, k * h / t);
             t += h * 0.8;
@@ -345,7 +354,7 @@ float getAO(vec3 pos, vec3 normal, float time) {
     float aoTotalDist = 0.0;
     for(int j = 0; j < 6; j++) {
         aoTotalDist += aoStep;
-        float d_ao = mapScene(pos + normal * aoTotalDist * 0.5, time);
+        float d_ao = mapScene(pos + normal * aoTotalDist * 0.5, time).x;
         ao += max(0.0, (aoTotalDist*0.5 - d_ao));
         aoStep *= 1.8;
     }

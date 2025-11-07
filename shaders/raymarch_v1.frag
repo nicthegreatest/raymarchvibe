@@ -85,7 +85,7 @@ float sdDodecahedron(vec3 p, float r_inradius) {
 
 
 // Scene Definition
-float mapScene(vec3 p, float time) {
+vec2 mapScene(vec3 p, float time) {
     float effectiveTime = time * u_timeSpeed;
 
     // Dodecahedron properties
@@ -103,10 +103,13 @@ float mapScene(vec3 p, float time) {
 
     float dodecaDist = sdDodecahedron(p_transformed, dodecaInradius);
     
+    // Material ID for the dodecahedron
+    float materialID = 1.0;
+    
     // Optional: Add a ground plane for context
     // float planeDist = p.y + dodecaInradius * 1.2; // Place plane below the dodecahedron
-    // return min(dodecaDist, planeDist);
-    return dodecaDist;
+    // return vec2(min(dodecaDist, planeDist), materialID);
+    return vec2(dodecaDist, materialID);
 }
 
 // Normal Calculation
@@ -114,9 +117,9 @@ vec3 getNormal(vec3 p, float time) {
     float eps = 0.0005 * u_scale; // Epsilon relative to scale for better normals on smaller objects
     vec2 e = vec2(eps, 0.0);
     return normalize(vec3(
-        mapScene(p + e.xyy, time) - mapScene(p - e.xyy, time),
-        mapScene(p + e.yxy, time) - mapScene(p - e.yxy, time),
-        mapScene(p + e.yyx, time) - mapScene(p - e.yyx, time)
+        mapScene(p + e.xyy, time).x - mapScene(p - e.xyy, time).x,
+        mapScene(p + e.yxy, time).x - mapScene(p - e.yxy, time).x,
+        mapScene(p + e.yyx, time).x - mapScene(p - e.yyx, time).x
     ));
 }
 
@@ -125,7 +128,7 @@ float rayMarch(vec3 ro, vec3 rd, float time) {
     float t = 0.0;
     for (int i = 0; i < 96; i++) { // Max steps
         vec3 p = ro + rd * t;
-        float dist = mapScene(p, time);
+        float dist = mapScene(p, time).x;
         if (dist < (0.001 * t) || dist < 0.0001) { // Adjusted hit threshold
              return t;
         }
@@ -176,7 +179,7 @@ void main() {
         float aoTotalDist = 0.0;
         for(int j=0; j<4; j++){
             aoTotalDist += aoStep;
-            float d_ao = mapScene(hitPos + normal * aoTotalDist * 0.5, iTime);
+            float d_ao = mapScene(hitPos + normal * aoTotalDist * 0.5, iTime).x;
             ao += max(0.0, (aoTotalDist*0.5 - d_ao));
             aoStep *= 1.7;
         }

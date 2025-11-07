@@ -30,7 +30,7 @@ float sdStar(vec2 p, int n, float r1, float r2) {
 }
 
 // Scene SDF: A single 3D star
-float map(vec3 pos) {
+vec2 map(vec3 pos) {
     // Pulse animation
     float pulse = sin(iTime * u_pulseSpeed) * 0.05;
     
@@ -42,16 +42,18 @@ float map(vec3 pos) {
 
     // Combine with height to make it 3D, with slightly rounded edges
     vec2 d = vec2(d2d, abs(pos.z) - u_height);
-    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - 0.01;
+    float distance = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - 0.01;
+    
+    return vec2(distance, 1.0);
 }
 
 // Calculate the normal of the surface at a point p
 vec3 calcNormal(vec3 p) {
     vec2 e = vec2(0.001, 0.0);
     return normalize(vec3(
-        map(p + e.xyy) - map(p - e.xyy),
-        map(p + e.yxy) - map(p - e.yxy),
-        map(p + e.yyx) - map(p - e.yyx)
+        map(p + e.xyy).x - map(p - e.xyy).x,
+        map(p + e.yxy).x - map(p - e.yxy).x,
+        map(p + e.yyx).x - map(p - e.yyx).x
     ));
 }
 
@@ -67,7 +69,7 @@ void main() {
 
     // Raymarching loop
     for (int i = 0; i < 100; i++) {
-        d = map(p);
+        d = map(p).x;
         if (d < 0.001) {
             break;
         }
