@@ -88,7 +88,9 @@ float worley(vec2 p) {
     for(int xo = -1; xo <= 1; xo++)
     for(int yo = -1; yo <= 1; yo++) {
         vec2 cellPos = vec2(float(xo), float(yo));
-        vec2 point = fract(sin(dot(ip + cellPos, vec2(12.9898, 78.233))) * 43758.5453);
+        float rand1 = fract(sin(dot(ip + cellPos, vec2(12.9898, 78.233))) * 43758.5453);
+        float rand2 = fract(sin(dot(ip + cellPos, vec2(94.673, 39.759))) * 43758.5453);
+        vec2 point = vec2(rand1, rand2);
         float dist = length(fp - cellPos - point);
         d = min(d, dist);
     }
