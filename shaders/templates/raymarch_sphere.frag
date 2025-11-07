@@ -56,7 +56,7 @@ float sdSphere(vec3 p, float r) {
 }
 
 // Scene SDF
-float map(vec3 pos) {
+vec2 map(vec3 pos) {
     // Rotation
     float angle = iTime * u_rotationSpeed;
     mat3 rotM = rotationMatrix(u_rotationAxis, angle);
@@ -64,16 +64,18 @@ float map(vec3 pos) {
 
     // Pulse the radius with the audio amplitude
     float audioPulse = iAudioAmp * 0.2;
-    return sdSphere(pos, u_radius + audioPulse);
+    float distance = sdSphere(pos, u_radius + audioPulse);
+    
+    return vec2(distance, 1.0);
 }
 
 // Calculate the normal of the surface at a point p
 vec3 calcNormal(vec3 p) {
     vec2 e = vec2(0.001, 0.0);
     return normalize(vec3(
-        map(p + e.xyy) - map(p - e.xyy),
-        map(p + e.yxy) - map(p - e.yxy),
-        map(p + e.yyx) - map(p - e.yyx)
+        map(p + e.xyy).x - map(p - e.xyy).x,
+        map(p + e.yxy).x - map(p - e.yxy).x,
+        map(p + e.yyx).x - map(p - e.yyx).x
     ));
 }
 
@@ -104,7 +106,7 @@ void main() {
     float d = 0.0;
     vec3 p = ro; // Current point along the ray
     for (int i = 0; i < 100; i++) {
-        d = map(p);
+        d = map(p).x;
         if (d < 0.001) break; // Hit
         if (d > 100.0) break; // Miss
         p += rd * d;
