@@ -40,7 +40,8 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
       m_rboID(0),
       m_fboWidth(initialWidth),
       m_fboHeight(initialHeight),
-      m_lastWriteTime{}
+      m_lastWriteTime{},
+      m_debugLogged(false)
 {
     if (m_isShadertoyMode) {
         m_inputs.resize(4, nullptr);
@@ -634,11 +635,77 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.5f, 0.25f, 0.5f, 0.7f));
     bool expanded = ImGui::CollapsingHeader((label + " [Palette]").c_str());
     ImGui::PopStyleColor();
-    
+
     if (expanded) {
-        // Mode selector
-        const char* modes[] = { "Individual", "Palette" };
-        ImGui::Combo(("Mode##" + control.name).c_str(), (int*)&control.paletteMode, modes, 2);
+        // Determine if this is a secondary color control (should have Sync option)
+        // Use the same detection logic as the parser - check paletteControlIndex
+        bool isSecondaryControl = false;
+        std::string detectionMethod = "INDEX_FALLBACK";
+        std::string baseName = control.name;
+
+        // Phase 1: Semantic name detection (matches parser logic)
+        if (baseName.find("Secondary") != std::string::npos ||
+            baseName.find("Tertiary") != std::string::npos ||
+            baseName.find("Accent") != std::string::npos ||
+            baseName.find("Highlight") != std::string::npos ||
+            baseName.find("_secondary") != std::string::npos ||
+            baseName.find("_tertiary") != std::string::npos ||
+            baseName.find("_accent") != std::string::npos ||
+            baseName.find("_highlight") != std::string::npos) {
+            isSecondaryControl = true;
+            detectionMethod = "SEMANTIC_NAME";
+        }
+
+        // Phase 2: Index-based fallback (matches parser logic)
+        int paletteIndex = control.metadata.value("paletteControlIndex", 0);
+        if (!isSecondaryControl && paletteIndex > 0) {
+            isSecondaryControl = true;  // 2nd and subsequent palette controls are secondary
+            detectionMethod = "INDEX_FALLBACK";
+        }
+
+        // Determine if this is a secondary color control (should have Sync option)
+        // Use the same detection logic as the parser - check paletteControlIndex
+        if (baseName.find("Secondary") != std::string::npos ||
+            baseName.find("Tertiary") != std::string::npos ||
+            baseName.find("Accent") != std::string::npos ||
+            baseName.find("Highlight") != std::string::npos ||
+            baseName.find("_secondary") != std::string::npos ||
+            baseName.find("_tertiary") != std::string::npos ||
+            baseName.find("_accent") != std::string::npos ||
+            baseName.find("_highlight") != std::string::npos) {
+            isSecondaryControl = true;
+        }
+
+        // Phase 2: Index-based fallback (matches parser logic)
+        if (!isSecondaryControl && paletteIndex > 0) {
+            isSecondaryControl = true;  // 2nd and subsequent palette controls are secondary
+        }
+
+        // Mode selector - different options for primary vs secondary controls
+        if (isSecondaryControl) {
+            // Secondary controls: ALWAYS all 3 options (Individual | Palette | Sync)
+            const char* currentPreview = nullptr;
+            if (control.paletteMode == 0) currentPreview = "Individual";
+            else if (control.paletteMode == 1) currentPreview = "Palette";
+            else if (control.paletteMode == 2) currentPreview = "Sync";
+            else currentPreview = "Invalid"; // Fallback should not happen
+
+            if (ImGui::BeginCombo(("Mode##" + control.name).c_str(), currentPreview)) {
+                if (ImGui::Selectable("Individual", control.paletteMode == 0)) control.paletteMode = 0;
+                if (ImGui::Selectable("Palette", control.paletteMode == 1)) control.paletteMode = 1;
+                if (ImGui::Selectable("Sync", control.paletteMode == 2)) control.paletteMode = 2;
+                ImGui::EndCombo();
+            }
+        } else {
+            // Primary controls: Individual | Palette only (no Sync option)
+            // Clamp to valid range for primary controls
+            if (control.paletteMode >= 2) control.paletteMode = 1;
+            if (ImGui::BeginCombo(("Mode##" + control.name).c_str(), control.paletteMode == 0 ? "Individual" : "Palette")) {
+                if (ImGui::Selectable("Individual", control.paletteMode == 0)) control.paletteMode = 0;
+                if (ImGui::Selectable("Palette", control.paletteMode == 1)) control.paletteMode = 1;
+                ImGui::EndCombo();
+            }
+        }
 
         if (control.paletteMode == 0) {
             // Individual color picking mode
@@ -647,7 +714,7 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
             } else {
                 ImGui::ColorEdit4(("Color##" + control.name).c_str(), control.v4Value);
             }
-        } else {
+        } else if (control.paletteMode == 1) {
             // Palette generation mode
             // Harmony type selector
             const char* harmonies[] = {
@@ -670,11 +737,7 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                 baseColorChanged = ImGui::ColorEdit4(("Base Color##" + control.name).c_str(), control.v4Value);
             }
 
-            // Apply button to regenerate harmony
-            ImGui::SameLine();
-            if (ImGui::Button(("Apply##" + control.name).c_str())) {
-                baseColorChanged = true; // Force regeneration
-            }
+
 
             // Generate palette if harmony type changed or base color changed
             if (oldHarmony != control.selectedHarmonyType || baseColorChanged || control.generatedPalette.empty()) {
@@ -803,6 +866,82 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                     }
                     ImGui::EndPopup();
                 }
+            }
+        } else if (control.paletteMode == 2) {
+            // Sync mode - automatically sync from primary gradient
+            ImGui::Text("Synced to primary gradient");
+
+            // Find the primary control that generates gradients
+            const ShaderToyUniformControl* primaryControl = nullptr;
+            for (const auto& otherControl : m_shadertoyUniformControls) {
+                if (&otherControl != &control && otherControl.isColor && otherControl.paletteMode == 1 && otherControl.gradientMode && !otherControl.gradientColors.empty()) {
+                    primaryControl = &otherControl;
+                    break;
+                }
+            }
+
+            if (primaryControl && !primaryControl->gradientColors.empty()) {
+                const auto& gradient = primaryControl->gradientColors;
+                size_t gradientSize = gradient.size();
+
+                // Determine sampling position based on control name
+                float samplePos = 0.0f;
+                std::string baseName = control.name;
+
+                // Find "Primary", "Secondary", etc. patterns
+                if (baseName.find("Primary") != std::string::npos || baseName.find("_main") != std::string::npos) {
+                    samplePos = 0.0f;
+                } else if (baseName.find("Secondary") != std::string::npos || baseName.find("_secondary") != std::string::npos) {
+                    samplePos = 0.25f;
+                } else if (baseName.find("Tertiary") != std::string::npos || baseName.find("_tertiary") != std::string::npos) {
+                    samplePos = 0.5f;
+                } else if (baseName.find("Accent") != std::string::npos || baseName.find("_accent") != std::string::npos) {
+                    samplePos = 0.75f;
+                } else if (baseName.find("Highlight") != std::string::npos || baseName.find("_highlight") != std::string::npos) {
+                    samplePos = 1.0f;
+                } else {
+                    // Default to evenly spaced based on control index among sync controls
+                    int syncCount = 0;
+                    int syncIndex = 0;
+                    for (size_t i = 0; i < m_shadertoyUniformControls.size(); ++i) {
+                        const auto& other = m_shadertoyUniformControls[i];
+                        if (other.isColor && other.paletteMode == 2) {
+                            syncCount++;
+                            if (&other == &control) {
+                                syncIndex = syncCount - 1;
+                            }
+                        }
+                    }
+                    samplePos = syncCount > 1 ? static_cast<float>(syncIndex) / (syncCount - 1) : 0.0f;
+                }
+
+                // Sample from the gradient
+                size_t sampleIndex = static_cast<size_t>(samplePos * (gradientSize - 1));
+                sampleIndex = std::min(sampleIndex, gradientSize - 1);
+
+                const glm::vec3& sampledColor = gradient[sampleIndex];
+
+                // Update control value
+                control.v3Value[0] = sampledColor.x;
+                control.v3Value[1] = sampledColor.y;
+                control.v3Value[2] = sampledColor.z;
+                if (control.glslType == "vec4") {
+                    control.v4Value[3] = 1.0f;
+                }
+
+                // Display read-only color swatch
+                ImGui::ColorButton(("Synced Color##" + control.name).c_str(),
+                    ImVec4(sampledColor.x, sampledColor.y, sampledColor.z, 1.0f),
+                    ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop);
+
+                ImGui::SameLine();
+                ImGui::Text("(%.2f position)", samplePos);
+
+            } else {
+                // No primary gradient found
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f),
+                    "No primary gradient available for sync");
+                ImGui::Text("Set a primary color control to Palette mode with Gradient enabled");
             }
         }
     }
@@ -948,6 +1087,50 @@ void ShaderEffect::ParseShaderControls() {
     m_defineControls = m_shaderParser.GetDefineControls();
     m_constControls = m_shaderParser.GetConstControls();
     m_shadertoyUniformControls = m_shaderParser.GetUniformControls();
+
+    // ===================== PALETTE CONTROL SUMMARY =====================
+    // Log palette control summary once per shader load (not on every UI render)
+    if (!m_debugLogged && !m_shadertoyUniformControls.empty()) {
+        int primaryCount = 0, secondaryBySemantic = 0, secondaryByIndex = 0;
+
+        for (const auto& control : m_shadertoyUniformControls) {
+            if (control.isPalette) {
+                std::string baseName = control.name;
+                int paletteIndex = control.metadata.value("paletteControlIndex", 0);
+
+                // Check semantic detection
+                bool isSecondarySemantic = (
+                    baseName.find("Secondary") != std::string::npos ||
+                    baseName.find("Tertiary") != std::string::npos ||
+                    baseName.find("Accent") != std::string::npos ||
+                    baseName.find("Highlight") != std::string::npos ||
+                    baseName.find("_secondary") != std::string::npos ||
+                    baseName.find("_tertiary") != std::string::npos ||
+                    baseName.find("_accent") != std::string::npos ||
+                    baseName.find("_highlight") != std::string::npos
+                );
+
+                if (paletteIndex == 0) {
+                    primaryCount++;
+                } else if (isSecondarySemantic) {
+                    secondaryBySemantic++;
+                } else if (paletteIndex > 0) {
+                    secondaryByIndex++;
+                }
+            }
+        }
+
+        // Clean, once-per-load summary
+        std::cout << "[PALETTE] Shader loaded: '" << m_shaderFilePath << "'"
+                  << " → Primary:" << primaryCount
+                  << ", Secondary:" << (secondaryBySemantic + secondaryByIndex)
+                  << " (Semantic:" << secondaryBySemantic << ", Index:" << secondaryByIndex << ")"
+                  << std::endl;
+
+        // Mark debug as logged for this shader load
+        m_debugLogged = true;
+    }
+    // =================================================================
 
     // Apply any deserialized control values
     if (!m_deserialized_controls.is_null()) {

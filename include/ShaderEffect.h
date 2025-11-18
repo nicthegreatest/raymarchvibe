@@ -79,6 +79,7 @@ private:
     GLuint m_shaderProgram;
     bool m_isShadertoyMode;
     bool m_shaderLoaded;
+    bool m_debugLogged;
     float m_time;
     float m_deltaTime;
     int m_frameCount;

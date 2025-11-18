@@ -11,11 +11,73 @@ ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std
 
     : name(n), glslType(type_str), metadata(meta) {
 
-    location = -1; 
+    location = -1;
 
     isColor = metadata.value("widget", "") == "color" || metadata.value("type", "") == "color";
     smooth = metadata.value("smooth", false);
     isPalette = isColor && metadata.value("palette", false);
+
+    // Default palette mode: Individual (0), Palette (1), or Sync (2)
+    paletteMode = 0; // Default to Individual
+    if (isPalette) {
+
+        // PALETTE CONTROL DETECTION SYSTEM - DOCUMENTATION FOR AI AGENTS
+        // ========================================================
+        // Primary Role: Generates harmonies and gradients (only Individual + Palette modes)
+        // Secondary Role: Auto-syncs from primary gradients (Individual + Palette + Sync modes)
+        // Detection Priority: 1. Semantic names, 2. Index-based fallback
+
+        // Phase 1: Semantic Name Detection (PREFERRED METHOD - AI FRIENDLY)
+        bool isSecondaryControl = false;
+        std::string baseName = name;
+        std::string detectionMethod = "INDEX_FALLBACK";
+
+        // SEMANTIC KEYWORDS FOR SECONDARY ROLE (case-insensitive patterns):
+        // - Contains: "Secondary", "Tertiary", "Accent", "Highlight"
+        // - Underscore variants: "_secondary", "_tertiary", "_accent", "_highlight"
+        if (baseName.find("Secondary") != std::string::npos ||
+            baseName.find("Tertiary") != std::string::npos ||
+            baseName.find("Accent") != std::string::npos ||
+            baseName.find("Highlight") != std::string::npos ||
+            baseName.find("_secondary") != std::string::npos ||
+            baseName.find("_tertiary") != std::string::npos ||
+            baseName.find("_accent") != std::string::npos ||
+            baseName.find("_highlight") != std::string::npos) {
+            isSecondaryControl = true;
+            detectionMethod = "SEMANTIC_NAME";
+        }
+
+        // Phase 2: Index-Based Fallback (IMMEDIATE COMPATIBILITY)
+        // If no semantic names found, use position among palette controls as fallback
+        int paletteIndex = metadata.value("paletteControlIndex", 0);
+        if (!isSecondaryControl && paletteIndex > 0) {
+            isSecondaryControl = true;  // 2nd and subsequent palette controls are secondary
+            detectionMethod = "INDEX_FALLBACK";
+        }
+
+        // SET DEFAULT MODES BASED ON ROLE
+        if (isSecondaryControl) {
+            paletteMode = 2; // Default secondary controls to Sync mode
+            std::cout << "[PALETTE_DEBUG] 🔗 ShaderParser: '" << name << "' → SECONDARY CONTROL ("
+                      << detectionMethod << "), default paletteMode=2 (Sync)" << std::endl;
+        } else {
+            paletteMode = 1; // Default primary controls to Palette mode
+            std::cout << "[PALETTE_DEBUG] 🎨 ShaderParser: '" << name << "' → PRIMARY CONTROL ("
+                      << detectionMethod << "), default paletteMode=1 (Palette)" << std::endl;
+        }
+
+        // TROUBLESHOOTING GUIDE for developers/AI agents:
+        // PRIMARY → ONLY Individual + Palette modes (generates themes)
+        // SECONDARY → Individual + Palette + Sync modes (consumes themes)
+        //
+        // To force SECONDARY role via SEMANTIC NAMES:
+        // Rename 'paletteColor1' -> 'paletteColorSecondary' or 'paletteColorAccent'
+        // Patterns: Any containing "Secondary|Tertiary|Accent|Highlight" or "_N_" variants
+        //
+        // AI AGENTS: When generating palette-enabled shaders, follow above naming conventions
+    } else {
+        std::cout << "[PALETTE_DEBUG] ⚪ ShaderParser: '" << name << "' is not a palette control (isPalette=false)" << std::endl;
+    }
 
 
 
@@ -283,6 +345,9 @@ void ShaderParser::ScanAndPrepareUniformControls(const std::string& shaderCode) 
     // It captures: 1:type, 2:name, 3:default value (optional), 4:json blob
     std::regex uniform_control_regex(R"(uniform\s+(float|int|bool|vec2|vec3|vec4)\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\s*=\s*([^;]+))?;\s*//\s*(\{.*\}))");
 
+    // Track palette control indices for smart defaults
+    int paletteControlIndex = 0;
+
     while (std::getline(iss, line)) {
         std::smatch match;
         if (std::regex_search(line, match, uniform_control_regex)) {
@@ -296,11 +361,17 @@ void ShaderParser::ScanAndPrepareUniformControls(const std::string& shaderCode) 
                 if (!metadata.contains("label")) {
                     metadata["label"] = name_str;
                 }
-                
+
                 if (metadata.value("type", "") == "color") {
                     if (glsl_type == "vec3" || glsl_type == "vec4") {
                          metadata["widget"] = "color";
                     }
+                }
+
+                // Add palette control index for smart defaulting
+                metadata["paletteControlIndex"] = paletteControlIndex;
+                if (metadata.value("palette", false)) {
+                    paletteControlIndex++;
                 }
 
                 m_uniformControls.emplace_back(name_str, glsl_type, default_val_str, metadata);
