@@ -29,7 +29,7 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
       m_frameCount(0),
       m_audioAmp(0.0f),
       m_iAudioAmpLoc(-1),
-      m_iAudioBandsLoc(-1),
+      m_iAudioBandsAttLoc(-1),
       m_shaderParser(),
       m_iChannel0SamplerLoc(-1),
       m_iChannel1SamplerLoc(-1),
@@ -308,8 +308,8 @@ void ShaderEffect::Render() {
     if (m_iAudioAmpLoc != -1) {
         glUniform1f(m_iAudioAmpLoc, m_audioAmp);
     }
-    if (m_iAudioBandsLoc != -1) {
-        glUniform4fv(m_iAudioBandsLoc, 1, m_audioBands.data());
+    if (m_iAudioBandsAttLoc != -1) {
+        glUniform4fv(m_iAudioBandsAttLoc, 1, m_audioBands.data());
     }
 
     if (m_iCameraPositionLocation != -1) {
@@ -735,7 +735,7 @@ void ShaderEffect::FetchUniformLocations() {
     m_iFrameLocation = glGetUniformLocation(m_shaderProgram, "iFrame");
     m_iMouseLocation = glGetUniformLocation(m_shaderProgram, "iMouse");
     m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
-    m_iAudioBandsLoc = glGetUniformLocation(m_shaderProgram, "iAudioBands");
+    m_iAudioBandsAttLoc = glGetUniformLocation(m_shaderProgram, "iAudioBandsAtt");
     m_iCameraPositionLocation = glGetUniformLocation(m_shaderProgram, "iCameraPosition");
     m_iCameraMatrixLocation = glGetUniformLocation(m_shaderProgram, "iCameraMatrix");
     m_iLightPositionLocation = glGetUniformLocation(m_shaderProgram, "iLightPos");

@@ -18,6 +18,7 @@
 #include <regex>
 #include <memory>
 #include <queue>
+#include <mutex>
 #include <nlohmann/json.hpp> // For scene save/load
 #include <filesystem> // For std::filesystem::path
 #include <chrono> // For recording timer
@@ -64,6 +65,7 @@ void processInput(GLFWwindow *window);
 void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void drop_callback(GLFWwindow* window, int count, const char** paths);
 
 // New: GLFW error callback function
 void glfw_error_callback(int error, const char* description) {
@@ -206,6 +208,19 @@ static std::map<int, ImVec2> g_new_node_initial_positions;
 static std::vector<int> g_nodes_to_delete;
 
 
+// --- Drag and Drop Queue ---
+struct DroppedFile {
+    std::string path;
+    ImVec2 drop_pos;
+};
+static std::vector<DroppedFile> g_dropped_files_queue;
+static std::mutex g_dropped_files_mutex;
+
+// --- Rate Limiting for Drag and Drop ---
+static std::chrono::steady_clock::time_point g_last_drop_time;
+static const std::chrono::milliseconds g_drop_cooldown(100); // Minimum 100ms between drops to prevent spam
+
+
 // --- Timeline State (New) ---
 #include "Timeline.h" // For TimelineState struct
 static TimelineState g_timelineState;
@@ -298,10 +313,37 @@ void MarkNodeForDeletion(int node_id) {
 void CreateAndPlaceNode(std::unique_ptr<Effect> newEffect, ImVec2 position) {
     if (newEffect) {
         Effect* rawPtr = newEffect.get();
-        g_scene.push_back(std::move(newEffect));
-        rawPtr->Load();
-        g_nodes_requiring_initial_position.insert(rawPtr->id);
-        g_new_node_initial_positions[rawPtr->id] = position;
+
+        // Add to scene first, but keep ownership here until we're sure it loads successfully
+        // Note: We need to move it to the scene and handle failures carefully
+
+        try {
+            g_scene.push_back(std::move(newEffect));
+            rawPtr->Load();
+            g_nodes_requiring_initial_position.insert(rawPtr->id);
+            g_new_node_initial_positions[rawPtr->id] = position;
+        }
+        catch (const std::exception& e) {
+            // Load failed - remove from scene and log error
+            g_consoleLog += "ERROR: Failed to load effect '" + rawPtr->name + "', removing from scene. Exception: " + std::string(e.what()) + "\n";
+            // Remove the failed effect from g_scene
+            auto it = std::find_if(g_scene.begin(), g_scene.end(),
+                [rawPtr](const std::unique_ptr<Effect>& eff) { return eff.get() == rawPtr; });
+            if (it != g_scene.end()) {
+                g_scene.erase(it);
+            }
+            // The unique_ptr went out of scope, so rawPtr is gone - no need to delete manually
+        }
+        catch (...) {
+            // Catch any other exceptions (rare but possible)
+            g_consoleLog += "ERROR: Fatal exception loading effect '" + rawPtr->name + "', removing from scene.\n";
+            // Remove the failed effect from g_scene
+            auto it = std::find_if(g_scene.begin(), g_scene.end(),
+                [rawPtr](const std::unique_ptr<Effect>& eff) { return eff.get() == rawPtr; });
+            if (it != g_scene.end()) {
+                g_scene.erase(it);
+            }
+        }
     }
 }
 
@@ -1487,6 +1529,7 @@ int main(int argc, char** argv) {
     glfwSetCursorPosCallback(window, mouse_cursor_position_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetScrollCallback(window, scroll_callback);
+    glfwSetDropCallback(window, drop_callback);
 
     g_renderer.Init();
 
@@ -1561,6 +1604,23 @@ int main(int argc, char** argv) {
     static size_t last_scene_size = 0;
 
     while(!glfwWindowShouldClose(window)) {
+        // --- Process Drag and Drop Queue ---
+        std::vector<DroppedFile> files_to_process;
+        {
+            std::lock_guard<std::mutex> lock(g_dropped_files_mutex);
+            if (!g_dropped_files_queue.empty()) {
+                files_to_process.swap(g_dropped_files_queue);
+            }
+        }
+
+        for (const auto& file_info : files_to_process) {
+            g_consoleLog += "Dropped shader file: " + file_info.path + "\n";
+            auto newEffect = std::make_unique<ShaderEffect>(file_info.path, SCR_WIDTH, SCR_HEIGHT);
+            newEffect->name = std::filesystem::path(file_info.path).filename().string();
+            CreateAndPlaceNode(std::move(newEffect), file_info.drop_pos);
+        }
+
+
         // Check if a node was added to reset the console log spam guard
         if (g_scene.size() > last_scene_size) {
             g_no_output_logged = false;
@@ -2017,13 +2077,72 @@ std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects) {
     if (sortedOrder.size() != activeEffects.size()) {
         std::cerr << "Error: Cycle detected in node graph!" << std::endl;
         g_consoleLog = "ERROR: Cycle detected in node graph! Rendering may be incorrect.";
+        }
+        return sortedOrder;
     }
-    return sortedOrder;
-}
-void SaveScene(const std::string& filePath) {
-    nlohmann::json sceneJson;
+    
+    void drop_callback(GLFWwindow* window, int count, const char** paths) {
+        // Rate limiting: prevent rapid drag operations
+        auto now = std::chrono::steady_clock::now();
+        if (now - g_last_drop_time < g_drop_cooldown) {
+            std::cout << "[DROP] Ignoring rapid consecutive drop - rate limited" << std::endl;
+            return; // Ignore drops that are too close together
+        }
+        g_last_drop_time = now;
 
-    // Serialize TimelineState
+        std::lock_guard<std::mutex> lock(g_dropped_files_mutex);
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+        ImVec2 drop_pos = ImVec2((float)xpos, (float)ypos);
+
+        for (int i = 0; i < count; i++) {
+            std::filesystem::path p = paths[i];
+            if (p.extension() == ".frag") {
+                try {
+                    // Validate file exists
+                    if (!std::filesystem::exists(p)) {
+                        std::cout << "[DROP ERROR] File does not exist: " << p.string() << std::endl;
+                        g_consoleLog += "ERROR: Dropped file does not exist: " + p.string() + "\n";
+                        continue;
+                    }
+
+                    // Validate file size (reasonable limit to prevent massive strings)
+                    auto file_size = std::filesystem::file_size(p);
+                    const size_t MAX_SHADER_SIZE = 10 * 1024 * 1024; // 10MB limit
+                    if (file_size > MAX_SHADER_SIZE) {
+                        std::cout << "[DROP ERROR] File too large (" << file_size << " bytes): " << p.string() << std::endl;
+                        g_consoleLog += "ERROR: Shader file too large (" + std::to_string(file_size) + " bytes, max " + std::to_string(MAX_SHADER_SIZE) + "): " + p.filename().string() + "\n";
+                        continue;
+                    }
+
+                    // Validate file is readable
+                    std::ifstream test_file(p, std::ios::binary);
+                    if (!test_file.is_open()) {
+                        std::cout << "[DROP ERROR] Cannot read file: " << p.string() << std::endl;
+                        g_consoleLog += "ERROR: Cannot read dropped file: " + p.filename().string() + "\n";
+                        continue;
+                    }
+                    test_file.close();
+
+                    std::cout << "[DROP] Validated shader file: " << p.string() << " (" << file_size << " bytes)" << std::endl;
+
+                    g_dropped_files_queue.push_back({p.string(), drop_pos});
+                }
+                catch (const std::filesystem::filesystem_error& e) {
+                    std::cout << "[DROP ERROR] Filesystem error for " << paths[i] << ": " << e.what() << std::endl;
+                    g_consoleLog += "ERROR: Filesystem error checking dropped file '" + std::string(paths[i]) + "': " + std::string(e.what()) + "\n";
+                }
+                catch (const std::exception& e) {
+                    std::cout << "[DROP ERROR] Unexpected error validating " << paths[i] << ": " << e.what() << std::endl;
+                    g_consoleLog += "ERROR: Unexpected validation error for dropped file '" + std::string(paths[i]) + "': " + std::string(e.what()) + "\n";
+                }
+            }
+        }
+    }
+    void SaveScene(const std::string& filePath) {
+        nlohmann::json sceneJson;
+    
+        // Serialize TimelineState
     sceneJson["timelineState"] = g_timelineState; // Uses to_json for TimelineState
 
     // Serialize actual effects from g_scene
