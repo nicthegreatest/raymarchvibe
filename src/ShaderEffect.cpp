@@ -527,13 +527,13 @@ void ShaderEffect::RenderParsedUniformsUI() {
             ImGui::DragFloat2(label.c_str(), control.v2Value, step);
         } else if (control.glslType == "vec3") {
             if (control.isColor) {
-                ImGui::ColorEdit3(label.c_str(), control.v3Value);
+                RenderEnhancedColorControl(control, label, 3);
             } else {
                 ImGui::DragFloat3(label.c_str(), control.v3Value, step);
             }
         } else if (control.glslType == "vec4") {
             if (control.isColor) {
-                ImGui::ColorEdit4(label.c_str(), control.v4Value);
+                RenderEnhancedColorControl(control, label, 4);
             } else {
                 ImGui::DragFloat4(label.c_str(), control.v4Value, step);
             }
@@ -616,6 +616,121 @@ void ShaderEffect::GetGradientColor(float t, float* outColor) {
             outColor[1] = pow(t, 2.0f);
             outColor[2] = pow(t, 0.5f);
             break;
+    }
+}
+
+void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, const std::string& label, int components) {
+    if (!control.isPalette) {
+        // Backward compatibility: render as standard color picker
+        if (components == 3) {
+            ImGui::ColorEdit3(label.c_str(), control.v3Value);
+        } else {
+            ImGui::ColorEdit4(label.c_str(), control.v4Value);
+        }
+        return;
+    }
+
+    // Enhanced palette-based color picker
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.5f, 0.25f, 0.5f, 0.7f));
+    bool expanded = ImGui::CollapsingHeader((label + " [Palette]").c_str());
+    ImGui::PopStyleColor();
+    
+    if (expanded) {
+        // Mode selector
+        const char* modes[] = { "Individual", "Palette" };
+        ImGui::Combo(("Mode##" + control.name).c_str(), (int*)&control.paletteMode, modes, 2);
+
+        if (control.paletteMode == 0) {
+            // Individual color picking mode
+            if (components == 3) {
+                ImGui::ColorEdit3(("Color##" + control.name).c_str(), control.v3Value);
+            } else {
+                ImGui::ColorEdit4(("Color##" + control.name).c_str(), control.v4Value);
+            }
+        } else {
+            // Palette generation mode
+            // Harmony type selector
+            const char* harmonies[] = {
+                "Monochromatic",
+                "Complementary",
+                "Triadic",
+                "Analogous",
+                "Split-Complementary",
+                "Square"
+            };
+            
+            int oldHarmony = control.selectedHarmonyType;
+            ImGui::Combo(("Harmony##" + control.name).c_str(), &control.selectedHarmonyType, harmonies, IM_ARRAYSIZE(harmonies));
+
+            // Base color picker
+            if (components == 3) {
+                ImGui::ColorEdit3(("Base Color##" + control.name).c_str(), control.v3Value);
+            } else {
+                ImGui::ColorEdit4(("Base Color##" + control.name).c_str(), control.v4Value);
+            }
+
+            // Generate palette if harmony type changed
+            if (oldHarmony != control.selectedHarmonyType || control.generatedPalette.empty()) {
+                glm::vec3 baseRgb(control.v3Value[0], control.v3Value[1], control.v3Value[2]);
+                ColorPaletteGenerator::HarmonyType harmonyType = static_cast<ColorPaletteGenerator::HarmonyType>(control.selectedHarmonyType);
+                control.generatedPalette = ColorPaletteGenerator::GeneratePalette(baseRgb, harmonyType, 5);
+            }
+
+            // Gradient mode toggle
+            ImGui::Checkbox(("Gradient Mode##" + control.name).c_str(), &control.gradientMode);
+
+            // Generate gradient if needed
+            if (control.gradientMode && (control.gradientColors.empty() || oldHarmony != control.selectedHarmonyType)) {
+                control.gradientColors = ColorPaletteGenerator::GenerateGradient(control.generatedPalette, 10);
+            }
+
+            // Display palette preview
+            ImGui::Text("Palette Preview:");
+            const std::vector<glm::vec3>& displayPalette = control.gradientMode ? control.gradientColors : control.generatedPalette;
+            
+            if (!displayPalette.empty()) {
+                float colorBoxSize = ImGui::GetContentRegionAvail().x / displayPalette.size();
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+                float boxHeight = 30.0f;
+
+                for (size_t j = 0; j < displayPalette.size(); ++j) {
+                    ImVec2 boxMin(cursorPos.x + j * colorBoxSize, cursorPos.y);
+                    ImVec2 boxMax(boxMin.x + colorBoxSize, boxMin.y + boxHeight);
+                    ImU32 color = ImGui::GetColorU32(ImVec4(
+                        displayPalette[j].x,
+                        displayPalette[j].y,
+                        displayPalette[j].z,
+                        1.0f
+                    ));
+                    drawList->AddRectFilled(boxMin, boxMax, color);
+                    drawList->AddRect(boxMin, boxMax, ImGui::GetColorU32(ImVec4(0.5f, 0.5f, 0.5f, 1.0f)));
+                }
+                ImGui::Dummy(ImVec2(0, boxHeight + 5.0f));
+
+                // Apply button
+                if (ImGui::Button(("Apply Palette##" + control.name).c_str())) {
+                    // Apply palette colors to matching color uniforms in the same shader
+                    std::vector<size_t> colorUniformIndices;
+                    for (size_t j = 0; j < m_shadertoyUniformControls.size(); ++j) {
+                        if (m_shadertoyUniformControls[j].isColor && m_shadertoyUniformControls[j].isPalette) {
+                            colorUniformIndices.push_back(j);
+                        }
+                    }
+
+                    // Distribute palette colors to available uniforms
+                    for (size_t j = 0; j < colorUniformIndices.size() && j < displayPalette.size(); ++j) {
+                        size_t idx = colorUniformIndices[j];
+                        m_shadertoyUniformControls[idx].v3Value[0] = displayPalette[j].x;
+                        m_shadertoyUniformControls[idx].v3Value[1] = displayPalette[j].y;
+                        m_shadertoyUniformControls[idx].v3Value[2] = displayPalette[j].z;
+                        if (m_shadertoyUniformControls[idx].glslType == "vec4") {
+                            m_shadertoyUniformControls[idx].v4Value[3] = 1.0f;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

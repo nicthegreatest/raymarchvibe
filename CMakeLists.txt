@@ -201,6 +201,7 @@ add_executable(RaymarchVibe
   src/main.cpp
   src/ShaderEffect.cpp
   src/ShaderParser.cpp
+  src/ColorPaletteGenerator.cpp
   src/Renderer.cpp          # <-- ADDED Renderer.cpp
   src/VideoRecorder.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
