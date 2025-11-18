@@ -286,6 +286,175 @@ uniform vec3 u_color = vec3(1.0, 0.0, 0.0); // {"widget":"color"}
 uniform vec4 u_color_alpha = vec4(1.0, 0.0, 0.0, 1.0); // {"widget":"color"}
 ```
 
+#### 4.3 ⚠️ CRITICAL: Color Palette Widgets (`"palette":true`)
+
+**Requires palette metadata flag for advanced color harmony functionality.**
+
+The RaymarchVibe palette system enables professional color coordination through semantic roles and automatic gradient synchronization. This system is active when `{"palette":true}` is specified in control metadata.
+
+##### Color Control Semantics
+
+Controls are automatically categorized into **Primary** or **Secondary** roles based on naming patterns:
+
+- **Primary Controls** (Palette Generators):
+  - Generate color harmonies and gradient sequences
+  - Default to "Palette" mode
+  - Support all 6 harmony types: Monochromatic, Complementary, Triadic, Analogous, Split-Complementary, Square
+
+- **Secondary Controls** (Gradient Consumers):
+  - Automatically sync from primary control gradients
+  - Default to "Sync" mode
+  - Sample at semantic positions (SecondaryColor → 0.25, AccentColor → 0.75)
+
+##### Semantic Naming Convention
+
+Use these naming patterns to assign color roles (case-sensitive):
+
+| Control Name Pattern | Role | Default Mode | Gradient Position |
+|---------------------|------|--------------|-------------------|
+| `PrimaryColor` | Primary | Palette | N/A (generates gradients) |
+| `MainColor` | Primary | Palette | N/A |
+| `BaseColor` | Primary | Palette | N/A |
+| `SecondaryColor` | Secondary | Sync | 0.25 |
+| `AccentColor` | Secondary | Sync | 0.75 |
+| `HighlightColor` | Secondary | Sync | 1.0 |
+| `TertiaryColor` | Secondary | Sync | 0.5 |
+
+##### Index-Based Fallback
+
+If semantic naming is not used, the first palette control becomes **Primary** and subsequent controls become **Secondary**:
+
+```glsl
+// Control order determines role when semantic naming is not used
+uniform vec3 u_paletteColor1 = vec3(1.0, 0.5, 0.0); // {"widget":"color", "palette":true} → PRIMARY
+uniform vec3 u_paletteColor2 = vec3(0.5, 0.8, 1.0); // {"widget":"color", "palette":true} → SECONDARY
+```
+
+##### Palette Mode Options
+
+Each palette-enabled color control provides three operating modes:
+
+1. **Individual Mode (0)**:
+   - Standard color picker functionality
+   - Independent color selection
+   - No harmony or synchronization
+
+2. **Palette Mode (1)**:
+   - **Primary only**: Generates harmonic color schemes
+   - Harmony selector: Mono/Comp/Triad/Anal/SplitComp/Square
+   - Gradient toggle for smooth color transitions
+   - Interactive preview with clickable palette segments
+   - Real-time color editing through palette clicks
+
+3. **Sync Mode (2)**:
+   - **Secondary only**: Automatically samples primary gradients
+   - Semantic position sampling (based on control name)
+   - Real-time updates when primary changes
+   - Read-only color swatch display
+
+##### Advanced Sync Implementation
+
+Secondary controls automatically sample primary gradient at semantically meaningful positions:
+
+```glsl
+// Primary control generates gradient from base color through harmony
+uniform vec3 u_primaryColor = vec3(1.0, 0.5, 0.0); // {"widget":"color", "palette":true}
+// → Generates 10-color gradient: [base, harmony1, harmony2, ..., blendMix]
+
+uniform vec3 u_secondaryColor = vec3(0.5, 0.8, 1.0); // {"widget":"color", "palette":true}
+// → Automatically set to gradientSample(0.25) via semantic sync
+
+uniform vec3 u_accentColor = vec3(0.8, 0.3, 0.9); // {"widget":"color", "palette":true}
+// → Automatically set to gradientSample(0.75) via semantic sync
+```
+
+##### Palette-Enabled Shader Creation
+
+**Basic Pattern**: Single primary control for simple color theming:
+
+```glsl
+#version 330 core
+out vec4 FragColor;
+
+uniform vec2 iResolution;
+uniform float iTime;
+
+// Primary color control - generates palette and gradient
+uniform vec3 u_primaryColor = vec3(1.0, 0.5, 0.0); // {"widget":"color", "palette":true, "label":"Primary Color"}
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+
+    // Generate palette from primary (Monochromatic harmony by default)
+    vec3 baseColor = u_primaryColor;
+
+    // Use color in your shader logic
+    vec3 color = baseColor * vec3(uv.x);
+
+    FragColor = vec4(color, 1.0);
+}
+```
+
+**Advanced Pattern**: Multi-control palette synchronization:
+
+```glsl
+#version 330 core
+out vec4 FragColor;
+
+uniform vec2 iResolution;
+uniform float iTime;
+
+// Primary control - generates the master palette
+uniform vec3 u_primaryColor = vec3(1.0, 0.5, 0.0); // {"widget":"color", "palette":true, "label":"Primary Color"}
+
+// Secondary controls - sync automatically from primary gradient
+uniform vec3 u_secondaryColor = vec3(0.5, 0.8, 1.0); // {"widget":"color", "palette":true, "label":"Secondary Color"}
+uniform vec3 u_accentColor = vec3(0.8, 0.3, 0.9); // {"widget":"color", "palette":true, "label":"Accent Color"}
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+
+    // Use primary color for base elements
+    vec3 baseColor = u_primaryColor;
+
+    // Use secondary color for highlights/details
+    vec3 accentColor = u_secondaryColor;
+
+    // Use accent color for special effects
+    vec3 highlightColor = u_accentColor;
+
+    // Create coordinated color scheme
+    vec3 color = baseColor * accentColor * highlightColor;
+
+    FragColor = vec4(color, 1.0);
+}
+```
+
+##### Synchronization Rules
+
+- **Single Primary**: All secondary controls sync from that primary's gradient
+- **No Primary**: Secondary controls become independent (fallback to Individual mode)
+- **Multiple Primaries**: Undefined behavior - only one primary should generate gradients
+- **Role Assignment Priority**: Semantic naming → Index-based fallback
+
+##### Interactive Palette Editing
+
+When in Palette mode, the primary control provides:
+- **Harmony Selector**: 6 predefined color relationships
+- **Gradient Toggle**: Smooth vs discrete palette transitions
+- **Color Preview**: Visual palette display with hover effects
+- **Direct Editing**: Click palette segments to modify colors
+
+##### Best Practices
+
+1. **Use semantic naming** for role-based color assignment
+2. **One primary control** per shader (multiple creates confusion)
+3. **Test sync relationships** by toggling primary base color
+4. **Use demo shader** (`palette_sync_demo.frag`) as reference
+5. **Document color roles** in shader comments for maintenance
+
+See `documentation/PALETTE_FEATURE.md` for comprehensive technical details and `shaders/palette_sync_demo.frag` for working examples.
+
 ## 5. Node-Based Architecture Constraints
 
 ### 5.1 Feedback Loop Handling
@@ -1573,7 +1742,16 @@ Study these patterns, understand the underlying mathematics, then apply them wit
 
 ## 13. Change Log
 
-- **v2.1** (Current): Enhanced mathematical sophistication - Inspiration shaders 11-20 integration
+- **v2.2** (Current): Advanced Color Palette System Documentation
+  - Added comprehensive **Color Palette Widgets** section (4.3) with `{"palette":true}` semantics
+  - Documented **Primary vs Secondary** color control roles and auto-detection
+  - Implemented **semantic naming conventions** (PrimaryColor, SecondaryColor, AccentColor, etc.)
+  - Added **palette mode explanations**: Individual, Palette, and Sync modes
+  - Provided **implementation examples** for single and multi-control palettes
+  - Included **synchronization rules** and best practices
+  - Reference to `palette_sync_demo.frag` and `documentation/PALETTE_FEATURE.md`
+
+- **v2.1** (Previous): Enhanced mathematical sophistication - Inspiration shaders 11-20 integration
   - Added **Kaleidoscopic & Angular Folding** techniques (Section 9.1.3)
   - Documented **Kalibox/Mandelbox fractals** with orbit trap coloring (Section 9.1.4)
   - Included **Worley/Voronoi noise** and **Simplex grid** systems (Section 9.1.5)
