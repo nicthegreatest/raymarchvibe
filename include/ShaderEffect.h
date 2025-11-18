@@ -2,6 +2,7 @@
 
 #include "Effect.h"
 #include "ShaderParser.h"
+#include "ColorPaletteGenerator.h"
 #include <string>
 #include <vector>
 #include <nlohmann/json.hpp>
@@ -73,6 +74,7 @@ private:
     void RenderConstControlsUI();
     void RenderColorCycleUI();
     void GetGradientColor(float t, float* outColor);
+    void RenderEnhancedColorControl(ShaderToyUniformControl& control, const std::string& label, int components);
 
     GLuint m_shaderProgram;
     bool m_isShadertoyMode;
