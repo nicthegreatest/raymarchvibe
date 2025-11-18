@@ -15,6 +15,7 @@ ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std
 
     isColor = metadata.value("widget", "") == "color" || metadata.value("type", "") == "color";
     smooth = metadata.value("smooth", false);
+    isPalette = isColor && metadata.value("palette", false);
 
 
 
