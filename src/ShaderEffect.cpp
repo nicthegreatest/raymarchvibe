@@ -685,16 +685,38 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                 control.gradientColors = ColorPaletteGenerator::GenerateGradient(control.generatedPalette, 10);
             }
 
-            // Display palette preview
-            ImGui::Text("Palette Preview:");
+
+            // Make palette clickable for editing individual colors
+            ImGui::Text("Palette Preview (click to edit):");
             const std::vector<glm::vec3>& displayPalette = control.gradientMode ? control.gradientColors : control.generatedPalette;
-            
+
             if (!displayPalette.empty()) {
                 float colorBoxSize = ImGui::GetContentRegionAvail().x / displayPalette.size();
                 ImDrawList* drawList = ImGui::GetWindowDrawList();
                 ImVec2 cursorPos = ImGui::GetCursorScreenPos();
                 float boxHeight = 30.0f;
+                ImVec2 mousePos = ImGui::GetMousePos();
 
+                int hoveredIndex = -1;
+                bool segmentClicked = false;
+                size_t clickedIndex = 0;
+
+                // First pass: find which segment is hovered/clicked
+                for (size_t j = 0; j < displayPalette.size(); ++j) {
+                    ImVec2 boxMin(cursorPos.x + j * colorBoxSize, cursorPos.y);
+                    ImVec2 boxMax(boxMin.x + colorBoxSize, boxMin.y + boxHeight);
+
+                    if (mousePos.x >= boxMin.x && mousePos.x <= boxMax.x &&
+                        mousePos.y >= boxMin.y && mousePos.y <= boxMax.y) {
+                        hoveredIndex = static_cast<int>(j);
+                        if (ImGui::IsMouseClicked(0)) {
+                            clickedIndex = j;
+                            segmentClicked = true;
+                        }
+                    }
+                }
+
+                // Second pass: render the preview with hover highlighting
                 for (size_t j = 0; j < displayPalette.size(); ++j) {
                     ImVec2 boxMin(cursorPos.x + j * colorBoxSize, cursorPos.y);
                     ImVec2 boxMax(boxMin.x + colorBoxSize, boxMin.y + boxHeight);
@@ -704,37 +726,68 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                         displayPalette[j].z,
                         1.0f
                     ));
-                    drawList->AddRectFilled(boxMin, boxMax, color);
-                    drawList->AddRect(boxMin, boxMax, ImGui::GetColorU32(ImVec4(0.5f, 0.5f, 0.5f, 1.0f)));
-                }
-                ImGui::Dummy(ImVec2(0, boxHeight + 5.0f));
 
-                // Apply button
-                if (ImGui::Button(("Apply Palette##" + control.name).c_str())) {
-                    // Apply palette colors to matching color uniforms in the same shader
-                    std::vector<size_t> colorUniformIndices;
-                    for (size_t j = 0; j < m_shadertoyUniformControls.size(); ++j) {
-                        if (m_shadertoyUniformControls[j].isColor && m_shadertoyUniformControls[j].isPalette) {
-                            colorUniformIndices.push_back(j);
+                    // Highlight hovered segment
+                    if (static_cast<int>(j) == hoveredIndex) {
+                        // Lighten the color for hover effect
+                        float h, s, v;
+                        ImGui::ColorConvertRGBtoHSV(displayPalette[j].x, displayPalette[j].y, displayPalette[j].z, h, s, v);
+                        v = std::min(v + 0.2f, 1.0f);  // Increase brightness
+                        float r, g, b;
+                        ImGui::ColorConvertHSVtoRGB(h, s, v, r, g, b);
+                        color = ImGui::GetColorU32(ImVec4(r, g, b, 1.0f));
+
+                        // Show tooltip
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Click to edit this color");
                         }
                     }
 
-                    // Distribute palette colors to available uniforms using even sampling across the gradient
-                    size_t paletteSize = displayPalette.size();
-                    size_t numUniforms = colorUniformIndices.size();
-                    for (size_t j = 0; j < numUniforms; ++j) {
-                        // Sample evenly across the palette: start, middle points, end
-                        // j * (paletteSize - 1) / max(1, numUniforms - 1) gives even distribution
-                        size_t paletteIndex = (numUniforms > 1) ?
-                            (j * (paletteSize - 1)) / (numUniforms - 1) : 0;
-                        paletteIndex = std::min(paletteIndex, paletteSize - 1);  // Bounds check
+                    drawList->AddRectFilled(boxMin, boxMax, color);
+                    ImU32 borderColor = ImGui::GetColorU32(ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+                    if (static_cast<int>(j) == hoveredIndex) {
+                        // Thicker border for hover
+                        drawList->AddRect(boxMin, boxMax, borderColor, 0.0f, 0, 2.0f);
+                    } else {
+                        drawList->AddRect(boxMin, boxMax, borderColor);
+                    }
+                }
 
-                        size_t idx = colorUniformIndices[j];
-                        m_shadertoyUniformControls[idx].v3Value[0] = displayPalette[paletteIndex].x;
-                        m_shadertoyUniformControls[idx].v3Value[1] = displayPalette[paletteIndex].y;
-                        m_shadertoyUniformControls[idx].v3Value[2] = displayPalette[paletteIndex].z;
-                        if (m_shadertoyUniformControls[idx].glslType == "vec4") {
-                            m_shadertoyUniformControls[idx].v4Value[3] = 1.0f;
+                ImGui::Dummy(ImVec2(0, boxHeight + 5.0f));
+
+                // Handle color editing popup
+                if (segmentClicked) {
+                    std::vector<glm::vec3>& editablePalette = control.gradientMode ? control.gradientColors : control.generatedPalette;
+                    float tempColor[3] = {editablePalette[clickedIndex].x, editablePalette[clickedIndex].y, editablePalette[clickedIndex].z};
+
+                    bool updatedPalette = false;
+                    if (ImGui::ColorEdit3(("Edit Segment " + std::to_string(clickedIndex + 1)).c_str(), tempColor)) {
+                        editablePalette[clickedIndex] = glm::vec3(tempColor[0], tempColor[1], tempColor[2]);
+                        updatedPalette = true;
+
+                        // Auto-reapply palette to uniforms after color change
+                        std::vector<size_t> colorUniformIndices;
+                        for (size_t j = 0; j < m_shadertoyUniformControls.size(); ++j) {
+                            if (m_shadertoyUniformControls[j].isColor && m_shadertoyUniformControls[j].isPalette) {
+                                colorUniformIndices.push_back(j);
+                            }
+                        }
+
+                        // Distribute palette colors to available uniforms using even sampling across the gradient
+                        size_t paletteSize = displayPalette.size();
+                        size_t numUniforms = colorUniformIndices.size();
+                        for (size_t j = 0; j < numUniforms; ++j) {
+                            size_t paletteIndex = (numUniforms > 1) ?
+                                (j * (paletteSize - 1)) / (numUniforms - 1) : 0;
+                            paletteIndex = std::min(paletteIndex, paletteSize - 1);
+
+                            size_t idx = colorUniformIndices[j];
+                            m_shadertoyUniformControls[idx].v3Value[0] = displayPalette[paletteIndex].x;
+                            m_shadertoyUniformControls[idx].v3Value[1] = displayPalette[paletteIndex].y;
+                            m_shadertoyUniformControls[idx].v3Value[2] = displayPalette[paletteIndex].z;
+                            if (m_shadertoyUniformControls[idx].glslType == "vec4") {
+                                m_shadertoyUniformControls[idx].v4Value[3] = 1.0f;
+                            }
                         }
                     }
                 }
