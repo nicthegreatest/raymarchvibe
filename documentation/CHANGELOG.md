@@ -1,3 +1,25 @@
+## [0.3.9] - 2025-11-18
+
+### Added
+- **Advanced Color Palette Sync System:** Implemented comprehensive color harmony synchronization for shader controls.
+  - **Semantic Color Role Detection:** Automatically identifies primary, secondary, tertiary, and accent color controls using semantic naming patterns (e.g., "SecondaryColor", "AccentColor"). Primary controls generate palettes, secondary controls sync from primary gradients.
+  - **Color Palette Generation:** Integrated ColorPaletteGenerator with support for Monochromatic, Complementary, Triadic, Analogous, Split-Complementary, and Square color harmonies.
+  - **Gradient Mode:** Secondary controls can automatically sync to primary color gradients, sampling at semantic positions (e.g., "SecondaryColor" samples at 0.25 position, "AccentColor" at 0.75 position).
+  - **Interactive Palette Preview:** Visual preview of generated palettes with clickable segments for real-time color editing.
+  - **Demonstration Shader:** Added `palette_sync_demo.frag` as comprehensive test case showcasing all palette sync functionality.
+
+### Changed
+- **Professional Debugging:** Refined debug output to show clean shader load summaries without terminal flood. Moved from per-frame spam to once-per-shader-load logging.
+- **Shader Parameter Controls:** Enhanced UI for color controls with palette mode switching (Individual, Palette, Sync options).
+
+### ⚠️ Known Issues
+- **Palette Sync UI Bug:** Secondary color controls cannot select "Sync" mode from the dropdown menu despite correct detection and default setting. The parser correctly identifies secondary controls and sets paletteMode=2, but the UI dropdown only shows "Individual | Palette" options. Diagnosis attempted but requires expert-level investigation.
+
+### Notes
+- **Expert Diagnostics Required:** The sync mode selection bug requires deep ImGui combo rendering expertise to resolve. All other palette functionality (detection, generation, gradient sync logic) is implemented and working correctly.
+
+---
+
 ## [0.3.8] - 2025-11-03
 
 ### Added
