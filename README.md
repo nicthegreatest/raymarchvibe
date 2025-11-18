@@ -13,6 +13,7 @@ Dive in, tweak, explore, and vibe with your shaders!
 *   **Node-Based Visual Programming:** Create complex, multi-pass effects by connecting shaders together in an intuitive node graph.
 *   **Advanced Real-time Shader Editor:** Powered by ImGuiColorTextEdit for GLSL syntax highlighting, line numbers, and error marking.
 *   **Dynamic UI Generation:** Automatically generate UI controls (sliders, color pickers) for shader uniforms by adding a single line of JSON in your shader comments.
+*   **Enhanced Color Picker with Palettes:** Generate harmonious color palettes automatically using color theory (complementary, triadic, analogous, split-complementary, square, and monochromatic harmony types) with optional smooth gradient interpolation.
 *   **Advanced Audio Reactivity:** Drive shader animations with real-time audio analysis, using not just overall amplitude but also four distinct frequency bands (bass, mids, highs).
 *   **Video & Audio Recording:** Record your creations to high-quality video files (MP4, MOV) with synchronized audio using a dedicated, high-performance FFmpeg backend.
 *   **Full Scene Serialization:** Save and load your entire workspace, including the node graph, shader code, and UI parameters, to a JSON file.
@@ -145,6 +146,7 @@ See the [TODO.md](documentation/TODO.md) for a complete list of planned features
 For detailed information about the project, see the `documentation/` directory:
 
 - **[SHADERS.md](documentation/SHADERS.md)** - Complete shader specification and creative guidelines (essential reading for shader authors!)
+- **[PALETTE_FEATURE.md](PALETTE_FEATURE.md)** - Enhanced color picker with palettes, harmonies, and gradients
 - **[CHANGELOG.md](documentation/CHANGELOG.md)** - Version history and release notes
 - **[TODO.md](documentation/TODO.md)** - Planned features and improvements
 - **[CODE_REVIEW.md](documentation/CODE_REVIEW.md)** - Architectural overview and code quality assessment
