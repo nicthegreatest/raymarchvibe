@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp> // For json
 #include <cstdint>           // For uint8_t, uint64_t
 #include "TextEditor.h"      // ImGuiColorTextEdit include
+#include <glm/glm.hpp>       // For glm::vec3
 
 using json = nlohmann::json;
 
@@ -37,6 +38,14 @@ struct ShaderToyUniformControl {
     bool bValue = false;
     bool isColor = false; 
     bool smooth = false;
+
+    // Palette-related fields
+    bool isPalette = false;
+    bool paletteMode = false;
+    int selectedHarmonyType = 0;  // Index into harmony types
+    std::vector<glm::vec3> generatedPalette;
+    bool gradientMode = false;
+    std::vector<glm::vec3> gradientColors;
 
     ShaderToyUniformControl(const std::string& n, const std::string& type_str, const std::string& default_val_str, const json& meta);
 };
