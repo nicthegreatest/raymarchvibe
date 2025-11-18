@@ -663,14 +663,15 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
             ImGui::Combo(("Harmony##" + control.name).c_str(), &control.selectedHarmonyType, harmonies, IM_ARRAYSIZE(harmonies));
 
             // Base color picker
+            bool baseColorChanged = false;
             if (components == 3) {
-                ImGui::ColorEdit3(("Base Color##" + control.name).c_str(), control.v3Value);
+                baseColorChanged = ImGui::ColorEdit3(("Base Color##" + control.name).c_str(), control.v3Value);
             } else {
-                ImGui::ColorEdit4(("Base Color##" + control.name).c_str(), control.v4Value);
+                baseColorChanged = ImGui::ColorEdit4(("Base Color##" + control.name).c_str(), control.v4Value);
             }
 
-            // Generate palette if harmony type changed
-            if (oldHarmony != control.selectedHarmonyType || control.generatedPalette.empty()) {
+            // Generate palette if harmony type changed or base color changed
+            if (oldHarmony != control.selectedHarmonyType || baseColorChanged || control.generatedPalette.empty()) {
                 glm::vec3 baseRgb(control.v3Value[0], control.v3Value[1], control.v3Value[2]);
                 ColorPaletteGenerator::HarmonyType harmonyType = static_cast<ColorPaletteGenerator::HarmonyType>(control.selectedHarmonyType);
                 control.generatedPalette = ColorPaletteGenerator::GeneratePalette(baseRgb, harmonyType, 5);
@@ -680,7 +681,7 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
             ImGui::Checkbox(("Gradient Mode##" + control.name).c_str(), &control.gradientMode);
 
             // Generate gradient if needed
-            if (control.gradientMode && (control.gradientColors.empty() || oldHarmony != control.selectedHarmonyType)) {
+            if (control.gradientMode && (control.gradientColors.empty() || oldHarmony != control.selectedHarmonyType || baseColorChanged)) {
                 control.gradientColors = ColorPaletteGenerator::GenerateGradient(control.generatedPalette, 10);
             }
 
@@ -718,12 +719,20 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                         }
                     }
 
-                    // Distribute palette colors to available uniforms
-                    for (size_t j = 0; j < colorUniformIndices.size() && j < displayPalette.size(); ++j) {
+                    // Distribute palette colors to available uniforms using even sampling across the gradient
+                    size_t paletteSize = displayPalette.size();
+                    size_t numUniforms = colorUniformIndices.size();
+                    for (size_t j = 0; j < numUniforms; ++j) {
+                        // Sample evenly across the palette: start, middle points, end
+                        // j * (paletteSize - 1) / max(1, numUniforms - 1) gives even distribution
+                        size_t paletteIndex = (numUniforms > 1) ?
+                            (j * (paletteSize - 1)) / (numUniforms - 1) : 0;
+                        paletteIndex = std::min(paletteIndex, paletteSize - 1);  // Bounds check
+
                         size_t idx = colorUniformIndices[j];
-                        m_shadertoyUniformControls[idx].v3Value[0] = displayPalette[j].x;
-                        m_shadertoyUniformControls[idx].v3Value[1] = displayPalette[j].y;
-                        m_shadertoyUniformControls[idx].v3Value[2] = displayPalette[j].z;
+                        m_shadertoyUniformControls[idx].v3Value[0] = displayPalette[paletteIndex].x;
+                        m_shadertoyUniformControls[idx].v3Value[1] = displayPalette[paletteIndex].y;
+                        m_shadertoyUniformControls[idx].v3Value[2] = displayPalette[paletteIndex].z;
                         if (m_shadertoyUniformControls[idx].glslType == "vec4") {
                             m_shadertoyUniformControls[idx].v4Value[3] = 1.0f;
                         }
