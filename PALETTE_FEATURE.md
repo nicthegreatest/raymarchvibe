@@ -26,7 +26,13 @@ RaymarchVibe now includes an advanced color picker system that enables palette-b
 - Creates seamless color transitions for animation or layered effects
 - Automatically generates 10 intermediate colors
 
-### 4. **HSV/HSL Color Space Support**
+### 4. **Sync Mode** (Advanced)
+- Secondary color controls can automatically sync to primary control's gradient
+- Semantic naming detection (Secondary, Tertiary, Accent, Highlight)
+- Sample positions: Secondary=0.25, Tertiary=0.5, Accent=0.75, Highlight=1.0
+- Enables cohesive, harmonious color schemes across complex shaders
+
+### 5. **HSV/HSL Color Space Support**
 - ColorPaletteGenerator class provides:
   - `RgbToHsv()` / `HsvToRgb()` conversions
   - `RgbToHsl()` / `HslToRgb()` conversions
@@ -61,6 +67,7 @@ uniform vec3 accentColor = vec3(0.0, 0.0, 1.0);
 2. **Choose a Mode**
    - **Individual**: Use standard color picker
    - **Palette**: Generate harmonious colors automatically
+   - **Sync**: (Secondary controls only) Auto-sync from primary control's gradient
 
 3. **In Palette Mode:**
    - Select a **Harmony Type** from the dropdown
@@ -70,12 +77,24 @@ uniform vec3 accentColor = vec3(0.0, 0.0, 1.0);
    - Preview the generated colors in real-time
    - Click **Apply Palette** to distribute colors across all palette-enabled uniforms
 
-### Example Shader
+4. **In Sync Mode:** (Secondary controls only)
+   - Automatically inherits colors from the primary control's gradient
+   - Sampling position determined by semantic name (Secondary, Tertiary, Accent, Highlight)
+   - Updates in real-time as primary control changes
+   - Displays read-only color swatch and sample position
 
-See `shaders/palette_demo.frag` for a complete example demonstrating:
+### Example Shaders
+
+**Basic palette usage:** See `shaders/palette_demo.frag` for:
 - Multiple palette-enabled uniforms
 - Animation controls
 - Different rendering techniques using palette colors
+
+**Advanced sync mode:** See `shaders/palette_sync_demo.frag` for:
+- Primary color control generating gradient
+- Secondary/Accent/Highlight controls syncing automatically
+- Real-time demonstration of semantic position sampling
+- Visual regions showing sync behavior
 
 ## Implementation Details
 
@@ -89,7 +108,7 @@ ColorPaletteGenerator (new utility class)
 
 ShaderToyUniformControl (extended)
 ├── isPalette flag
-├── paletteMode flag (0=Individual, 1=Palette)
+├── paletteMode int (0=Individual, 1=Palette, 2=Sync)
 ├── selectedHarmonyType index
 ├── generatedPalette vector
 ├── gradientMode flag
@@ -103,12 +122,13 @@ ShaderEffect::RenderEnhancedColorControl()
 
 1. **include/ColorPaletteGenerator.h** - New class definition
 2. **src/ColorPaletteGenerator.cpp** - Implementation
-3. **include/ShaderParser.h** - Extended ShaderToyUniformControl struct
-4. **src/ShaderParser.cpp** - Initialize isPalette from metadata
+3. **include/ShaderParser.h** - Extended ShaderToyUniformControl struct (FIXED: paletteMode type changed from bool to int)
+4. **src/ShaderParser.cpp** - Initialize isPalette from metadata, semantic role detection
 5. **include/ShaderEffect.h** - Added RenderEnhancedColorControl method
-6. **src/ShaderEffect.cpp** - Implemented enhanced UI rendering
+6. **src/ShaderEffect.cpp** - Implemented enhanced UI rendering with sync mode support
 7. **CMakeLists.txt** - Added ColorPaletteGenerator.cpp to build
-8. **shaders/palette_demo.frag** - Demo shader
+8. **shaders/palette_demo.frag** - Basic demo shader
+9. **shaders/palette_sync_demo.frag** - Advanced sync mode demo shader
 
 ## Color Theory
 
@@ -213,7 +233,8 @@ Potential additions for future versions:
 
 ## Testing
 
-To test the feature:
+### Basic Palette Mode
+To test basic palette functionality:
 
 1. Open `shaders/palette_demo.frag` in the editor
 2. Locate palette-enabled uniforms (marked with `[Palette]`)
@@ -223,6 +244,31 @@ To test the feature:
 6. Observe palette preview updating
 7. Click "Apply Palette" to see effect on shader
 8. Try "Gradient Mode" for smooth transitions
+
+### Sync Mode (Advanced)
+To test sync mode functionality:
+
+1. Open `shaders/palette_sync_demo.frag` in the editor
+2. Expand the "Primary Color" control
+3. Set it to "Palette" mode and enable "Gradient Mode"
+4. Choose a harmony type (e.g., "Triadic")
+5. Expand "Secondary Color", "Accent Color", or "Highlight Color" controls
+6. Each should show a "Sync" option in the mode dropdown
+7. Set them to "Sync" mode
+8. Observe them automatically sampling from the primary gradient
+9. Change primary color/harmony and watch secondary controls update in real-time
+
+## Troubleshooting
+
+### Sync Mode Not Available
+**Problem:** "Sync" option doesn't appear in mode dropdown for secondary controls.
+
+**Solution:** This was caused by a type mismatch bug (v0.3.9). The `paletteMode` field was declared as `bool` but used as `int` (0, 1, 2). This has been fixed by changing the type to `int` in `include/ShaderParser.h`.
+
+**Verify Fix:**
+- Check that `paletteMode` in `ShaderParser.h` line 44 is declared as `int paletteMode = 0;`
+- Rebuild the application
+- Secondary controls should now show all three options: Individual | Palette | Sync
 
 ## References
 
