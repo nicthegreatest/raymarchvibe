@@ -12,11 +12,8 @@
 - **Professional Debugging:** Refined debug output to show clean shader load summaries without terminal flood. Moved from per-frame spam to once-per-shader-load logging.
 - **Shader Parameter Controls:** Enhanced UI for color controls with palette mode switching (Individual, Palette, Sync options).
 
-### ⚠️ Known Issues
-- **Palette Sync UI Bug:** Secondary color controls cannot select "Sync" mode from the dropdown menu despite correct detection and default setting. The parser correctly identifies secondary controls and sets paletteMode=2, but the UI dropdown only shows "Individual | Palette" options. Diagnosis attempted but requires expert-level investigation.
-
-### Notes
-- **Expert Diagnostics Required:** The sync mode selection bug requires deep ImGui combo rendering expertise to resolve. All other palette functionality (detection, generation, gradient sync logic) is implemented and working correctly.
+### Fixed
+- **Palette Sync UI Bug:** Fixed critical type mismatch where `paletteMode` was declared as `bool` but used as `int` (0=Individual, 1=Palette, 2=Sync) throughout the codebase. Changed type from `bool` to `int` in `ShaderParser.h`, enabling proper Sync mode selection in UI dropdowns for secondary color controls.
 
 ---
 
