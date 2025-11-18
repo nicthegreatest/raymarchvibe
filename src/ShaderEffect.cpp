@@ -670,6 +670,12 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                 baseColorChanged = ImGui::ColorEdit4(("Base Color##" + control.name).c_str(), control.v4Value);
             }
 
+            // Apply button to regenerate harmony
+            ImGui::SameLine();
+            if (ImGui::Button(("Apply##" + control.name).c_str())) {
+                baseColorChanged = true; // Force regeneration
+            }
+
             // Generate palette if harmony type changed or base color changed
             if (oldHarmony != control.selectedHarmonyType || baseColorChanged || control.generatedPalette.empty()) {
                 glm::vec3 baseRgb(control.v3Value[0], control.v3Value[1], control.v3Value[2]);
@@ -697,11 +703,13 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                 float boxHeight = 30.0f;
                 ImVec2 mousePos = ImGui::GetMousePos();
 
-                int hoveredIndex = -1;
-                bool segmentClicked = false;
-                size_t clickedIndex = 0;
+                static int hoveredIndex = -1;
+                static size_t clickedIndex = 0;
 
-                // First pass: find which segment is hovered/clicked
+                hoveredIndex = -1;
+                bool segmentClicked = false;
+
+                // Check for hover and clicks
                 for (size_t j = 0; j < displayPalette.size(); ++j) {
                     ImVec2 boxMin(cursorPos.x + j * colorBoxSize, cursorPos.y);
                     ImVec2 boxMax(boxMin.x + colorBoxSize, boxMin.y + boxHeight);
@@ -709,14 +717,14 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                     if (mousePos.x >= boxMin.x && mousePos.x <= boxMax.x &&
                         mousePos.y >= boxMin.y && mousePos.y <= boxMax.y) {
                         hoveredIndex = static_cast<int>(j);
-                        if (ImGui::IsMouseClicked(0)) {
+                        if (ImGui::IsMouseClicked(0) && !ImGui::IsPopupOpen("ColorPicker")) {
                             clickedIndex = j;
                             segmentClicked = true;
                         }
                     }
                 }
 
-                // Second pass: render the preview with hover highlighting
+                // Render the preview with hover highlighting
                 for (size_t j = 0; j < displayPalette.size(); ++j) {
                     ImVec2 boxMin(cursorPos.x + j * colorBoxSize, cursorPos.y);
                     ImVec2 boxMax(boxMin.x + colorBoxSize, boxMin.y + boxHeight);
@@ -736,11 +744,6 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                         float r, g, b;
                         ImGui::ColorConvertHSVtoRGB(h, s, v, r, g, b);
                         color = ImGui::GetColorU32(ImVec4(r, g, b, 1.0f));
-
-                        // Show tooltip
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::SetTooltip("Click to edit this color");
-                        }
                     }
 
                     drawList->AddRectFilled(boxMin, boxMax, color);
@@ -757,13 +760,16 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
 
                 // Handle color editing popup
                 if (segmentClicked) {
+                    ImGui::OpenPopup("ColorPicker");
+                }
+
+                if (ImGui::BeginPopup("ColorPicker")) {
                     std::vector<glm::vec3>& editablePalette = control.gradientMode ? control.gradientColors : control.generatedPalette;
                     float tempColor[3] = {editablePalette[clickedIndex].x, editablePalette[clickedIndex].y, editablePalette[clickedIndex].z};
 
-                    bool updatedPalette = false;
-                    if (ImGui::ColorEdit3(("Edit Segment " + std::to_string(clickedIndex + 1)).c_str(), tempColor)) {
+                    ImGui::Text("Edit Segment %zu", clickedIndex + 1);
+                    if (ImGui::ColorPicker3("##palettecolor", tempColor)) {
                         editablePalette[clickedIndex] = glm::vec3(tempColor[0], tempColor[1], tempColor[2]);
-                        updatedPalette = true;
 
                         // Auto-reapply palette to uniforms after color change
                         std::vector<size_t> colorUniformIndices;
@@ -790,6 +796,12 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                             }
                         }
                     }
+
+                    ImGui::Separator();
+                    if (ImGui::Button("Close")) {
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::EndPopup();
                 }
             }
         }
