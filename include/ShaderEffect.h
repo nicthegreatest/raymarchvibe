@@ -77,25 +77,37 @@ private:
     GLuint m_shaderProgram;
     bool m_isShadertoyMode;
     bool m_shaderLoaded;
+    float m_time;
+    float m_deltaTime;
+    int m_frameCount;
+    float m_audioAmp;
+    GLint m_iAudioAmpLoc;
+    GLint m_iAudioBandsAttLoc;
+    ShaderParser m_shaderParser;
+    GLint m_iChannel0SamplerLoc;
+    GLint m_iChannel1SamplerLoc;
+    GLint m_iChannel2SamplerLoc;
+    GLint m_iChannel3SamplerLoc;
+    GLuint m_fboID;
+    GLuint m_fboTextureID;
+    GLuint m_rboID;
+    int m_fboWidth;
+    int m_fboHeight;
+    std::filesystem::file_time_type m_lastWriteTime;
+
     std::string m_shaderFilePath;
     std::string m_shaderSourceCode;
     std::string m_compileErrorLog;
 
     std::vector<Effect*> m_inputs;
 
-    float m_time;
     float m_internalTime = 0.0f;
-    float m_deltaTime;
-    int m_frameCount;
     float m_mouseState[4];
     int m_currentDisplayWidth, m_currentDisplayHeight;
 
     // Shadertoy user uniforms
-
-    float m_audioAmp;
     std::array<float, 4> m_audioBands;
 
-    ShaderParser m_shaderParser;
     std::vector<ShaderToyUniformControl> m_shadertoyUniformControls;
     std::vector<DefineControl> m_defineControls;
     std::vector<ConstVariableControl> m_constControls;
@@ -106,16 +118,10 @@ private:
     GLint m_iTimeDeltaLocation = -1;
     GLint m_iFrameLocation = -1;
     GLint m_iMouseLocation = -1;
-    GLint m_iChannel0SamplerLoc = -1;
-    GLint m_iChannel1SamplerLoc = -1;
-    GLint m_iChannel2SamplerLoc = -1;
-    GLint m_iChannel3SamplerLoc = -1;
     GLint m_iChannel0ActiveLoc = -1;
     GLint m_iChannel1ActiveLoc = -1;
     GLint m_iChannel2ActiveLoc = -1;
     GLint m_iChannel3ActiveLoc = -1;
-    GLint m_iAudioAmpLoc = -1;
-    GLint m_iAudioBandsLoc = -1;
     GLint m_iCameraPositionLocation = -1;
     GLint m_iCameraMatrixLocation = -1;
     GLint m_iLightPositionLocation = -1;
@@ -132,12 +138,8 @@ private:
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(ColorCycleState, isEnabled, speed, cycleTime, currentGradient);
     } m_colorCycleState;
 
-    GLuint m_fboID, m_fboTextureID, m_rboID;
-    int m_fboWidth, m_fboHeight;
-
     nlohmann::json m_deserialized_controls;
     std::vector<int> m_deserialized_input_ids;
-    std::filesystem::file_time_type m_lastWriteTime;
 
     int m_channelPendingTextureLoad = -1;
 

@@ -1,6 +1,7 @@
 ## [0.3.8] - 2025-11-03
 
 ### Added
+- **Drag-and-Drop Shader Loading:** Implemented the ability to drag and drop `.frag` shader files directly onto the application window. Dropped `.frag` files will automatically create a new `ShaderEffect` node in the Node Editor, loaded with the shader code, and placed at the mouse cursor's position. This feature uses a thread-safe queuing mechanism to ensure robust handling of file drop events.
 - Implemented generic uniform smoothing for 'float' types, controlled by '{"smooth": true}' metadata in shader uniform comments.
 - Added a 'Refresh' button with F5 keybinding to the Shader Editor for faster iteration.
 
