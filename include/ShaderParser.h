@@ -41,7 +41,7 @@ struct ShaderToyUniformControl {
 
     // Palette-related fields
     bool isPalette = false;
-    bool paletteMode = false;
+    int paletteMode = 0;  // 0=Individual, 1=Palette, 2=Sync
     int selectedHarmonyType = 0;  // Index into harmony types
     std::vector<glm::vec3> generatedPalette;
     bool gradientMode = false;
