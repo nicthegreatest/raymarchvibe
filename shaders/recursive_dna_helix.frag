@@ -11,25 +11,38 @@ uniform sampler2D iChannel0;   // Previous frame/feedback
 uniform vec3 iCameraPosition;
 uniform mat4 iCameraMatrix;
 
-// --- UI Controls ---
-uniform vec3 u_base_color_a = vec3(0.1, 0.6, 1.0); // {"widget":"color", "label":"DNA Strand A"}
-uniform vec3 u_base_color_t = vec3(1.0, 0.3, 0.2); // {"widget":"color", "label":"DNA Strand T"}
-uniform vec3 u_base_color_g = vec3(0.3, 1.0, 0.4); // {"widget":"color", "label":"DNA Strand G"}
-uniform vec3 u_base_color_c = vec3(1.0, 0.8, 0.2); // {"widget":"color", "label":"DNA Strand C"}
-uniform vec3 u_connection_color = vec3(0.8, 0.3, 1.0); // {"widget":"color", "label":"Connnections"}
+// --- UI Controls: PALETTE SYNCHRONIZATION DEMO ---
+// Primary control generates palette - uses semantic naming for primary role
+uniform vec3 u_primaryColor = vec3(0.8, 0.3, 1.0); // {"widget":"color", "palette":true, "label":"Primary Helix Color"}
+
+// Secondary controls sync from primary gradient - positioned at semantic locations
+uniform vec3 u_secondaryColor = vec3(0.1, 0.6, 1.0); // {"widget":"color", "palette":true, "label":"Secondary Gradient A"}
+uniform vec3 u_tertiaryColor = vec3(1.0, 0.3, 0.2); // {"widget":"color", "palette":true, "label":"Tertiary Gradient T"}
+uniform vec3 u_accentColor = vec3(0.3, 1.0, 0.4); // {"widget":"color", "palette":true, "label":"Accent Gradient G"}
+uniform vec3 u_highlightColor = vec3(1.0, 0.8, 0.2); // {"widget":"color", "palette":true, "label":"Highlight Gradient C"}
+
+// Connection colors sync from gradient positions
+uniform vec3 u_connectionPrimary = vec3(0.9, 0.5, 1.2); // {"widget":"color", "palette":true, "label":"Primary Connections"}
+uniform vec3 u_connectionSecondary = vec3(1.2, 0.7, 0.8); // {"widget":"color", "palette":true, "label":"Secondary Connections"}
+
+// Textured colors sync as well
+uniform vec3 u_lightPrimary = vec3(1.0, 0.9, 0.8); // {"widget":"color", "palette":true, "label":"Primary Light"}
+uniform vec3 u_glowSecondary = vec3(0.4, 0.8, 1.0); // {"widget":"color", "palette":true, "label":"Secondary Glow"}
+
+// Non-palette controls (structure/behavior)
 uniform float u_recursion = 5.0;       // {"widget":"slider", "min":1.0, "max":8.0, "label":"Recursion Depth", "smooth":true}
 uniform float u_radius = 0.5;          // {"widget":"slider", "min":0.1, "max":2.0, "label":"Helix Radius"}
 uniform float u_twist = 5.0;           // {"widget":"slider", "min":0.1, "max":15.0, "label":"Twist Amount"}
 uniform float u_speed = 0.6;           // {"widget":"slider", "min":0.0, "max":3.0, "label":"Motion Speed"}
-    uniform float u_audio_react = 0.003;     // {"widget":"slider", "min":0.0, "max":0.01, "label":"Audio Reactivity"}
+uniform float u_audio_react = 0.003;   // {"widget":"slider", "min":0.0, "max":0.01, "label":"Audio Reactivity"}
 uniform float u_morph_amount = 0.3;    // {"widget":"slider", "min":0.0, "max":1.0, "label":"Morph Amount"}
 uniform float u_fractal_scale = 2.3;   // {"widget":"slider", "min":0.5, "max":4.0, "label":"Fractal Scale"}
 uniform float u_connection_spacing = 0.5; // {"widget":"slider", "min":0.2, "max":1.5, "label":"Connection Spacing"}
-uniform vec3 u_light_color = vec3(1.0, 0.9, 0.8); // {"widget":"color", "label":"Light Color"}
-uniform vec3 u_glow_color = vec3(0.4, 0.8, 1.0); // {"widget":"color", "label":"Glow Color"}
 uniform float u_glow_intensity = 1.5;  // {"widget":"slider", "min":0.0, "max":4.0, "label":"Glow Intensity"}
 uniform float u_brightness = 1.0;      // {"widget":"slider", "min":0.1, "max":3.0, "label":"Brightness"}
 uniform bool u_enable_fog = true;      // {"label":"Enable Atmospheric Fog"}
+
+// Fixed background colors (non-palette)
 uniform vec3 u_bg_color_bottom = vec3(0.01, 0.005, 0.02); // {"widget":"color", "label":"Background Bottom Color"}
 uniform vec3 u_bg_color_top = vec3(0.1, 0.05, 0.2); // {"widget":"color", "label":"Background Top Color"}
 uniform float u_bg_gradient_power = 2.0; // {"widget":"slider", "min":0.1, "max":5.0, "label":"Background Gradient Power"}
@@ -406,10 +419,10 @@ vec3 getMaterialColor(float materialID, vec3 pos) {
         float pos_factor3 = sin(helix_pos * 3.1 + iTime * 0.2 + 3.0) * 0.5 + 0.5;
 
         // Mix between all four base colors based on position for gradient effect
-        vec3 color_a = u_base_color_a;
-        vec3 color_t = u_base_color_t;
-        vec3 color_g = u_base_color_g;
-        vec3 color_c = u_base_color_c;
+        vec3 color_a = u_secondaryColor;  // Syncs to gradient position 0.25
+        vec3 color_t = u_tertiaryColor;   // Syncs to gradient position 0.5
+        vec3 color_g = u_accentColor;     // Syncs to gradient position 0.75
+        vec3 color_c = u_highlightColor;  // Syncs to gradient position 1.0
 
         // Three-stage color blending for smooth gradients
         vec3 gradient1 = mix(color_a, color_t, pos_factor);
@@ -423,13 +436,13 @@ vec3 getMaterialColor(float materialID, vec3 pos) {
 
         return final_color * pulse * anim_intensity;
     } else if (materialID == 10.0) {
-        // A-T Hydrogen bond connections - gradient between purples
+        // A-T Hydrogen bond connections - use primary connection color
         float connection_pos = sin(helix_pos * 1.5 + iTime * 0.4) * 0.5 + 0.5;
         vec3 connection_colors[4] = vec3[4](
-            u_connection_color,
-            u_connection_color * vec3(1.2, 0.8, 1.1),
-            u_connection_color * vec3(0.9, 1.0, 1.3),
-            u_connection_color * vec3(1.1, 0.9, 0.8)
+            u_connectionPrimary,      // Primary connections - syncs from gradient
+            u_connectionPrimary * vec3(1.2, 0.8, 1.1),
+            u_connectionPrimary * vec3(0.9, 1.0, 1.3),
+            u_connectionPrimary * vec3(1.1, 0.9, 0.8)
         );
 
         // Blend between connection colors for psychedelic effect
@@ -442,9 +455,9 @@ vec3 getMaterialColor(float materialID, vec3 pos) {
 
         return connection_color * pulse * connection_brightness;
     } else if (materialID == 11.0) {
-        // G-C Hydrogen bond connections - gradient magenta variations
+        // G-C Hydrogen bond connections - use secondary connection color
         float gc_pos = sin(helix_pos * 2.2 + iTime * 0.6) * 0.5 + 0.5;
-        vec3 gc_base = u_connection_color * vec3(0.8, 0.5, 1.2);
+        vec3 gc_base = u_connectionSecondary * vec3(0.8, 0.5, 1.2); // Secondary connections - syncs from gradient
         vec3 gc_variations[3] = vec3[3](
             gc_base * vec3(1.0, 0.7, 1.4),
             gc_base * vec3(1.3, 0.8, 1.0),
@@ -506,7 +519,7 @@ vec3 iridescence(vec3 normal, vec3 viewDir, float intensity) {
 // --- Stabilized Temporal Glow (Reduced feedback to prevent ghost artifacts) ---
 vec3 temporalGlow(vec2 uv, vec3 currentColor) {
     vec4 previous = texture(iChannel0, uv);
-    vec3 glow = u_glow_color * u_glow_intensity * (iAudioBandsAtt.x * 0.0001 + 0.1); // Reduced audio influence
+    vec3 glow = u_glowSecondary * u_glow_intensity * (iAudioBandsAtt.x * 0.0001 + 0.1); // Secondary glow - syncs from gradient
     return mix(previous.rgb, currentColor + glow, 0.3) * 0.98; // Much more subtle blending
 }
 
@@ -565,7 +578,7 @@ void main() {
     } else {
         // Add audio-reactive stars on top of gradient
         if (length(uv) > 0.3 && fract(sin(dot(uv + iTime * 0.1, vec2(12.9898, 78.233))) * 43758.5453) > 0.995) {
-            col += u_glow_color * iAudioBandsAtt.w;
+            col += u_glowSecondary * iAudioBandsAtt.w; // Use secondary glow color - syncs from gradient
         }
     }
 

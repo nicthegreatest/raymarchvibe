@@ -75,6 +75,7 @@ private:
     void RenderColorCycleUI();
     void GetGradientColor(float t, float* outColor);
     void RenderEnhancedColorControl(ShaderToyUniformControl& control, const std::string& label, int components);
+    void updatePaletteSync(); // REAL-TIME PALETTE SYNCHRONIZATION
 
     GLuint m_shaderProgram;
     bool m_isShadertoyMode;
