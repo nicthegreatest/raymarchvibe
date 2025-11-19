@@ -240,11 +240,20 @@ void ShaderEffect::Update(float currentTime) {
         m_colorCycleState.cycleTime += m_deltaTime * m_colorCycleState.speed;
         for (auto& control : m_shadertoyUniformControls) {
             if (control.name == "u_objectColor") { // Or another designated target uniform for cycling
-                GetGradientColor(m_colorCycleState.cycleTime, control.v3Value);
+                // Fix: GetGradientColor expects float* output
+                float color[3];
+                GetGradientColor(m_colorCycleState.cycleTime, color);
+                control.v3Value[0] = color[0];
+                control.v3Value[1] = color[1];
+                control.v3Value[2] = color[2];
                 break;
             }
         }
     }
+
+    // REAL-TIME PALETTE SYNCHRONIZATION
+    // Continuously sync secondary palette controls from primary gradients
+    updatePaletteSync();
 }
 
 void ShaderEffect::Render() {
@@ -716,46 +725,9 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
             }
         } else if (control.paletteMode == 1) {
             // Palette generation mode
-            // Harmony type selector
-            const char* harmonies[] = {
-                "Monochromatic",
-                "Complementary",
-                "Triadic",
-                "Analogous",
-                "Split-Complementary",
-                "Square"
-            };
-            
-            int oldHarmony = control.selectedHarmonyType;
-            ImGui::Combo(("Harmony##" + control.name).c_str(), &control.selectedHarmonyType, harmonies, IM_ARRAYSIZE(harmonies));
 
-            // Base color picker
-            bool baseColorChanged = false;
-            if (components == 3) {
-                baseColorChanged = ImGui::ColorEdit3(("Base Color##" + control.name).c_str(), control.v3Value);
-            } else {
-                baseColorChanged = ImGui::ColorEdit4(("Base Color##" + control.name).c_str(), control.v4Value);
-            }
-
-
-
-            // Generate palette if harmony type changed or base color changed
-            if (oldHarmony != control.selectedHarmonyType || baseColorChanged || control.generatedPalette.empty()) {
-                glm::vec3 baseRgb(control.v3Value[0], control.v3Value[1], control.v3Value[2]);
-                ColorPaletteGenerator::HarmonyType harmonyType = static_cast<ColorPaletteGenerator::HarmonyType>(control.selectedHarmonyType);
-                control.generatedPalette = ColorPaletteGenerator::GeneratePalette(baseRgb, harmonyType, 5);
-            }
-
-            // Gradient mode toggle
-            ImGui::Checkbox(("Gradient Mode##" + control.name).c_str(), &control.gradientMode);
-
-            // Generate gradient if needed
-            if (control.gradientMode && (control.gradientColors.empty() || oldHarmony != control.selectedHarmonyType || baseColorChanged)) {
-                control.gradientColors = ColorPaletteGenerator::GenerateGradient(control.generatedPalette, 10);
-            }
-
-
-            // Make palette clickable for editing individual colors
+            // --- Palette Preview (drawn first to solve layering issue) ---
+            // This preview uses the data generated in the *previous* frame.
             ImGui::Text("Palette Preview (click to edit):");
             const std::vector<glm::vec3>& displayPalette = control.gradientMode ? control.gradientColors : control.generatedPalette;
 
@@ -772,7 +744,6 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                 hoveredIndex = -1;
                 bool segmentClicked = false;
 
-                // Check for hover and clicks
                 for (size_t j = 0; j < displayPalette.size(); ++j) {
                     ImVec2 boxMin(cursorPos.x + j * colorBoxSize, cursorPos.y);
                     ImVec2 boxMax(boxMin.x + colorBoxSize, boxMin.y + boxHeight);
@@ -787,23 +758,15 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                     }
                 }
 
-                // Render the preview with hover highlighting
                 for (size_t j = 0; j < displayPalette.size(); ++j) {
                     ImVec2 boxMin(cursorPos.x + j * colorBoxSize, cursorPos.y);
                     ImVec2 boxMax(boxMin.x + colorBoxSize, boxMin.y + boxHeight);
-                    ImU32 color = ImGui::GetColorU32(ImVec4(
-                        displayPalette[j].x,
-                        displayPalette[j].y,
-                        displayPalette[j].z,
-                        1.0f
-                    ));
+                    ImU32 color = ImGui::GetColorU32(ImVec4(displayPalette[j].x, displayPalette[j].y, displayPalette[j].z, 1.0f));
 
-                    // Highlight hovered segment
                     if (static_cast<int>(j) == hoveredIndex) {
-                        // Lighten the color for hover effect
                         float h, s, v;
                         ImGui::ColorConvertRGBtoHSV(displayPalette[j].x, displayPalette[j].y, displayPalette[j].z, h, s, v);
-                        v = std::min(v + 0.2f, 1.0f);  // Increase brightness
+                        v = std::min(v + 0.2f, 1.0f);
                         float r, g, b;
                         ImGui::ColorConvertHSVtoRGB(h, s, v, r, g, b);
                         color = ImGui::GetColorU32(ImVec4(r, g, b, 1.0f));
@@ -812,7 +775,6 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                     drawList->AddRectFilled(boxMin, boxMax, color);
                     ImU32 borderColor = ImGui::GetColorU32(ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
                     if (static_cast<int>(j) == hoveredIndex) {
-                        // Thicker border for hover
                         drawList->AddRect(boxMin, boxMax, borderColor, 0.0f, 0, 2.0f);
                     } else {
                         drawList->AddRect(boxMin, boxMax, borderColor);
@@ -821,7 +783,6 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
 
                 ImGui::Dummy(ImVec2(0, boxHeight + 5.0f));
 
-                // Handle color editing popup
                 if (segmentClicked) {
                     ImGui::OpenPopup("ColorPicker");
                 }
@@ -833,33 +794,7 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                     ImGui::Text("Edit Segment %zu", clickedIndex + 1);
                     if (ImGui::ColorPicker3("##palettecolor", tempColor)) {
                         editablePalette[clickedIndex] = glm::vec3(tempColor[0], tempColor[1], tempColor[2]);
-
-                        // Auto-reapply palette to uniforms after color change
-                        std::vector<size_t> colorUniformIndices;
-                        for (size_t j = 0; j < m_shadertoyUniformControls.size(); ++j) {
-                            if (m_shadertoyUniformControls[j].isColor && m_shadertoyUniformControls[j].isPalette) {
-                                colorUniformIndices.push_back(j);
-                            }
-                        }
-
-                        // Distribute palette colors to available uniforms using even sampling across the gradient
-                        size_t paletteSize = displayPalette.size();
-                        size_t numUniforms = colorUniformIndices.size();
-                        for (size_t j = 0; j < numUniforms; ++j) {
-                            size_t paletteIndex = (numUniforms > 1) ?
-                                (j * (paletteSize - 1)) / (numUniforms - 1) : 0;
-                            paletteIndex = std::min(paletteIndex, paletteSize - 1);
-
-                            size_t idx = colorUniformIndices[j];
-                            m_shadertoyUniformControls[idx].v3Value[0] = displayPalette[paletteIndex].x;
-                            m_shadertoyUniformControls[idx].v3Value[1] = displayPalette[paletteIndex].y;
-                            m_shadertoyUniformControls[idx].v3Value[2] = displayPalette[paletteIndex].z;
-                            if (m_shadertoyUniformControls[idx].glslType == "vec4") {
-                                m_shadertoyUniformControls[idx].v4Value[3] = 1.0f;
-                            }
-                        }
                     }
-
                     ImGui::Separator();
                     if (ImGui::Button("Close")) {
                         ImGui::CloseCurrentPopup();
@@ -867,6 +802,32 @@ void ShaderEffect::RenderEnhancedColorControl(ShaderToyUniformControl& control, 
                     ImGui::EndPopup();
                 }
             }
+            
+            // --- Controls drawn after preview ---
+            // These controls will update the data that is used in the *next* frame's preview.
+            bool baseColorChanged = false;
+            if (components == 3) {
+                baseColorChanged = ImGui::ColorEdit3(("Base Color##" + control.name).c_str(), control.v3Value);
+            } else {
+                baseColorChanged = ImGui::ColorEdit4(("Base Color##" + control.name).c_str(), control.v4Value);
+            }
+
+            const char* harmonies[] = { "Monochromatic", "Complementary", "Triadic", "Analogous", "Split-Complementary", "Square" };
+            bool harmonyChanged = ImGui::Combo(("Harmony##" + control.name).c_str(), &control.selectedHarmonyType, harmonies, IM_ARRAYSIZE(harmonies));
+
+            bool gradientModeChanged = ImGui::Checkbox(("Gradient Mode##" + control.name).c_str(), &control.gradientMode);
+
+            // --- Data Update Logic (for next frame) ---
+            if (harmonyChanged || baseColorChanged || control.generatedPalette.empty()) {
+                glm::vec3 baseRgb(control.v3Value[0], control.v3Value[1], control.v3Value[2]);
+                ColorPaletteGenerator::HarmonyType harmonyType = static_cast<ColorPaletteGenerator::HarmonyType>(control.selectedHarmonyType);
+                control.generatedPalette = ColorPaletteGenerator::GeneratePalette(baseRgb, harmonyType, 5);
+            }
+
+            if (control.gradientMode && (harmonyChanged || baseColorChanged || gradientModeChanged || control.gradientColors.empty())) {
+                control.gradientColors = ColorPaletteGenerator::GenerateGradient(control.generatedPalette, 10);
+            }
+
         } else if (control.paletteMode == 2) {
             // Sync mode - automatically sync from primary gradient
             ImGui::Text("Synced to primary gradient");
@@ -1132,6 +1093,9 @@ void ShaderEffect::ParseShaderControls() {
     }
     // =================================================================
 
+    // INITIALIZE PALETTE SYNC - ensure secondary controls are synced on shader load
+    updatePaletteSync();
+
     // Apply any deserialized control values
     if (!m_deserialized_controls.is_null()) {
         for (auto& control : m_shadertoyUniformControls) {
@@ -1279,6 +1243,76 @@ std::unique_ptr<Effect> ShaderEffect::Clone() const {
     // and create the FBO. We don't copy inputs here, the user can reconnect them.
 
     return newEffect;
+}
+
+// REAL-TIME PALETTE SYNCHRONIZATION METHOD
+// Continuously syncs secondary palette controls to primary gradients
+void ShaderEffect::updatePaletteSync() {
+    // Find the primary control that generates gradients
+    const ShaderToyUniformControl* primaryControl = nullptr;
+    for (const auto& control : m_shadertoyUniformControls) {
+        if (control.isColor && control.paletteMode == 1 && control.gradientMode && !control.gradientColors.empty()) {
+            primaryControl = &control;
+            break; // Use the first primary gradient we find
+        }
+    }
+
+    if (!primaryControl || primaryControl->gradientColors.empty()) {
+        return; // No primary gradient available
+    }
+
+    const auto& gradient = primaryControl->gradientColors;
+    size_t gradientSize = gradient.size();
+
+    // Update all secondary controls in sync mode
+    for (auto& control : m_shadertoyUniformControls) {
+        if (control.isColor && control.paletteMode == 2) {
+            // This control is in sync mode - determine sampling position
+            float samplePos = 0.0f;
+            std::string baseName = control.name;
+
+            // Determine sampling position based on control name (semantic keywords)
+            if (baseName.find("Primary") != std::string::npos || baseName.find("_main") != std::string::npos || baseName.find("_primary") != std::string::npos) {
+                samplePos = 0.0f; // Start of gradient
+            } else if (baseName.find("Secondary") != std::string::npos || baseName.find("_secondary") != std::string::npos) {
+                samplePos = 0.25f; // Quarter way through gradient
+            } else if (baseName.find("Tertiary") != std::string::npos || baseName.find("_tertiary") != std::string::npos) {
+                samplePos = 0.5f; // Middle of gradient
+            } else if (baseName.find("Accent") != std::string::npos || baseName.find("_accent") != std::string::npos) {
+                samplePos = 0.75f; // Three-quarters through gradient
+            } else if (baseName.find("Highlight") != std::string::npos || baseName.find("_highlight") != std::string::npos) {
+                samplePos = 1.0f; // End of gradient
+            } else {
+                // Default: evenly space sync controls across gradient
+                int syncCount = 0;
+                int syncIndex = 0;
+                for (size_t i = 0; i < m_shadertoyUniformControls.size(); ++i) {
+                    const auto& other = m_shadertoyUniformControls[i];
+                    if (other.isColor && other.paletteMode == 2) {
+                        syncCount++;
+                        if (&other == &control) {
+                            syncIndex = syncCount - 1;
+                        }
+                    }
+                }
+                samplePos = syncCount > 1 ? static_cast<float>(syncIndex) / (syncCount - 1) : 0.0f;
+            }
+
+            // Sample from the gradient
+            size_t sampleIndex = static_cast<size_t>(samplePos * (gradientSize - 1));
+            sampleIndex = std::min(sampleIndex, gradientSize - 1);
+
+            const glm::vec3& sampledColor = gradient[sampleIndex];
+
+            // Update control values - this is the real-time sync!
+            control.v3Value[0] = sampledColor.x;
+            control.v3Value[1] = sampledColor.y;
+            control.v3Value[2] = sampledColor.z;
+            if (control.glslType == "vec4") {
+                control.v4Value[3] = 1.0f;
+            }
+        }
+    }
 }
 
 void ShaderEffect::InitializeDummyTexture() {

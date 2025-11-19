@@ -83,73 +83,99 @@ ShaderToyUniformControl::ShaderToyUniformControl(const std::string& n, const std
 
     // Helper to parse numbers from strings like "vec3(1.0, 0.5, 0.2)"
 
-    auto extract_numbers = [](const std::string& s, int count) -> std::vector<float> {
+        auto extract_numbers = [](const std::string& s, int count) -> std::vector<float> {
 
-        std::vector<float> nums;
+            std::vector<float> nums;
 
-        std::regex num_regex(R"([-+]?[0-9]*\.?[0-9]+f?)");
+    
 
-        auto words_begin = std::sregex_iterator(s.begin(), s.end(), num_regex);
+            std::string search_str = s;
 
-        auto words_end = std::sregex_iterator();
+            size_t open_paren = s.find('(');
 
-        for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
+            if (open_paren != std::string::npos) {
 
-            if (nums.size() < (size_t)count) {
+                search_str = s.substr(open_paren + 1);
 
-                try {
+            }
 
-                    nums.push_back(std::stof((*i).str()));
+    
 
-                } catch (...) {
+            std::regex num_regex(R"([-+]?[0-9]*\.?[0-9]+f?)");
 
-                    // Ignore conversion errors
+    
+
+            auto words_begin = std::sregex_iterator(search_str.begin(), search_str.end(), num_regex);
+
+            auto words_end = std::sregex_iterator();
+
+    
+
+            for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
+
+                if (nums.size() < (size_t)count) {
+
+                    try {
+
+                        nums.push_back(std::stof((*i).str()));
+
+                    } catch (...) {
+
+                        // Ignore conversion errors
+
+                    }
 
                 }
 
             }
 
-        }
+    
 
-        while (nums.size() < (size_t)count) {
+            while (nums.size() < (size_t)count) {
 
-            nums.push_back(0.0f);
+                nums.push_back(0.0f);
 
-        }
+            }
 
-        return nums;
+            return nums;
 
-    };
+        };
 
+    
 
+    
 
-    // 1. Set initial values from GLSL default string
+    
 
-    if (!default_val_str.empty()) {
+        // 1. Set initial values from GLSL default string
 
-        if (glslType == "float") {
+    
 
-            try { fValue = std::stof(default_val_str); } catch (...) { fValue = 0.0f; }
+        if (!default_val_str.empty()) {
 
-        } else if (glslType == "int" || glslType == "bool") {
+            if (glslType == "float") {
 
-            try { iValue = std::stoi(default_val_str); } catch (...) { iValue = 0; }
+                try { fValue = std::stof(default_val_str); } catch (...) { fValue = 0.0f; }
 
-            if (glslType == "bool") bValue = (iValue != 0);
+            } else if (glslType == "int" || glslType == "bool") {
 
-        } else if (glslType == "vec2") {
+                try { iValue = std::stoi(default_val_str); } catch (...) { iValue = 0; }
 
-            auto nums = extract_numbers(default_val_str, 2);
+                if (glslType == "bool") bValue = (iValue != 0);
 
-            v2Value[0] = nums[0]; v2Value[1] = nums[1];
+            } else if (glslType == "vec2") {
 
-        } else if (glslType == "vec3") {
+                auto nums = extract_numbers(default_val_str, 2);
 
-            auto nums = extract_numbers(default_val_str, 3);
+                v2Value[0] = nums[0]; v2Value[1] = nums[1];
 
-            v3Value[0] = nums[0]; v3Value[1] = nums[1]; v3Value[2] = nums[2];
+            } else if (glslType == "vec3") {
 
-        } else if (glslType == "vec4") {
+                auto nums = extract_numbers(default_val_str, 3);
+
+                v3Value[0] = nums[0]; v3Value[1] = nums[1]; v3Value[2] = nums[2];
+
+            } else if (glslType == "vec4") {
 
             auto nums = extract_numbers(default_val_str, 4);
 
