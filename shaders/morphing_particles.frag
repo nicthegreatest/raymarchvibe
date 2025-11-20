@@ -120,40 +120,40 @@ vec3 nebula_surface_color(vec3 point, int material_type) {
     // Use palette colors as the foundation for all nebula effects
     float gradTime = length(uv1) * 0.6 + nebula * 0.3 + iTime * 0.08 + mids_smooth * 0.4 + point.z * 0.03;
 
-    // PRIMARY COLORS DOMINATE: Semantic palette control with strong dominance
-    vec3 baseNebula = mix(PrimaryColor,
-                         mix(SecondaryColor, PrimaryColor, nebula * 0.5),
-                         0.7 + all_smooth * 0.3);
+    // PRIMARY COLORS DOMINATE: Strong influence with nebula variation
+    vec3 baseNebula = mix(PrimaryColor * (0.8 + nebula * 0.2),
+                          PrimaryColor * (0.6 + nebula * 0.4),
+                          abs(sin(gradTime)));
 
     // HIGHLIGHT colors provide rainbow variation with strong presence
     vec3 rainbowColor = mix(HighlightColor,
-                           HighlightColor * 0.8,
-                           sin(length(uv1) * TAU + iTime) * 0.5 + 0.5);
+                            HighlightColor * vec3(0.8, 0.9, 1.0),
+                            sin(length(uv1) * TAU + iTime) * 0.5 + 0.5);
 
     // Secondary and accent palettes for material differentiation
-    vec3 baseColor = mix(baseNebula, rainbowColor, 0.6 + all_smooth * 0.3);
+    vec3 baseColor = mix(baseNebula, rainbowColor, 0.5 + all_smooth * 0.2);
 
-    // Material-based color variation (HEALING the whiteness!)
+    // Material-based color variation modulated by palette colors
     if(material_type == 0) {
-        // Helical system: Cool blues and cyans with nebula flow
-        vec3 helicalColor = vec3(
-            cos(point.x * 0.08 + iTime * 0.4) * 0.3 + 0.5,
-            sin(point.y * 0.06 + nebula * 0.5) * 0.4 + 0.6,
-            sin(point.z * 0.07 + iTime * 0.3) * 0.2 + 0.7
+        // Helical system: Modulate secondary color with parametric patterns
+        vec3 helicalMod = vec3(
+            cos(point.x * 0.08 + iTime * 0.4) * 0.5 + 0.5,
+            sin(point.y * 0.06 + nebula * 0.5) * 0.5 + 0.5,
+            sin(point.z * 0.07 + iTime * 0.3) * 0.5 + 0.5
         );
-        baseColor = mix(baseColor, helicalColor, 0.5);
+        baseColor = mix(baseColor, baseColor * helicalMod + SecondaryColor * (1.0 - helicalMod), 0.6);
     } else {
-        // Tendril system: Warm magentas and oranges
-        vec3 tendrilColor = vec3(
-            cos(point.x * 0.06 + iTime * 0.5) * 0.4 + 0.7,
-            sin(point.y * 0.08 + nebula * 0.3) * 0.3 + 0.4,
+        // Tendril system: Modulate with secondary tones
+        vec3 tendrilMod = vec3(
+            cos(point.x * 0.06 + iTime * 0.5) * 0.5 + 0.5,
+            sin(point.y * 0.08 + nebula * 0.3) * 0.5 + 0.5,
             cos(point.z * 0.05 + iTime * 0.4) * 0.5 + 0.5
         );
-        baseColor = mix(baseColor, tendrilColor, 0.4);
+        baseColor = mix(baseColor, baseColor * tendrilMod + SecondaryColor * (1.0 - tendrilMod), 0.5);
     }
 
-    // Add matrix stars (pure white/blue for code effect)
-    baseColor += vec3(0.8, 0.9, 1.0) * matrix_stars * 0.6;
+    // Add matrix stars with highlight color tint
+    baseColor += HighlightColor * matrix_stars * 0.5;
 
     // Add energy veins with ACCENT palette colors - DOMINANT contribution
     vec3 accentGlow = AccentColor * veins * 0.8 + AccentColor * all_smooth * 0.3;
@@ -252,44 +252,44 @@ float df(vec3 p){
 
 // === Raymarching Function ===
 vec2 rm(vec3 pos, vec3 dir, float threshold, float td){
-	vec3 startPos = pos;
-	vec3 oDir = dir;
-	float l,i, tl;
-	l = 0.;
+    vec3 startPos = pos;
+    vec3 oDir = dir;
+    float l,i, tl;
+    l = 0.;
 
-	for(float i=0.; i<=1.; i+=1.0/maxIters){
-		l = df(pos);
-		if(abs(l) < threshold){
-			break;
-		}
-		pos += (l * dir * 0.7);
-	}
-	l = length(startPos - pos);
-	return vec2(l < td ? 1.0 : -1.0, min(l, td));
+    for(float i=0.; i<=1.; i+=1.0/maxIters){
+        l = df(pos);
+        if(abs(l) < threshold){
+            break;
+        }
+        pos += (l * dir * 0.7);
+    }
+    l = length(startPos - pos);
+    return vec2(l < td ? 1.0 : -1.0, min(l, td));
 }
 
 // === Soft Shadow Function ===
 #define SHADOWS
 float softShadow(vec3 pos, vec3 l, float r, float f, float td) {
-	float d;
-	vec3 p;
-	float o = 1.0, maxI = 10., or = r;
-	float len;
-	for (float i=10.; i>1.; i--) {
-		len = (i - 1.) / maxI;
-		p = pos + ((l - pos) * len);
-		r = or * len;
-		d = clamp(df(p), 0.0, 1.0);
-		o -= d < r ? (r -d)/(r * f) : 0.;
+    float d;
+    vec3 p;
+    float o = 1.0, maxI = 10., or = r;
+    float len;
+    for (float i=10.; i>1.; i--) {
+        len = (i - 1.) / maxI;
+        p = pos + ((l - pos) * len);
+        r = or * len;
+        d = clamp(df(p), 0.0, 1.0);
+        o -= d < r ? (r -d)/(r * f) : 0.;
 
-		if(o < 0.) break;
-	}
-	return o;
+        if(o < 0.) break;
+    }
+    return o;
 }
 
 // === Main 3D Render Function ===
 void main() {
-	vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
 
     // Dynamic camera movement through the weave - AUDIO-REACTIVE
     float bass_smooth = iAudioBandsAtt.x * u_audioSensitivity;
@@ -303,53 +303,53 @@ void main() {
     );
 
     vec3 rayDir = vec3(uv, 1.0);
-	rayDir = normalize(rayDir);
-	rayDir.yz = R(rayDir.yz, sin(iTime*.25)*.25+1.25 + bass_smooth * 0.5);
-	rayDir.xz = R(rayDir.xz, sin(iTime*.2) + mids_smooth * 0.3);
+    rayDir = normalize(rayDir);
+    rayDir.yz = R(rayDir.yz, sin(iTime*.25)*.25+1.25 + bass_smooth * 0.5);
+    rayDir.xz = R(rayDir.xz, sin(iTime*.2) + mids_smooth * 0.3);
 
-	float gd = maxD;
-	vec2 march = rm(camPos, rayDir, threshold, gd);
+    float gd = maxD;
+    vec2 march = rm(camPos, rayDir, threshold, gd);
 
-	vec3 col = vec3(0.0);
+    vec3 col = vec3(0.0);
 
-	if(march.x == 1.0) {
-		// Hit the 3D structure - render with nebula material
-		int lm = m;
-		vec3 point = camPos + (rayDir * march.g);
-		vec2 e = vec2(0.01, 0.0);
+    if(march.x == 1.0) {
+        // Hit the 3D structure - render with nebula material
+        int lm = m;
+        vec3 point = camPos + (rayDir * march.g);
+        vec2 e = vec2(0.01, 0.0);
 
-		// Calculate normal
-		vec3 n = (vec3(df(point+e.xyy),df(point +e.yxy),df(point +e.yyx))-df(point))/e.x;
+        // Calculate normal
+        vec3 n = (vec3(df(point+e.xyy),df(point +e.yxy),df(point +e.yyx))-df(point))/e.x;
 
-		// Lighting calculation
-		vec3 lightDir = normalize(lightPos - point);
-		float intensity = max(dot(n, lightDir), 0.0) * 0.5;
+        // Lighting calculation
+        vec3 lightDir = normalize(lightPos - point);
+        float intensity = max(dot(n, lightDir), 0.0) * 0.5;
 
 #ifdef SHADOWS
-		intensity *= softShadow(point, lightPos, 2.0, 8., gd) * 3.0;
+        intensity *= softShadow(point, lightPos, 2.0, 8., gd) * 3.0;
 #endif
 
-		intensity -= (march.y)*0.02;
-		intensity = march.y == maxD ? 0. : intensity;
+        intensity -= (march.y)*0.02;
+        intensity = march.y == maxD ? 0. : intensity;
 
-		// === Apply Nebula Material Instead of Simple Colors ===
-		vec3 nebulaColor = nebula_surface_color(point, lm);
-		nebulaColor += 1.0; // Bright boost like original
+        // === Apply Nebula Material - Palette Driven ===
+        vec3 nebulaColor = nebula_surface_color(point, lm);
+        nebulaColor *= 1.3; // Moderate brightening to preserve palette colors
 
-		col = nebulaColor * (intensity + ambient);
-	}
+        col = nebulaColor * (intensity + ambient);
+    }
 
-	// === Post-processing ===
-	// ACES tone mapping
-	float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
-	col = clamp((col*(a*col+b))/(col*(c*col+d)+e), 0.0, 1.0);
+    // === Post-processing ===
+    // ACES tone mapping
+    float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    col = clamp((col*(a*col+b))/(col*(c*col+d)+e), 0.0, 1.0);
 
-	// Gamma correction
-	col = pow(col, vec3(1.0/2.2));
+    // Gamma correction
+    col = pow(col, vec3(1.0/2.2));
 
-	// Vignette
-	float vignette = smoothstep(0.7, 1.4, length(uv));
-	col *= (1.0 - vignette * 0.3);
+    // Vignette
+    float vignette = smoothstep(0.7, 1.4, length(uv));
+    col *= (1.0 - vignette * 0.3);
 
-	FragColor = vec4(col, 1.0);
+    FragColor = vec4(col, 1.0);
 }
