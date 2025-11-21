@@ -80,6 +80,7 @@ void RenderNodeEditorWindow();
 void RenderConsoleWindow();
 void RenderAudioReactivityWindow();
 void RenderShadertoyWindow();
+void RenderFpsMeter();
 void RenderCameraHelpText();
 
 std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects);
@@ -179,6 +180,10 @@ static double g_lastMouseX = 0.0, g_lastMouseY = 0.0;
 
 // Recording state
 static std::chrono::steady_clock::time_point g_recordingStartTime;
+static bool g_offlineRendering = false;
+static float g_offlineTime = 0.0f;
+static int g_videoQuality = 2; // Default to High
+static int g_audioBitrate = 1; // Default to 192k
 
 // Window visibility flags
 static bool g_showShaderEditorWindow = true;
@@ -189,6 +194,7 @@ static bool g_showTimelineWindow = false;
 static bool g_showNodeEditorWindow = false;
 static bool g_showAudioWindow = false;
 static bool g_showShadertoyWindow = false;
+static bool g_showFpsMeter = false;
 
 static char g_shadertoyApiKeyBuffer[256] = ""; // For user's API key
 
@@ -585,6 +591,14 @@ void RenderMenuBar() {
 
             static bool g_recordAudio = true;
             ImGui::Checkbox("Record Audio", &g_recordAudio);
+            ImGui::Checkbox("Offline Rendering (Smooth Video)", &g_offlineRendering);
+            ImGui::SameLine(); HelpMarker("Decouples rendering from real-time. Ensures smooth 60 FPS video even if the app runs slowly. Audio sync only works with Audio File source.");
+
+            const char* quality_items[] = { "Low", "Medium", "High", "Ultra" };
+            ImGui::Combo("Video Quality", &g_videoQuality, quality_items, IM_ARRAYSIZE(quality_items));
+
+            const char* bitrate_items[] = { "128 kbps", "192 kbps", "320 kbps", "Lossless (ALAC)" };
+            ImGui::Combo("Audio Bitrate", &g_audioBitrate, bitrate_items, IM_ARRAYSIZE(bitrate_items));
 
             if (g_videoRecorder.is_recording()) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
@@ -625,7 +639,17 @@ void RenderMenuBar() {
                         fb_height &= ~1;
                         g_videoRecorder.start_recording(filename, fb_width, fb_height, 60, formats[format_idx], g_recordAudio,
                                                     g_audioSystem.GetCurrentInputSampleRate(),
-                                                    g_audioSystem.GetCurrentInputChannels());
+                                                    g_audioSystem.GetCurrentInputChannels(),
+                                                    g_offlineRendering,
+                                                    static_cast<VideoRecorder::VideoQuality>(g_videoQuality),
+                                                    static_cast<VideoRecorder::AudioBitrate>(g_audioBitrate));
+                        if (g_offlineRendering) {
+                            g_offlineTime = g_timelineState.currentTime_seconds; // Start from current timeline time
+                            if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile) {
+                                g_audioSystem.Pause(); // Pause audio playback to manually step it
+                                g_audioSystem.SetPlaybackProgress(g_offlineTime / g_audioSystem.GetPlaybackDuration());
+                            }
+                        }
                         g_recordingStartTime = std::chrono::steady_clock::now();
                     }
                 }
@@ -648,7 +672,17 @@ void RenderMenuBar() {
                     fb_height &= ~1;
                     g_videoRecorder.start_recording(filename, fb_width, fb_height, 60, formats[format_idx], g_recordAudio,
                                                 g_audioSystem.GetCurrentInputSampleRate(),
-                                                g_audioSystem.GetCurrentInputChannels());
+                                                g_audioSystem.GetCurrentInputChannels(),
+                                                g_offlineRendering,
+                                                static_cast<VideoRecorder::VideoQuality>(g_videoQuality),
+                                                static_cast<VideoRecorder::AudioBitrate>(g_audioBitrate));
+                    if (g_offlineRendering) {
+                        g_offlineTime = g_timelineState.currentTime_seconds;
+                        if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile) {
+                            g_audioSystem.Pause();
+                            g_audioSystem.SetPlaybackProgress(g_offlineTime / g_audioSystem.GetPlaybackDuration());
+                        }
+                    }
                     g_recordingStartTime = std::chrono::steady_clock::now();
                     ImGui::CloseCurrentPopup();
                 }
@@ -663,6 +697,7 @@ void RenderMenuBar() {
         }
         ImGui::MenuItem("Node Editor (F2)", "F2", &g_showNodeEditorWindow);
         ImGui::MenuItem("Audio Reactivity (F3)", "F3", &g_showAudioWindow);
+        ImGui::MenuItem("FPS Meter (F4)", "F4", &g_showFpsMeter);
 
         ImGui::EndMainMenuBar();
     }
@@ -1089,6 +1124,23 @@ void RenderNodeEditorWindow() {
             if (ImGui::MenuItem("Scene Output")) CreateAndPlaceNode(std::make_unique<OutputNode>(), popup_pos);
             ImGui::EndMenu();
         }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Arrange Nodes Here")) {
+            const float GRID_SPACING_X = 250.0f;
+            const float GRID_SPACING_Y = 200.0f;
+            const int GRID_COLUMNS = 4;
+            
+            int index = 0;
+            for (const auto& effect_ptr : g_scene) {
+                if (!effect_ptr) continue;
+                
+                float x = popup_pos.x + (index % GRID_COLUMNS) * GRID_SPACING_X;
+                float y = popup_pos.y + (index / GRID_COLUMNS) * GRID_SPACING_Y;
+                
+                ImNodes::SetNodeScreenSpacePos(effect_ptr->id, ImVec2(x, y));
+                index++;
+            }
+        }
         ImGui::EndPopup();
     }
 
@@ -1330,6 +1382,26 @@ void RenderShadertoyWindow() {
     }
     ImGui::PopStyleColor(4);
 
+    ImGui::End();
+}
+
+void RenderFpsMeter() {
+    if (!g_showFpsMeter) return;
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
+    const float PAD = 10.0f;
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 work_pos = viewport->WorkPos; // Use work area to avoid menu-bar/task-bar, if any!
+    ImVec2 work_size = viewport->WorkSize;
+    ImVec2 window_pos, window_pos_pivot;
+    window_pos.x = work_pos.x + work_size.x - PAD;
+    window_pos.y = work_pos.y + PAD;
+    window_pos_pivot.x = 1.0f;
+    window_pos_pivot.y = 0.0f;
+    ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, window_pos_pivot);
+    ImGui::SetNextWindowBgAlpha(0.35f); // Transparent background
+    if (ImGui::Begin("FPS Overlay", nullptr, window_flags)) {
+        ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+    }
     ImGui::End();
 }
 
@@ -1672,6 +1744,36 @@ int main(int argc, char** argv) {
         deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
 
+        // --- Offline Rendering Logic ---
+        if (g_videoRecorder.is_recording() && g_offlineRendering) {
+            deltaTime = 1.0f / 60.0f; // Fixed 60 FPS time step
+            g_offlineTime += deltaTime;
+            
+            // Sync audio file playback position and extract audio for recording
+            if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile && g_audioSystem.IsAudioFileLoaded()) {
+                // Ensure real-time playback is stopped to prevent conflict
+                g_audioSystem.StopActiveDevice(); 
+
+                float duration = g_audioSystem.GetPlaybackDuration();
+                if (duration > 0.0f) {
+                    g_audioSystem.SetPlaybackProgress(g_offlineTime / duration);
+                }
+
+                // Manually extract audio samples for this frame
+                int sampleRate = g_audioSystem.GetCurrentInputSampleRate();
+                int channels = g_audioSystem.GetCurrentInputChannels();
+                int samplesNeeded = (int)((float)sampleRate * deltaTime);
+                
+                // Buffer to hold interleaved samples
+                std::vector<float> audioBuffer(samplesNeeded * channels);
+                ma_uint64 framesRead = g_audioSystem.ReadOfflineAudio(audioBuffer.data(), samplesNeeded);
+                
+                if (framesRead > 0) {
+                    g_videoRecorder.add_audio_frame(audioBuffer.data(), framesRead);
+                }
+            }
+        }
+
         // --- Hot-reloading Check (every second) ---
         static float hot_reload_timer = 0.0f;
         hot_reload_timer += deltaTime;
@@ -1724,7 +1826,12 @@ int main(int argc, char** argv) {
 
         // Determine the time value to be used by effects (iTime)
         // This is the core of "Timeline Control Logic" for shaders
-        float currentTimeForEffects = g_timelineState.isEnabled ? g_timelineState.currentTime_seconds : (float)glfwGetTime();
+        float currentTimeForEffects;
+        if (g_videoRecorder.is_recording() && g_offlineRendering) {
+             currentTimeForEffects = g_offlineTime;
+        } else {
+             currentTimeForEffects = g_timelineState.isEnabled ? g_timelineState.currentTime_seconds : (float)glfwGetTime();
+        }
 
         processInput(window);
 
@@ -1798,6 +1905,7 @@ int main(int argc, char** argv) {
             if (g_showNodeEditorWindow) RenderNodeEditorWindow();
             if (g_showAudioWindow) RenderAudioReactivityWindow();
             if (g_showShadertoyWindow) RenderShadertoyWindow();
+            if (g_showFpsMeter) RenderFpsMeter();
             RenderCameraHelpText();
         }
 
@@ -1885,7 +1993,14 @@ void processInput(GLFWwindow *window) {
                 glfwGetFramebufferSize(window, &fb_width, &fb_height);
                 fb_width &= ~1;
                 fb_height &= ~1;
-                g_videoRecorder.start_recording("output.mp4", fb_width, fb_height, 60, "mp4", true, g_audioSystem.GetCurrentInputSampleRate(), g_audioSystem.GetCurrentInputChannels());
+                g_videoRecorder.start_recording("output.mp4", fb_width, fb_height, 60, "mp4", true, g_audioSystem.GetCurrentInputSampleRate(), g_audioSystem.GetCurrentInputChannels(), g_offlineRendering, static_cast<VideoRecorder::VideoQuality>(g_videoQuality), static_cast<VideoRecorder::AudioBitrate>(g_audioBitrate));
+                if (g_offlineRendering) {
+                    g_offlineTime = g_timelineState.currentTime_seconds;
+                     if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile) {
+                        g_audioSystem.Pause();
+                        g_audioSystem.SetPlaybackProgress(g_offlineTime / g_audioSystem.GetPlaybackDuration());
+                    }
+                }
                 g_recordingStartTime = std::chrono::steady_clock::now();
             }
             f1_pressed = true;
@@ -1901,6 +2016,11 @@ void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS) {
         if (!f3_pressed) { g_showAudioWindow = !g_showAudioWindow; f3_pressed = true; }
     } else { f3_pressed = false; }
+
+    static bool f4_pressed = false;
+    if (glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS) {
+        if (!f4_pressed) { g_showFpsMeter = !g_showFpsMeter; f4_pressed = true; }
+    } else { f4_pressed = false; }
 }
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     (void)window;

@@ -1,4 +1,4 @@
-// === 3D Nebula Weave: Cosmic Flow Through Sacred Geometry ===
+// === 3D Nebula Weave: Cosmic Flow Through Sacred Geometry (DEBUG VERSION) ===
 
 #version 330 core
 out vec4 FragColor;
@@ -17,7 +17,7 @@ uniform vec3 AccentColor = vec3(1.0, 0.8, 0.4); // {"widget":"color", "palette":
 uniform vec3 HighlightColor = vec3(1.0, 0.4, 0.8); // {"widget":"color", "palette":true}
 uniform float u_audioSensitivity = 1.0; // {"widget":"slider", "min":0.1, "max":3.0, "step":0.1}
 
-// === PERFORMANCE CONTROLS ===
+// === PERFORMANCE CONTROLS (DEBUG) ===
 uniform int u_maxIters = 50; // {"widget":"slider", "min":10, "max":100, "step":1}
 uniform float u_stepSize = 0.9; // {"widget":"slider", "min":0.1, "max":1.0, "step":0.05}
 uniform float u_maxDist = 50.0; // {"widget":"slider", "min":10.0, "max":100.0, "step":1.0}
@@ -31,10 +31,8 @@ const float PI = 3.14159265359;
 const float TAU = 6.28318530718;
 const float PHI = 1.61803398875;   // Golden Ratio
 const float threshold = 0.001;
-const float maxIters = 50.0;
 const float ambient = 0.2;
 const float maxD = 100.0;
-const float MAX_DIST = 50.0;      // Required for raymarching
 
 // === Raymarching Infrastructure ===
 #define R(p,a) p=cos(a)*p+sin(a)*vec2(-p.y,p.x);
@@ -116,7 +114,7 @@ vec3 nebula_surface_color(vec3 point, int material_type) {
 
     // === ENERGY VEINS PULSING THROUGH - MIDS-DOMINATED GLOW ===
     float veins = 0.0;
-
+    
     for(int v = 0; v < u_veinCount; v++) {
         vec2 veinUV = uv1 + vec2(cos(float(v) * TAU/float(u_veinCount) + iTime * 0.8),
                                 sin(float(v) * TAU/float(u_veinCount) - iTime * 1.2));

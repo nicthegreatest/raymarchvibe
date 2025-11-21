@@ -54,10 +54,24 @@ struct SwrContextDeleter {
 
 class VideoRecorder : public IAudioListener {
 public:
+    enum class VideoQuality {
+        Low,
+        Medium,
+        High,
+        Ultra
+    };
+
+    enum class AudioBitrate {
+        Kbps128,
+        Kbps192,
+        Kbps320,
+        Lossless
+    };
+
     VideoRecorder();
     ~VideoRecorder();
 
-    bool start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels);
+    bool start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels, bool offline_mode = false, VideoQuality video_quality = VideoQuality::High, AudioBitrate audio_bitrate = AudioBitrate::Kbps192);
     void stop_recording();
     void add_video_frame_from_pbo(float deltaTime);
     void add_audio_frame(const float* samples, int num_samples);
@@ -83,6 +97,9 @@ private:
 
     // Recording settings
     bool m_recordAudio;
+    bool m_offlineMode;
+    VideoQuality m_videoQuality;
+    AudioBitrate m_audioBitrate;
 
     // Frame properties
     int frame_width;
@@ -114,6 +131,9 @@ private:
     std::queue<std::pair<std::vector<uint8_t>, std::chrono::steady_clock::time_point>> video_queue;
     std::atomic<bool> first_audio_frame_ready;
     std::queue<std::vector<float>> audio_queue;
+    
+    static const size_t MAX_QUEUE_SIZE = 60; // Limit queue to ~1 second of frames to prevent OOM
+    std::condition_variable queue_cv; // To signal when space is available
 };
 
 #endif // VIDEO_RECORDER_H

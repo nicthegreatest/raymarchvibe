@@ -26,11 +26,15 @@ void VideoRecorder::add_video_frame_from_pbo(float deltaTime) {
     if (!recording) return;
 
     frame_accumulator += deltaTime;
-    if (frame_accumulator < frame_duration) {
-        return; // Not time to capture a frame yet
+    if (!m_offlineMode && frame_accumulator < frame_duration) {
+        return; // Not time to capture a frame yet (only in real-time mode)
     }
 
-    frame_accumulator -= frame_duration;
+    if (!m_offlineMode) {
+        frame_accumulator -= frame_duration;
+    } else {
+        frame_accumulator = 0.0f; // Reset accumulator in offline mode to be safe
+    }
 
     auto capture_time = std::chrono::steady_clock::now();
     int next_pbo_index = (pbo_index + 1) % PBO_COUNT;
@@ -41,9 +45,14 @@ void VideoRecorder::add_video_frame_from_pbo(float deltaTime) {
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_pbo_index]);
     GLubyte* ptr = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
     if (ptr) {
-        std::lock_guard<std::mutex> lock(queue_mutex);
-        video_queue.push({std::vector<uint8_t>(ptr, ptr + frame_width * frame_height * 4), capture_time});
-        cv.notify_one();
+        std::unique_lock<std::mutex> lock(queue_mutex);
+        // Backpressure: Wait if queue is full to prevent OOM during slow encoding (e.g. Ultra quality)
+        queue_cv.wait(lock, [this] { return video_queue.size() < MAX_QUEUE_SIZE || !recording; });
+        
+        if (recording) {
+            video_queue.push({std::vector<uint8_t>(ptr, ptr + frame_width * frame_height * 4), capture_time});
+            cv.notify_one();
+        }
         glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     }
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
@@ -64,7 +73,7 @@ void VideoRecorder::onAudioData(const float* samples, uint32_t frameCount, int c
     }
 }
 
-bool VideoRecorder::start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels) {
+bool VideoRecorder::start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels, bool offline_mode, VideoQuality video_quality, AudioBitrate audio_bitrate) {
     if (recording) {
         std::cerr << "VideoRecorder::start_recording called while already recording." << std::endl;
         return false;
@@ -75,6 +84,9 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     frame_duration = 1.0 / static_cast<double>(frame_rate);
     frame_accumulator = 0.0;
     m_recordAudio = record_audio;
+    m_offlineMode = offline_mode;
+    m_videoQuality = video_quality;
+    m_audioBitrate = audio_bitrate;
     if (m_recordAudio) {
         this->input_audio_sample_rate = input_audio_sample_rate;
         this->input_audio_channels = input_audio_channels;
@@ -115,8 +127,32 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
     video_codec_ctx->time_base = {1, frame_rate};
     video_codec_ctx->framerate = {frame_rate, 1};
     video_codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    av_opt_set(video_codec_ctx->priv_data, "preset", "medium", 0);
-    av_opt_set(video_codec_ctx->priv_data, "crf", "18", 0);
+    video_codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    
+    const char* preset = "medium";
+    const char* crf = "18";
+
+    switch (m_videoQuality) {
+        case VideoQuality::Low:
+            preset = "veryfast";
+            crf = "28";
+            break;
+        case VideoQuality::Medium:
+            preset = "medium";
+            crf = "23";
+            break;
+        case VideoQuality::High:
+            preset = "slow";
+            crf = "18";
+            break;
+        case VideoQuality::Ultra:
+            preset = "veryslow";
+            crf = "14";
+            break;
+    }
+
+    av_opt_set(video_codec_ctx->priv_data, "preset", preset, 0);
+    av_opt_set(video_codec_ctx->priv_data, "crf", crf, 0);
     if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) video_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     if (avcodec_open2(video_codec_ctx.get(), video_codec, nullptr) < 0) { std::cerr << "Could not open video codec" << std::endl; return; }
     avcodec_parameters_from_context(video_stream->codecpar, video_codec_ctx.get());
@@ -124,11 +160,37 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
 
     // Audio Stream Setup (Conditional)
     if (m_recordAudio) {
-        const AVCodec* audio_codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+        const AVCodec* audio_codec = nullptr;
+        int64_t audio_bitrate = 192000;
+
+        if (m_audioBitrate == AudioBitrate::Lossless) {
+            audio_codec = avcodec_find_encoder(AV_CODEC_ID_ALAC);
+        } else {
+            audio_codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+            switch (m_audioBitrate) {
+                case AudioBitrate::Kbps128: audio_bitrate = 128000; break;
+                case AudioBitrate::Kbps192: audio_bitrate = 192000; break;
+                case AudioBitrate::Kbps320: audio_bitrate = 320000; break;
+                default: audio_bitrate = 192000; break;
+            }
+        }
+
+        if (!audio_codec) {
+            std::cerr << "Could not find requested audio codec, falling back to AAC" << std::endl;
+            audio_codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+        }
+
         audio_stream = avformat_new_stream(format_ctx.get(), audio_codec);
         audio_codec_ctx.reset(avcodec_alloc_context3(audio_codec));
-        audio_codec_ctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-        audio_codec_ctx->bit_rate = 192000;
+        
+        // ALAC typically uses S16P or S32P, AAC uses FLTP
+        if (audio_codec->id == AV_CODEC_ID_ALAC) {
+             audio_codec_ctx->sample_fmt = AV_SAMPLE_FMT_S16P;
+        } else {
+             audio_codec_ctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+        }
+
+        audio_codec_ctx->bit_rate = audio_bitrate;
         audio_codec_ctx->sample_rate = 44100;
         av_channel_layout_from_string(&audio_codec_ctx->ch_layout, "stereo");
         audio_codec_ctx->time_base = {1, audio_codec_ctx->sample_rate};
@@ -187,6 +249,7 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
             }
             auto frame_data = video_queue.front();
             video_queue.pop();
+            queue_cv.notify_one(); // Signal that space is available
             lock.unlock();
 
             const std::vector<uint8_t>& pixels = frame_data.first;
