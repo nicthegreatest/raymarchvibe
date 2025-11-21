@@ -17,6 +17,15 @@ uniform vec3 AccentColor = vec3(1.0, 0.8, 0.4); // {"widget":"color", "palette":
 uniform vec3 HighlightColor = vec3(1.0, 0.4, 0.8); // {"widget":"color", "palette":true}
 uniform float u_audioSensitivity = 1.0; // {"widget":"slider", "min":0.1, "max":3.0, "step":0.1}
 
+// === PERFORMANCE CONTROLS ===
+uniform int u_maxIters = 50; // {"widget":"slider", "min":10, "max":100, "step":1}
+uniform float u_stepSize = 0.9; // {"widget":"slider", "min":0.1, "max":1.0, "step":0.05}
+uniform float u_maxDist = 50.0; // {"widget":"slider", "min":10.0, "max":100.0, "step":1.0}
+uniform int u_shadowIters = 4; // {"widget":"slider", "min":0, "max":16, "step":1}
+uniform float u_shadowQuality = 8.0; // {"widget":"slider", "min":1.0, "max":32.0, "step":1.0}
+uniform int u_starCount = 10; // {"widget":"slider", "min":0, "max":20, "step":1}
+uniform int u_veinCount = 3; // {"widget":"slider", "min":0, "max":6, "step":1}
+
 // === Constants ===
 const float PI = 3.14159265359;
 const float TAU = 6.28318530718;
@@ -82,37 +91,40 @@ vec3 nebula_surface_color(vec3 point, int material_type) {
     float nebula = nebula1 + nebula2 + nebula3;
     nebula += all_smooth * 0.5; // Overall audio influence
 
-    // === MATRIX-CODE STARS FLOWING THROUGH THE WEAVE ===
-    vec2 starUV = uv1 * 12.0; // Matrix-code style - more frequent stars
+    // === MATRIX-CODE STARS - TREBLE-ENHANCED SPARKLE AND DENSITY ===
+    vec2 starUV = uv1 * (12.0 + treb_smooth * 3.0); // TREBLE MAKES MORE STARS appear
     float matrix_stars = 0.0;
 
-    for(int i = 0; i < 16; i++) { // More stars for matrix effect
+    for(int i = 0; i < u_starCount; i++) { // More stars for matrix effect
         vec2 si = vec2(float(i), float(i) * PHI) + vec2(sin(float(i)), cos(float(i)));
         vec2 ipos = floor(starUV + si);
         vec2 fpos = fract(starUV + si);
 
         float starHash = hash(ipos);
-        if(starHash > 0.995) { // More frequent stars
-            float starSize = starHash * 0.08 + treb_smooth * 0.04; // Larger, more reactive
+        // TREBLE LOWER THRESHOLD: More frequent stars with treble energy
+        if(starHash > 0.995 - treb_smooth * 0.1) { // Treble makes stars more frequent
+            float starSize = starHash * 0.08 + treb_smooth * 0.08; // TREBLE makes stars bigger
             // Matrix-code style - falling/streaming effect
-            float fallSpeed = sin(float(i) * 0.5) * 2.0 + 3.0;
+            float fallSpeed = sin(float(i) * 0.5) * 2.0 + 3.0 + treb_smooth * 1.5; // TREBLE makes them faster too
             float streamEffect = sin(fallSpeed * iTime + starHash * TAU) * 0.5 + 0.5;
             float starSparkle = sin(iTime * 12.0 + starHash * TAU * 2.0) * 0.5 + 0.5;
+            starSparkle *= 1.0 + treb_smooth * 0.5; // EXTRA TREBLE SPARKLE
             float finalStar = starSize * starSparkle * streamEffect / (length(fpos - 0.5) + 0.1);
             matrix_stars += finalStar;
         }
     }
 
-    // === ENERGY VEINS PULSING THROUGH ===
+    // === ENERGY VEINS PULSING THROUGH - MIDS-DOMINATED GLOW ===
     float veins = 0.0;
-    const int numVeins = 4;
 
-    for(int v = 0; v < numVeins; v++) {
-        vec2 veinUV = uv1 + vec2(cos(float(v) * TAU/float(numVeins) + iTime * 0.8),
-                                sin(float(v) * TAU/float(numVeins) - iTime * 1.2));
-        // Exponential falloff for energy veins
-        veins += exp(-length(veinUV) * 2.5) * (0.4 + mids_smooth * 0.6 + bass_smooth * 0.3);
-        veins += exp(-length(veinUV * 1.5) * 3.0) * (0.2 + treb_smooth * 0.4); // Secondary veins
+    for(int v = 0; v < u_veinCount; v++) {
+        vec2 veinUV = uv1 + vec2(cos(float(v) * TAU/float(u_veinCount) + iTime * 0.8),
+                                sin(float(v) * TAU/float(u_veinCount) - iTime * 1.2));
+        // MIDS make veins STRONG and prominent
+        float veinStrength = 0.4 + mids_smooth * 1.2 + bass_smooth * 0.2 + treb_smooth * 0.4;
+        // Exponential falloff for energy veins - enhanced by mids
+        veins += exp(-length(veinUV) * 2.5) * veinStrength;
+        veins += exp(-length(veinUV * 1.5) * 3.0) * (0.2 + mids_smooth * 0.8); // Stronger secondary with mids
     }
 
     // === PALETTE POWER: Reconnected Sacred Color Controls ===
@@ -167,8 +179,12 @@ vec3 nebula_surface_color(vec3 point, int material_type) {
 
 // === Cosmic Energy Strand Distance Functions ===
 
-// Helical cable with organic modulation
+// Helical cable with organic modulation - BASS-ACTIVATED THICKNESS
 float helicalCable(vec3 p, vec2 freq, float radius, float modulation) {
+    // BASS ENHANCED: Audio-modulated cable thickness
+    float bass_smooth = iAudioBandsAtt.x * u_audioSensitivity * 0.15;
+    radius *= 1.0 + bass_smooth; // Bass makes cables thicker
+
     // Convert to cylindrical coordinates
     float r = length(p.xz);
     float a = atan(p.z, p.x);
@@ -178,8 +194,9 @@ float helicalCable(vec3 p, vec2 freq, float radius, float modulation) {
     float rot = sin(iTime * 0.7 + a * 2.0) * 0.3;
     q.xz = mat2(cos(rot), -sin(rot), sin(rot), cos(rot)) * q.xz;
 
-    // Create helical pattern
+    // Create helical pattern - enhanced bass pulsing
     float heightMod = sin(freq.x * a + iTime * freq.y + q.y * 3.0) * modulation;
+    heightMod += sin(freq.x * a + iTime * freq.y * 0.5) * bass_smooth * 0.3; // Extra bass pulsing
 
     // Distance from center with organic swelling
     float dist = length(vec2(r - radius + heightMod * 0.1, q.y));
@@ -187,21 +204,27 @@ float helicalCable(vec3 p, vec2 freq, float radius, float modulation) {
     return dist - radius * 0.5 + sin(q.y * PI + iTime) * modulation * 0.2;
 }
 
-// Energy tendril with wave modulation
+// Energy tendril with wave modulation - BASS-RESPONSIVE STRENGTH
 float energyTendril(vec3 p, vec3 center, float radius) {
     vec3 q = p - center;
+
+    // BASS MODULATION: stronger presence with bass
+    float bass_smooth = iAudioBandsAtt.x * u_audioSensitivity * 0.1;
+    radius *= 1.0 + bass_smooth * 0.3; // Bass makes tendrils thicker
 
     // Apply wave modulation along the tendril
     float waveFreq = 4.0;
     float waveAmp = sin(q.y * waveFreq + iTime * 2.0) * 0.15;
     float waveAmp2 = cos(q.y * waveFreq * 1.3 + iTime * 1.4) * 0.1;
 
-    // Create asymmetric tendril shape
+    // Create asymmetric tendril shape - enhanced bass amplitude
+    waveAmp *= 1.0 + bass_smooth * 0.5; // More movement with bass
     float r = length(vec2(length(q.xz), q.y + waveAmp + waveAmp2 * 0.5));
     float dist = r - radius;
 
-    // Add organic pulsing
-    dist *= 1.0 + sin(iTime * 3.0 + q.y * PI) * 0.1;
+    // Add organic pulsing - enhanced by bass
+    float pulsing = sin(iTime * 3.0 + q.y * PI) * 0.1 * (1.0 + bass_smooth);
+    dist *= 1.0 + pulsing;
     dist -= cos(q.y * PI * 2.0) * radius * 0.2;
 
     return dist;
@@ -257,12 +280,12 @@ vec2 rm(vec3 pos, vec3 dir, float threshold, float td){
     float l,i, tl;
     l = 0.;
 
-    for(float i=0.; i<=1.; i+=1.0/maxIters){
+    for(float i=0.; i<=1.; i+=1.0/float(u_maxIters)){
         l = df(pos);
         if(abs(l) < threshold){
             break;
         }
-        pos += (l * dir * 0.7);
+        pos += (l * dir * u_stepSize);
     }
     l = length(startPos - pos);
     return vec2(l < td ? 1.0 : -1.0, min(l, td));
@@ -273,9 +296,9 @@ vec2 rm(vec3 pos, vec3 dir, float threshold, float td){
 float softShadow(vec3 pos, vec3 l, float r, float f, float td) {
     float d;
     vec3 p;
-    float o = 1.0, maxI = 10., or = r;
+    float o = 1.0, maxI = float(u_shadowIters), or = r;
     float len;
-    for (float i=10.; i>1.; i--) {
+    for (float i=float(u_shadowIters); i>1.; i--) {
         len = (i - 1.) / maxI;
         p = pos + ((l - pos) * len);
         r = or * len;
@@ -291,23 +314,19 @@ float softShadow(vec3 pos, vec3 l, float r, float f, float td) {
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
 
-    // Dynamic camera movement through the weave - AUDIO-REACTIVE
-    float bass_smooth = iAudioBandsAtt.x * u_audioSensitivity;
-    float mids_smooth = iAudioBandsAtt.y * u_audioSensitivity;
-    float treb_smooth = iAudioBandsAtt.z * u_audioSensitivity;
-
+    // Smooth camera movement through the weave - NO JERKY AUDIO CHRONOS
     vec3 camPos = vec3(
-        sin(iTime*.3 + bass_smooth) * 0.5,
-        sin(iTime*.3) + 3. + mids_smooth * 2.0,
-        iTime + cos(iTime*.2 + treb_smooth) * 1.0
+        sin(iTime*.3) * 0.5,
+        sin(iTime*.3) + 3.,
+        iTime + cos(iTime*.2) * 1.0
     );
 
     vec3 rayDir = vec3(uv, 1.0);
     rayDir = normalize(rayDir);
-    rayDir.yz = R(rayDir.yz, sin(iTime*.25)*.25+1.25 + bass_smooth * 0.5);
-    rayDir.xz = R(rayDir.xz, sin(iTime*.2) + mids_smooth * 0.3);
+    rayDir.yz = R(rayDir.yz, sin(iTime*.25)*.25+1.25);
+    rayDir.xz = R(rayDir.xz, sin(iTime*.2));
 
-    float gd = maxD;
+    float gd = u_maxDist;
     vec2 march = rm(camPos, rayDir, threshold, gd);
 
     vec3 col = vec3(0.0);
@@ -326,7 +345,9 @@ void main() {
         float intensity = max(dot(n, lightDir), 0.0) * 0.5;
 
 #ifdef SHADOWS
-        intensity *= softShadow(point, lightPos, 2.0, 8., gd) * 3.0;
+        if (u_shadowIters > 0) {
+            intensity *= softShadow(point, lightPos, 2.0, u_shadowQuality, gd) * 3.0;
+        }
 #endif
 
         intensity -= (march.y)*0.02;

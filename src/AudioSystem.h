@@ -41,6 +41,7 @@ public:
     bool InitializeAndStartSelectedCaptureDevice();
     void StopActiveDevice();
     void LoadWavFile(const char* filePath);
+    ma_uint64 ReadOfflineAudio(float* pOutput, ma_uint32 frameCount);
 
     // Audio Processing (called from main thread)
     void ProcessAudio();

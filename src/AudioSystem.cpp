@@ -148,6 +148,33 @@ void AudioSystem::LoadWavFile(const char* filePath) {
     }
 }
 
+ma_uint64 AudioSystem::ReadOfflineAudio(float* pOutput, ma_uint32 frameCount) {
+    if (!audioFileLoaded) return 0;
+
+    ma_uint64 framesRead;
+    ma_decoder_read_pcm_frames(&m_decoder, pOutput, frameCount, &framesRead);
+
+    // Process for visualization (FFT)
+    float* pSamples = static_cast<float*>(pOutput);
+    
+    // Feed the FFT buffer (mix to mono if stereo)
+    if (m_decoder.outputChannels == 1) {
+        m_file_fft_buffer.insert(m_file_fft_buffer.end(), pSamples, pSamples + framesRead);
+    } else if (m_decoder.outputChannels >= 2) {
+        for (ma_uint64 i = 0; i < framesRead; ++i) {
+            m_file_fft_buffer.push_back((pSamples[i * 2] + pSamples[i * 2 + 1]) * 0.5f);
+        }
+    }
+
+    // Calculate amplitude
+    ma_uint32 totalSamples = (ma_uint32)framesRead * m_decoder.outputChannels;
+    float sumOfAbsoluteSamples = 0.0f;
+    for (ma_uint32 i = 0; i < totalSamples; ++i) sumOfAbsoluteSamples += fabsf(pSamples[i]);
+    currentAudioAmplitude = totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) * m_amplitudeScale : 0.0f;
+
+    return framesRead;
+}
+
 void AudioSystem::RegisterListener(IAudioListener* listener) {
     if (listener) m_listeners.push_back(listener);
 }

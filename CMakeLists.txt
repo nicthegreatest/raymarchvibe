@@ -113,62 +113,175 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(miniaudio) # This makes miniaudio_SOURCE_DIR available
 
+
 # FFmpeg
+
+
 set(FFMPEG_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg)
 
+
+
+
+
 ExternalProject_Add(
+
+
     ffmpeg_project
+
+
     GIT_REPOSITORY https://github.com/FFmpeg/FFmpeg.git
+
+
     GIT_TAG n5.1.2
+
+
     UPDATE_COMMAND ""
+
+
     CONFIGURE_COMMAND <SOURCE_DIR>/configure 
+
+
         --prefix=${FFMPEG_INSTALL_DIR} 
+
+
         --disable-programs 
+
+
         --disable-doc 
+
+
         --disable-shared 
+
+
         --enable-static 
+
+
         --disable-everything 
+
+
         --enable-encoder=libx264
+
+
         --enable-libx264
+
+
         --enable-gpl
+
+
         --enable-nonfree
+
+
         --enable-encoder=mpeg4 
+
+
         --enable-encoder=aac 
+
+
         --enable-muxer=mp4 
+
+
         --enable-muxer=mov 
+
+
         --enable-muxer=mpg 
+
+
         --enable-protocol=file 
+
+
         --enable-avcodec 
+
+
         --enable-avformat 
+
+
         --enable-avutil 
+
+
         --enable-swresample 
+
+
         --enable-swscale 
+
+
         --extra-cflags="-fPIC" 
+
+
         --disable-x86asm 
+
+
         --disable-asm 
+
+
         --disable-vulkan 
+
+
         --disable-iconv 
+
+
         --disable-bzlib 
+
+
         --disable-lzma
+
+
     BUILD_COMMAND make -j4
+
+
     INSTALL_COMMAND make install
+
+
 )
 
+
+
+
+
 # Create imported target for FFmpeg
+
+
 add_library(ffmpeg INTERFACE)
+
+
 add_dependencies(ffmpeg ffmpeg_project)
+
+
+
+
 
 target_include_directories(ffmpeg INTERFACE ${FFMPEG_INSTALL_DIR}/include)
 
+
+
+
+
 # Find all the static libraries in the ffmpeg install lib dir
+
+
 set(FFMPEG_LIBS
+
+
     ${FFMPEG_INSTALL_DIR}/lib/libavformat.a
+
+
     ${FFMPEG_INSTALL_DIR}/lib/libavcodec.a
+
+
     ${FFMPEG_INSTALL_DIR}/lib/libswscale.a
+
+
     ${FFMPEG_INSTALL_DIR}/lib/libswresample.a
+
+
     ${FFMPEG_INSTALL_DIR}/lib/libavutil.a
+
+
     x264
+
+
     z
+
+
 )
 
 target_link_libraries(ffmpeg INTERFACE ${FFMPEG_LIBS})

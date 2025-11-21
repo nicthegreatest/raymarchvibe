@@ -1,3 +1,11 @@
+## [0.4.0] - 2025-11-21
+
+### Fixed
+- **Build System:** Corrected a critical dynamic linking issue where the application required a specific shared library version (`libx264.so.164`) that was not guaranteed to be on the user's system. The build process for FFmpeg was simplified to correctly use the system-installed `x264` development library, improving portability and fixing runtime errors on Linux.
+- **Rendering Pipeline:** Resolved a major rendering bug that caused a black screen or flashing colors instead of the correct shader output. The root cause was a vertex attribute mismatch in the final screen rendering step. Created `texture.vert` and `texture.frag` to correctly handle texture coordinates and restored core rendering functionality.
+
+---
+
 ## [0.3.9] - 2025-11-18
 
 ### Added
