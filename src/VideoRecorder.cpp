@@ -46,9 +46,18 @@ void VideoRecorder::add_video_frame_from_pbo(float deltaTime) {
     GLubyte* ptr = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
     if (ptr) {
         std::unique_lock<std::mutex> lock(queue_mutex);
-        // Backpressure: Wait if queue is full to prevent OOM during slow encoding (e.g. Ultra quality)
-        queue_cv.wait(lock, [this] { return video_queue.size() < MAX_QUEUE_SIZE || !recording; });
-        
+
+        if (m_offlineMode) {
+            // In offline mode, wait for space to prevent frame drops
+            queue_cv.wait(lock, [this] { return video_queue.size() < MAX_QUEUE_SIZE || !recording; });
+        } else if (video_queue.size() >= MAX_QUEUE_SIZE) {
+            // In real-time mode, drop the frame if the queue is full
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            pbo_index = next_pbo_index;
+            return;
+        }
+
         if (recording) {
             video_queue.push({std::vector<uint8_t>(ptr, ptr + frame_width * frame_height * 4), capture_time});
             cv.notify_one();
