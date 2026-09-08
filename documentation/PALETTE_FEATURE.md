@@ -85,7 +85,7 @@ uniform vec3 accentColor = vec3(0.0, 0.0, 1.0);
 
 ### Example Shaders
 
-**Basic palette usage:** See `shaders/palette_demo.frag` for:
+**Basic palette usage:** See `shaders/palette_sync_demo.frag` for:
 - Multiple palette-enabled uniforms
 - Animation controls
 - Different rendering techniques using palette colors
@@ -127,8 +127,7 @@ ShaderEffect::RenderEnhancedColorControl()
 5. **include/ShaderEffect.h** - Added RenderEnhancedColorControl method
 6. **src/ShaderEffect.cpp** - Implemented enhanced UI rendering with sync mode support
 7. **CMakeLists.txt** - Added ColorPaletteGenerator.cpp to build
-8. **shaders/palette_demo.frag** - Basic demo shader
-9. **shaders/palette_sync_demo.frag** - Advanced sync mode demo shader
+8. **shaders/palette_sync_demo.frag** - Palette demo shader (basic usage + advanced sync mode)
 
 ## Color Theory
 
@@ -236,7 +235,7 @@ Potential additions for future versions:
 ### Basic Palette Mode
 To test basic palette functionality:
 
-1. Open `shaders/palette_demo.frag` in the editor
+1. Open `shaders/palette_sync_demo.frag` in the editor
 2. Locate palette-enabled uniforms (marked with `[Palette]`)
 3. Expand a palette control
 4. Switch to "Palette" mode

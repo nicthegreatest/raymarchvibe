@@ -95,7 +95,7 @@ RaymarchVibe supports optional flags to speed up debugging and iteration:
 - `-load=PATH` (also `--load PATH` or `--load=PATH`): Load a fragment shader on startup.
   Examples:
   ```bash
-  ./RaymarchVibe -load=shaders/new_shader_test.frag
+  ./RaymarchVibe -load=shaders/raymarch_v2.frag
   ./RaymarchVibe --load /absolute/path/to/shader.frag
   ```
 
@@ -146,7 +146,7 @@ See the [TODO.md](documentation/TODO.md) for a complete list of planned features
 For detailed information about the project, see the `documentation/` directory:
 
 - **[SHADERS.md](documentation/SHADERS.md)** - Complete shader specification and creative guidelines (essential reading for shader authors!)
-- **[PALETTE_FEATURE.md](PALETTE_FEATURE.md)** - Enhanced color picker with palettes, harmonies, and gradients
+- **[PALETTE_FEATURE.md](documentation/PALETTE_FEATURE.md)** - Enhanced color picker with palettes, harmonies, and gradients
 - **[CHANGELOG.md](documentation/CHANGELOG.md)** - Version history and release notes
 - **[TODO.md](documentation/TODO.md)** - Planned features and improvements
 - **[CODE_REVIEW.md](documentation/CODE_REVIEW.md)** - Architectural overview and code quality assessment
