@@ -13,6 +13,10 @@ bool VideoRecorder::is_recording() const {
     return recording;
 }
 
+const std::string& VideoRecorder::get_last_error() const {
+    return last_error;
+}
+
 void VideoRecorder::init_pbos() {
     glGenBuffers(PBO_COUNT, pbos);
     for (int i = 0; i < PBO_COUNT; ++i) {
@@ -87,6 +91,31 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
         std::cerr << "VideoRecorder::start_recording called while already recording." << std::endl;
         return false;
     }
+    last_error.clear();
+
+    // Pre-flight validation: refuse invalid input with no state change (M6, M18).
+    if (width <= 0 || height <= 0) {
+        fail_start("Cannot start recording: invalid framebuffer size " + std::to_string(width) + "x" +
+                   std::to_string(height) + " (is the window minimized?).");
+        return false;
+    }
+    const AVOutputFormat* output_format = av_guess_format(format.c_str(), filename.c_str(), nullptr);
+    if (output_format == nullptr) {
+        fail_start("Cannot start recording: unknown container format \"" + format + "\".");
+        return false;
+    }
+    if (!avformat_query_codec(output_format, AV_CODEC_ID_H264, FF_COMPLIANCE_NORMAL)) {
+        fail_start("Cannot start recording: container format \"" + format + "\" does not support H.264 video.");
+        return false;
+    }
+    if (record_audio) {
+        const AVCodecID audio_codec_id = (audio_bitrate == AudioBitrate::Lossless) ? AV_CODEC_ID_ALAC : AV_CODEC_ID_AAC;
+        if (!avformat_query_codec(output_format, audio_codec_id, FF_COMPLIANCE_NORMAL)) {
+            fail_start("Cannot start recording: container format \"" + format + "\" does not support the selected audio codec.");
+            return false;
+        }
+    }
+
     frame_width = width;
     frame_height = height;
     frame_rate = fps;
@@ -100,6 +129,13 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
         this->input_audio_sample_rate = input_audio_sample_rate;
         this->input_audio_channels = input_audio_channels;
     }
+
+    // Encoder setup runs synchronously before any state is committed or the thread is
+    // spawned, so start_recording can never report success on a dead setup (C2).
+    if (!setup_encoder(filename, format)) {
+        return false;
+    }
+
     init_pbos();
     recording = true;
     next_video_pts = 0;
@@ -107,7 +143,7 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     last_video_pts = -1;
     recording_start_time = std::chrono::steady_clock::now();
     first_audio_frame_ready = false;
-    encoding_thread = std::thread(&VideoRecorder::encoding_thread_main, this, filename, format);
+    encoding_thread = std::thread(&VideoRecorder::encoding_thread_main, this);
     return true;
 }
 
@@ -121,11 +157,24 @@ void VideoRecorder::stop_recording() {
     glDeleteBuffers(PBO_COUNT, pbos);
 }
 
-void VideoRecorder::encoding_thread_main(const std::string& filename, const std::string& format) {
+// Single cleanup path for every failed start: clear recording, wake any waiters so
+// nothing blocks or keeps queueing, and stash a user-visible reason (C2).
+void VideoRecorder::fail_start(const std::string& message) {
+    recording = false;
+    cv.notify_all();
+    queue_cv.notify_all();
+    last_error = message;
+    std::cerr << "VideoRecorder: " << message << std::endl;
+}
+
+bool VideoRecorder::setup_encoder(const std::string& filename, const std::string& format) {
     AVFormatContext* raw_format_ctx = nullptr;
     avformat_alloc_output_context2(&raw_format_ctx, nullptr, format.c_str(), filename.c_str());
     format_ctx.reset(raw_format_ctx);
-    if (!format_ctx) { std::cerr << "Could not create output context" << std::endl; return; }
+    if (!format_ctx) {
+        fail_start("Could not create output context for \"" + format + "\".");
+        return false;
+    }
 
     // Video Stream Setup
     const AVCodec* video_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
@@ -163,7 +212,10 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
     av_opt_set(video_codec_ctx->priv_data, "preset", preset, 0);
     av_opt_set(video_codec_ctx->priv_data, "crf", crf, 0);
     if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) video_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    if (avcodec_open2(video_codec_ctx.get(), video_codec, nullptr) < 0) { std::cerr << "Could not open video codec" << std::endl; return; }
+    if (avcodec_open2(video_codec_ctx.get(), video_codec, nullptr) < 0) {
+        fail_start("Could not open video codec.");
+        return false;
+    }
     avcodec_parameters_from_context(video_stream->codecpar, video_codec_ctx.get());
     video_stream->time_base = {1, 90000};
 
@@ -204,15 +256,24 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
         av_channel_layout_from_string(&audio_codec_ctx->ch_layout, "stereo");
         audio_codec_ctx->time_base = {1, audio_codec_ctx->sample_rate};
         if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) audio_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-        if (avcodec_open2(audio_codec_ctx.get(), audio_codec, nullptr) < 0) { std::cerr << "Could not open audio codec" << std::endl; return; }
+        if (avcodec_open2(audio_codec_ctx.get(), audio_codec, nullptr) < 0) {
+            fail_start("Could not open audio codec.");
+            return false;
+        }
         avcodec_parameters_from_context(audio_stream->codecpar, audio_codec_ctx.get());
         audio_stream->time_base = {1, 90000};
     }
 
     if (!(format_ctx->oformat->flags & AVFMT_NOFILE)) {
-        if (avio_open(&format_ctx->pb, filename.c_str(), AVIO_FLAG_WRITE) < 0) { std::cerr << "Could not open output file" << std::endl; return; }
+        if (avio_open(&format_ctx->pb, filename.c_str(), AVIO_FLAG_WRITE) < 0) {
+            fail_start("Could not open output file \"" + filename + "\".");
+            return false;
+        }
     }
-    if (avformat_write_header(format_ctx.get(), nullptr) < 0) { std::cerr << "Could not write header" << std::endl; return; }
+    if (avformat_write_header(format_ctx.get(), nullptr) < 0) {
+        fail_start("Could not write header to \"" + filename + "\".");
+        return false;
+    }
 
     // Video Frame Setup
     video_frame.reset(av_frame_alloc());
@@ -243,7 +304,11 @@ void VideoRecorder::encoding_thread_main(const std::string& filename, const std:
     }
 
     sws_ctx.reset(sws_getContext(frame_width, frame_height, AV_PIX_FMT_RGBA, frame_width, frame_height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, nullptr, nullptr, nullptr));
-    
+
+    return true;
+}
+
+void VideoRecorder::encoding_thread_main() {
     std::vector<float> audio_input_buffer;
     while (recording || !video_queue.empty() || (m_recordAudio && !audio_queue.empty())) {
         std::unique_lock<std::mutex> lock(queue_mutex);
