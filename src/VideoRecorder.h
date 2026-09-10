@@ -76,12 +76,16 @@ public:
     void add_video_frame_from_pbo(float deltaTime);
     void add_audio_frame(const float* samples, int num_samples);
     bool is_recording() const;
+    // Human-readable reason for the most recent failed start (empty if none / last start succeeded).
+    const std::string& get_last_error() const;
     void init_pbos();
 
     void onAudioData(const float* samples, uint32_t frameCount, int channels, int sampleRate) override;
 
 private:
-    void encoding_thread_main(const std::string& filename, const std::string& format);
+    bool setup_encoder(const std::string& filename, const std::string& format);
+    void fail_start(const std::string& message);
+    void encoding_thread_main();
 
     // FFmpeg components using RAII
     std::unique_ptr<AVFormatContext, AVFormatContextDeleter> format_ctx;
@@ -126,6 +130,7 @@ private:
     std::atomic<bool> recording;
     std::mutex queue_mutex;
     std::condition_variable cv;
+    std::string last_error;
 
     // Frame queues
     std::queue<std::pair<std::vector<uint8_t>, std::chrono::steady_clock::time_point>> video_queue;
