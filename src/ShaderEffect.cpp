@@ -941,7 +941,6 @@ static std::string InjectStandardUniforms(const std::string& source, bool isShad
 }
 
 void ShaderEffect::CompileAndLinkShader() {
-    if (m_shaderProgram != 0) glDeleteProgram(m_shaderProgram);
     m_compileErrorLog.clear();
 
     std::string vsError, fsError, linkError;
@@ -998,11 +997,18 @@ void ShaderEffect::CompileAndLinkShader() {
         return;
     }
 
-    m_shaderProgram = CreateShaderProgram(vertexShader, fragmentShader, linkError);
-    if (m_shaderProgram == 0) {
+    // Compile/link into a local program and swap it in only on success, so a failed
+    // recompile keeps the last-good program instead of leaving a deleted handle in
+    // m_shaderProgram (which Render() would otherwise pass to glUseProgram).
+    GLuint newProgram = CreateShaderProgram(vertexShader, fragmentShader, linkError);
+    if (newProgram == 0) {
         m_compileErrorLog += (fsError.empty() ? "" : ("Fragment Shader Log:\n" + fsError + "\n")) +
                              "Shader Link Error:\n" + linkError;
+        return;
     }
+
+    if (m_shaderProgram != 0) glDeleteProgram(m_shaderProgram);
+    m_shaderProgram = newProgram;
 }
 
 
