@@ -22,25 +22,22 @@ Dive in, tweak, explore, and vibe with your shaders!
 
 ## Dependencies
 
-RaymarchVibe relies on the following libraries, which are fetched automatically using CMake's `FetchContent` where possible:
+RaymarchVibe needs a C++17 compiler, CMake 3.15+ and OpenGL 3.3+ drivers. Everything else is fetched automatically with CMake's `FetchContent`: GLFW, Dear ImGui, ImGuiColorTextEdit, nlohmann/json, cpp-httplib, miniaudio, GLAD (vendored in `src/`) and GLM.
 
-* C++17 Compiler: (e.g., GCC, Clang, MSVC)
-* CMake: (version 3.15 or higher)
-* OpenGL: (version 3.3 or higher)
-* GLFW: For windowing and input.
-* Dear ImGui: For the graphical user interface.
-* ImGuiColorTextEdit: For the enhanced shader code editor.
-* GLAD: OpenGL Loading Library.
-* cpp-httplib: For fetching shaders from Shadertoy.com (requires OpenSSL for HTTPS).
-* nlohmann/json: For parsing JSON data (used with Shadertoy API).
+FFmpeg n5.1.2 is also downloaded and compiled from source on the first build. That takes a while and is why `libx264-dev` is required below.
 
-**System Libraries (Linux):**
-While CMake automatically fetches and builds libraries like GLFW, you still need the development headers for their underlying dependencies (like X11 and OpenGL) to be present on your system.
+**System packages (Debian/Ubuntu):**
 
-* OpenGL development libraries (e.g `libgl1-mesa-dev`, `freeglut3-dev`)
-* GLFW development libraries (e.g `libglfw3-dev`)
-* X11 development libraries (e.g `libx11-dev`, `libxrandr-dev`, `libxinerama-dev`, `libxcursor-dev`, `libxi-dev`)
-* OpenSSL development libraries (e.g `libssl-dev`) for HTTPS Shadertoy fetching.
+```bash
+sudo apt update
+sudo apt install build-essential cmake libglm-dev libglfw3-dev libgl1-mesa-dev \
+    libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libxkbcommon-dev \
+    libasound2-dev libssl-dev libx264-dev
+```
+
+*   `libglm-dev` is optional: if no system GLM is found, CMake downloads a pinned copy automatically (configure with `-DRAYMARCHVIBE_FETCH_GLM=OFF` to require a system install instead).
+*   `libssl-dev` is only needed for HTTPS Shadertoy fetching (configure with `-DRAYMARCHVIBE_ENABLE_SSL=OFF` to build without it).
+*   `libasound2-dev` provides the ALSA headers used by miniaudio for audio input; `libx264-dev` is required by the locally built FFmpeg.
 
 ## Build Instructions (Linux)
 
@@ -50,12 +47,7 @@ While CMake automatically fetches and builds libraries like GLFW, you still need
     cd raymarchvibe/
     ```
 
-2.  Install Dependencies (if not already present):
-    ```bash
-    # For Debian/Ubuntu-based systems:
-    sudo apt update
-    sudo apt install build-essential cmake libgl1-mesa-dev libglfw3-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev libx264-dev
-    ```
+2.  Install dependencies (if not already present) — see [Dependencies](#dependencies) for the package list and what each one is for.
 
 3.  Configure with CMake:
     Create a build directory and run cmake from within it.
