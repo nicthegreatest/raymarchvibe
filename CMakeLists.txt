@@ -9,6 +9,47 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 include(FetchContent)
 include(ExternalProject)
 
+# --- GLM (OpenGL Mathematics, header-only) --------------------------------
+# GLM is used by src/main.cpp, src/ShaderEffect.cpp, include/ColorPaletteGenerator.h
+# and include/ShaderParser.h. It is checked before the other dependencies so a
+# missing GLM fails fast instead of after several minutes of downloading.
+option(RAYMARCHVIBE_FETCH_GLM
+       "Download GLM with FetchContent when no system GLM installation is found" ON)
+set(RAYMARCHVIBE_GLM_TAG "1.0.1" CACHE STRING "g-truc/glm tag to fetch when no system GLM is found")
+
+find_package(glm QUIET)
+set(RAYMARCHVIBE_GLM_DESC "system install")
+
+if(NOT glm_FOUND AND NOT TARGET glm::glm AND RAYMARCHVIBE_FETCH_GLM)
+  set(RAYMARCHVIBE_GLM_DESC "fetched ${RAYMARCHVIBE_GLM_TAG} via FetchContent")
+  message(STATUS "No system GLM found; fetching glm ${RAYMARCHVIBE_GLM_TAG} from GitHub.")
+  FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG ${RAYMARCHVIBE_GLM_TAG}
+  )
+  FetchContent_MakeAvailable(glm)
+  # Older GLM releases only define the `glm` target; provide the imported name
+  # the rest of this file links against.
+  if(NOT TARGET glm::glm AND DEFINED glm_SOURCE_DIR)
+    add_library(glm::glm INTERFACE IMPORTED GLOBAL)
+    set_target_properties(glm::glm PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${glm_SOURCE_DIR}")
+  endif()
+endif()
+
+if(NOT TARGET glm::glm)
+  message(FATAL_ERROR
+    "GLM (OpenGL Mathematics) is required by RaymarchVibe but was not found.\n"
+    "Install it, e.g.:\n"
+    "  Debian/Ubuntu: sudo apt install libglm-dev\n"
+    "  Fedora:        sudo dnf install glm-devel\n"
+    "  Arch:          sudo pacman -S glm\n"
+    "  macOS:         brew install glm\n"
+    "Or re-run CMake with -DRAYMARCHVIBE_FETCH_GLM=ON (the default) to download it "
+    "automatically, or point CMake at an existing install with -Dglm_DIR=<dir>.")
+endif()
+
 FetchContent_Declare(
   nlohmann_json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -353,6 +394,7 @@ target_include_directories(RaymarchVibe PRIVATE
 
 target_link_libraries(RaymarchVibe PRIVATE
   glad_lib
+  glm::glm # Header-only; provides the GLM include directory
   nlohmann_json::nlohmann_json
   glfw # Modern CMake target for GLFW, trying non-namespaced
   Threads::Threads
@@ -400,3 +442,4 @@ message(STATUS "RaymarchVibe configured.")
 message(STATUS "  Source directory: ${CMAKE_CURRENT_SOURCE_DIR}")
 message(STATUS "  Build directory:  ${CMAKE_CURRENT_BINARY_DIR}")
 message(STATUS "  SSL for httplib: ${RAYMARCHVIBE_ENABLE_SSL} (OpenSSL Found: ${OpenSSL_FOUND})")
+message(STATUS "  GLM: ${RAYMARCHVIBE_GLM_DESC}")
