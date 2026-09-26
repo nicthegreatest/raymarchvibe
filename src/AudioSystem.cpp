@@ -23,10 +23,17 @@ AudioSystem::AudioSystem() {
     enableAudioShaderLink = false;
     m_amplitudeScale = 1.0f;
     m_isPlaying = false;
+    m_shuttingDown = false;
+    m_playbackCursorFrames = 0;
+    m_captureChannels = 0;
+    m_captureSampleRate = 0;
+    m_playbackBytesPerFrame = 0;
+    for (auto& slot : m_listeners) slot.store(nullptr, std::memory_order_relaxed);
 
     m_fft_input.resize(FFT_SIZE);
     m_fftData.resize(FFT_SIZE / 2, 0.0f);
     m_audioBands.fill(0.0f);
+    // The FFT rings (m_mic_fft_buffer / m_file_fft_buffer) preallocate themselves.
 }
 
 // --- Destructor ---
@@ -42,12 +49,31 @@ bool AudioSystem::Initialize() {
         return false;
     }
     contextInitialized = true;
+    m_shuttingDown.store(false, std::memory_order_release);
     EnumerateCaptureDevices();
     return true;
 }
 
 void AudioSystem::Shutdown() {
+    // Teardown order (H1/M3), and it matters:
+    //  1. tell the audio callback to stop touching shared state,
+    //  2. stop both devices - ma_device_uninit() waits for the device thread, so no
+    //     callback is running once it returns,
+    //  3. only then destroy the decoder that callback was reading from
+    //     (previously Shutdown() leaked it and LoadWavFile() uninit'ed it underneath a
+    //     live callback),
+    //  4. finally the miniaudio context.
+    m_shuttingDown.store(true, std::memory_order_release);
     StopActiveDevice();
+    {
+        std::lock_guard<std::mutex> decoderLock(m_decoderMutex);
+        if (audioFileLoaded.load(std::memory_order_relaxed)) {
+            ma_decoder_uninit(&m_decoder);
+            audioFileLoaded.store(false, std::memory_order_relaxed);
+            m_isPlaying.store(false, std::memory_order_relaxed);
+            m_playbackCursorFrames.store(0, std::memory_order_relaxed);
+        }
+    }
     if (contextInitialized) {
         ma_context_uninit(&miniaudioContext);
         contextInitialized = false;
@@ -105,105 +131,166 @@ bool AudioSystem::InitializeAndStartSelectedCaptureDevice() {
     deviceConfig.capture.pDeviceID = &miniaudioAvailableCaptureDevicesInfo[selectedActualCaptureDeviceIndex].id;
 
     if (ma_device_init(&miniaudioContext, &deviceConfig, &device) != MA_SUCCESS) return false;
+    // Publish the capture parameters before the device can call back into us: the audio
+    // thread reads these atomics instead of `device`, which the main thread rewrites here
+    // and in ma_device_uninit().
+    m_captureChannels.store(device.capture.channels, std::memory_order_relaxed);
+    m_captureSampleRate.store(device.sampleRate, std::memory_order_relaxed);
     if (ma_device_start(&device) != MA_SUCCESS) {
         ma_device_uninit(&device);
         return false;
     }
-    miniaudioDeviceInitialized = true;
+    miniaudioDeviceInitialized.store(true, std::memory_order_release);
     return true;
 }
 
 void AudioSystem::StopActiveDevice() {
-    if (miniaudioDeviceInitialized) {
+    if (miniaudioDeviceInitialized.load(std::memory_order_relaxed)) {
         ma_device_uninit(&device);
-        miniaudioDeviceInitialized = false;
+        miniaudioDeviceInitialized.store(false, std::memory_order_release);
     }
+    StopPlaybackDevice();
+    currentAudioAmplitude.store(0.0f, std::memory_order_relaxed);
+}
+
+// Stops only the playback device. LoadWavFile() needs this: the playback callback reads
+// the decoder, so it must be gone before the decoder is uninit'ed/re-initialised (M3),
+// and stopping the capture device at the same time would kill a live microphone.
+void AudioSystem::StopPlaybackDevice() {
     if (m_playbackDeviceInitialized) {
         ma_device_uninit(&m_playbackDevice);
         m_playbackDeviceInitialized = false;
     }
-    currentAudioAmplitude = 0.0f;
 }
 
 void AudioSystem::LoadWavFile(const char* filePath) {
-    if (audioFileLoaded) ma_decoder_uninit(&m_decoder);
-    audioFileLoaded = false;
-    if (!filePath || filePath[0] == '\0') return;
+    // The playback callback is reading m_decoder; stop it (ma_device_uninit joins the
+    // device thread) and hold m_decoderMutex so the swap can never overlap a read.
+    StopPlaybackDevice();
+    {
+        std::lock_guard<std::mutex> decoderLock(m_decoderMutex);
+        if (audioFileLoaded.load(std::memory_order_relaxed)) ma_decoder_uninit(&m_decoder);
+        audioFileLoaded.store(false, std::memory_order_relaxed);
+        m_playbackCursorFrames.store(0, std::memory_order_relaxed);
+        if (!filePath || filePath[0] == '\0') return;
 
-    ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_f32, 0, 0);
-    if (ma_decoder_init_file(filePath, &decoderConfig, &m_decoder) != MA_SUCCESS) return;
+        ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_f32, 0, 0);
+        if (ma_decoder_init_file(filePath, &decoderConfig, &m_decoder) != MA_SUCCESS) return;
 
-    audioFileChannels = m_decoder.outputChannels;
-    audioFileSampleRate = m_decoder.outputSampleRate;
-    ma_decoder_get_length_in_pcm_frames(&m_decoder, &audioFileTotalFrameCount);
-    if (audioFileTotalFrameCount == 0) {
-        ma_decoder_uninit(&m_decoder);
-        return;
+        audioFileChannels = m_decoder.outputChannels;
+        audioFileSampleRate = m_decoder.outputSampleRate;
+        ma_decoder_get_length_in_pcm_frames(&m_decoder, &audioFileTotalFrameCount);
+        if (audioFileTotalFrameCount == 0) {
+            ma_decoder_uninit(&m_decoder);
+            return;
+        }
+
+        audioFileLoaded.store(true, std::memory_order_release);
     }
-
-    audioFileLoaded = true;
-    m_isPlaying = true;
-    if (m_isPlaying && currentAudioSource == AudioSource::AudioFile) {
+    m_isPlaying.store(true, std::memory_order_relaxed);
+    if (m_isPlaying.load(std::memory_order_relaxed) && currentAudioSource.load(std::memory_order_relaxed) == AudioSource::AudioFile) {
         InitializeAndStartPlaybackDevice();
     }
 }
 
 ma_uint64 AudioSystem::ReadOfflineAudio(float* pOutput, ma_uint32 frameCount) {
-    if (!audioFileLoaded) return 0;
+    if (!audioFileLoaded.load(std::memory_order_acquire)) return 0;
 
-    ma_uint64 framesRead;
-    ma_decoder_read_pcm_frames(&m_decoder, pOutput, frameCount, &framesRead);
+    ma_uint64 framesRead = 0;
+    ma_uint32 channels = 0;
+    {
+        // Main-thread read of the decoder; the audio thread takes this lock with try_lock
+        // only, so it can never be blocked by this.
+        std::lock_guard<std::mutex> decoderLock(m_decoderMutex);
+        channels = m_decoder.outputChannels;
+        ma_decoder_read_pcm_frames(&m_decoder, pOutput, frameCount, &framesRead);
+        ma_uint64 cursor = 0;
+        ma_decoder_get_cursor_in_pcm_frames(&m_decoder, &cursor);
+        m_playbackCursorFrames.store(cursor, std::memory_order_relaxed);
+    }
 
     // Process for visualization (FFT)
     float* pSamples = static_cast<float*>(pOutput);
-    
-    // Feed the FFT buffer (mix to mono if stereo)
-    if (m_decoder.outputChannels == 1) {
-        m_file_fft_buffer.insert(m_file_fft_buffer.end(), pSamples, pSamples + framesRead);
-    } else if (m_decoder.outputChannels >= 2) {
-        for (ma_uint64 i = 0; i < framesRead; ++i) {
-            m_file_fft_buffer.push_back((pSamples[i * 2] + pSamples[i * 2 + 1]) * 0.5f);
-        }
-    }
+
+    // Feed the FFT ring (mono for mono, pair-averaged for anything with >1 channel)
+    pushFileFftSamples(pSamples, (size_t)framesRead, (size_t)channels);
 
     // Calculate amplitude
-    ma_uint32 totalSamples = (ma_uint32)framesRead * m_decoder.outputChannels;
+    ma_uint32 totalSamples = (ma_uint32)framesRead * channels;
     float sumOfAbsoluteSamples = 0.0f;
     for (ma_uint32 i = 0; i < totalSamples; ++i) sumOfAbsoluteSamples += fabsf(pSamples[i]);
-    currentAudioAmplitude = totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) * m_amplitudeScale : 0.0f;
+    currentAudioAmplitude.store(totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) * m_amplitudeScale.load(std::memory_order_relaxed) : 0.0f,
+                                std::memory_order_relaxed);
 
     return framesRead;
 }
 
+// Microphone path. The original code appended frameCount * channels raw (interleaved)
+// samples here - it never mixed the capture path to mono, unlike the file path - so this
+// does exactly that.
+// Called from the audio thread, so this uses try_lock: if the main thread is mid copy the
+// block is simply skipped rather than stalling the device.
+void AudioSystem::pushMicFftSamples(const float* pSamples, size_t frameCount, size_t channels) {
+    if (pSamples == nullptr || frameCount == 0 || channels == 0) return;
+    std::unique_lock<std::mutex> bufferLock(m_bufferMutex, std::try_to_lock);
+    if (!bufferLock.owns_lock()) return;
+    m_mic_fft_buffer.pushRaw(pSamples, frameCount * channels);
+}
+
+// Playback path. Reproduces the original mono/multichannel split exactly: one sample per
+// frame for a mono file, and for anything with more than one channel the average of the
+// first two channels of each frame (`(s[i*2] + s[i*2+1]) * 0.5f`).
+// try_lock for the same reason as above (this one also runs on the audio thread).
+void AudioSystem::pushFileFftSamples(const float* pSamples, size_t frameCount, size_t channels) {
+    if (pSamples == nullptr || frameCount == 0 || channels == 0) return;
+    std::unique_lock<std::mutex> bufferLock(m_bufferMutex, std::try_to_lock);
+    if (!bufferLock.owns_lock()) return;
+    if (channels == 1) m_file_fft_buffer.pushRaw(pSamples, frameCount);
+    else               m_file_fft_buffer.pushFrames(pSamples, frameCount);
+}
+
 void AudioSystem::RegisterListener(IAudioListener* listener) {
-    if (listener) m_listeners.push_back(listener);
+    if (!listener) return;
+    for (auto& slot : m_listeners) {
+        IAudioListener* expected = nullptr;
+        if (slot.compare_exchange_strong(expected, listener, std::memory_order_release, std::memory_order_relaxed)) return;
+        if (expected == listener) return; // already registered
+    }
+    AppendToErrorLog("AUDIO WARNING: listener table full (max " + std::to_string(MAX_LISTENERS) + "); listener not registered.");
 }
 
 void AudioSystem::UnregisterListener(IAudioListener* listener) {
-    m_listeners.erase(std::remove(m_listeners.begin(), m_listeners.end(), listener), m_listeners.end());
+    if (!listener) return;
+    for (auto& slot : m_listeners) {
+        IAudioListener* expected = listener;
+        slot.compare_exchange_strong(expected, nullptr, std::memory_order_release, std::memory_order_relaxed);
+    }
 }
 
 // --- Getters ---
-float AudioSystem::GetCurrentAmplitude() const { return currentAudioAmplitude * m_amplitudeScale; }
-bool AudioSystem::IsCaptureDeviceInitialized() const { return miniaudioDeviceInitialized; }
-bool AudioSystem::IsAudioFileLoaded() const { return audioFileLoaded; }
+float AudioSystem::GetCurrentAmplitude() const {
+    return currentAudioAmplitude.load(std::memory_order_relaxed) * m_amplitudeScale.load(std::memory_order_relaxed);
+}
+bool AudioSystem::IsCaptureDeviceInitialized() const { return miniaudioDeviceInitialized.load(std::memory_order_relaxed); }
+bool AudioSystem::IsAudioFileLoaded() const { return audioFileLoaded.load(std::memory_order_relaxed); }
 const std::vector<const char*>& AudioSystem::GetCaptureDeviceGUINames() const { return miniaudioCaptureDevice_CString_Names; }
 int AudioSystem::GetSelectedCaptureDeviceIndex() const { return selectedActualCaptureDeviceIndex; }
 bool AudioSystem::WereDevicesEnumerated() const { return captureDevicesEnumerated; }
 bool AudioSystem::IsAudioLinkEnabled() const { return enableAudioShaderLink; }
-AudioSystem::AudioSource AudioSystem::GetCurrentAudioSource() const { return currentAudioSource; }
+AudioSystem::AudioSource AudioSystem::GetCurrentAudioSource() const { return currentAudioSource.load(std::memory_order_relaxed); }
 char* AudioSystem::GetAudioFilePathBuffer() { return audioFilePathInputBuffer; }
 const std::string& AudioSystem::GetLastError() const { return lastErrorLog; }
 
 float AudioSystem::GetPlaybackProgress() {
-    if (!audioFileLoaded || audioFileTotalFrameCount == 0) return 0.0f;
-    ma_uint64 cursor;
-    ma_decoder_get_cursor_in_pcm_frames(&m_decoder, &cursor);
-    return (float)cursor / (float)audioFileTotalFrameCount;
+    if (!audioFileLoaded.load(std::memory_order_relaxed) || audioFileTotalFrameCount == 0) return 0.0f;
+    // The cursor is mirrored into an atomic by whoever last read the decoder (the audio
+    // callback, ReadOfflineAudio or a seek) instead of querying m_decoder from here,
+    // which raced with the callback's own reads.
+    return (float)m_playbackCursorFrames.load(std::memory_order_relaxed) / (float)audioFileTotalFrameCount;
 }
 
 float AudioSystem::GetPlaybackDuration() const {
-    if (!audioFileLoaded || audioFileSampleRate == 0) return 0.0f;
+    if (!audioFileLoaded.load(std::memory_order_relaxed) || audioFileSampleRate == 0) return 0.0f;
     return (float)audioFileTotalFrameCount / (float)audioFileSampleRate;
 }
 
@@ -212,25 +299,27 @@ const std::vector<float>& AudioSystem::GetFFTData() const { return m_fftData; }
 const std::array<float, 4>& AudioSystem::GetAudioBands() const { return m_audioBands; }
 
 ma_uint32 AudioSystem::GetCurrentInputSampleRate() const {
-    if (currentAudioSource == AudioSource::Microphone) {
+    if (currentAudioSource.load(std::memory_order_relaxed) == AudioSource::Microphone) {
         // If the device is not yet initialized, it has no sample rate. Return a sensible default.
-        if (!miniaudioDeviceInitialized) return 48000;
-        return device.sampleRate;
+        if (!miniaudioDeviceInitialized.load(std::memory_order_relaxed)) return 48000;
+        // Same value as device.sampleRate, published when the device was started.
+        return m_captureSampleRate.load(std::memory_order_relaxed);
     }
-    if (currentAudioSource == AudioSource::AudioFile) {
-        if (!audioFileLoaded) return 48000; // Default if no file is loaded
+    if (currentAudioSource.load(std::memory_order_relaxed) == AudioSource::AudioFile) {
+        if (!audioFileLoaded.load(std::memory_order_relaxed)) return 48000; // Default if no file is loaded
         return audioFileSampleRate;
     }
     return 48000; // Fallback default
 }
 
 ma_uint32 AudioSystem::GetCurrentInputChannels() const {
-    if (currentAudioSource == AudioSource::Microphone) {
-        if (!miniaudioDeviceInitialized) return 1; // Default to mono
-        return device.capture.channels;
+    if (currentAudioSource.load(std::memory_order_relaxed) == AudioSource::Microphone) {
+        if (!miniaudioDeviceInitialized.load(std::memory_order_relaxed)) return 1; // Default to mono
+        // Same value as device.capture.channels, published when the device was started.
+        return m_captureChannels.load(std::memory_order_relaxed);
     }
-    if (currentAudioSource == AudioSource::AudioFile) {
-        if (!audioFileLoaded) return 1; // Default to mono
+    if (currentAudioSource.load(std::memory_order_relaxed) == AudioSource::AudioFile) {
+        if (!audioFileLoaded.load(std::memory_order_relaxed)) return 1; // Default to mono
         return audioFileChannels;
     }
     return 1; // Fallback default
@@ -250,14 +339,14 @@ void AudioSystem::SetSelectedCaptureDeviceIndex(int index) {
 void AudioSystem::SetAudioLinkEnabled(bool enabled) { enableAudioShaderLink = enabled; }
 
 void AudioSystem::SetCurrentAudioSource(AudioSource source) {
-    if (currentAudioSource == source) return;
-    currentAudioSource = source;
-    currentAudioAmplitude = 0.0f;
+    if (currentAudioSource.load(std::memory_order_relaxed) == source) return;
+    currentAudioSource.store(source, std::memory_order_release);
+    currentAudioAmplitude.store(0.0f, std::memory_order_relaxed);
     StopActiveDevice();
-    if (currentAudioSource == AudioSource::Microphone) {
+    if (source == AudioSource::Microphone) {
         InitializeAndStartSelectedCaptureDevice();
-    } else if (currentAudioSource == AudioSource::AudioFile) {
-        if (audioFileLoaded) InitializeAndStartPlaybackDevice();
+    } else if (source == AudioSource::AudioFile) {
+        if (audioFileLoaded.load(std::memory_order_relaxed)) InitializeAndStartPlaybackDevice();
     }
 }
 
@@ -268,27 +357,36 @@ void AudioSystem::SetAudioFilePath(const char* filePath) {
     }
 }
 
-void AudioSystem::SetAmplitudeScale(float scale) { m_amplitudeScale = scale; }
+void AudioSystem::SetAmplitudeScale(float scale) { m_amplitudeScale.store(scale, std::memory_order_relaxed); }
 
 void AudioSystem::SetPlaybackProgress(float progress) {
-    if (audioFileLoaded) {
-        ma_uint64 frameIndex = (ma_uint64)(progress * audioFileTotalFrameCount);
-        ma_decoder_seek_to_pcm_frame(&m_decoder, frameIndex);
-    }
+    if (!audioFileLoaded.load(std::memory_order_acquire)) return;
+    // Seek under the decoder lock: the playback callback reads the same decoder from the
+    // audio thread and takes this lock with try_lock, so it can never be left mid-seek.
+    std::lock_guard<std::mutex> decoderLock(m_decoderMutex);
+    ma_uint64 frameIndex = (ma_uint64)(progress * audioFileTotalFrameCount);
+    ma_decoder_seek_to_pcm_frame(&m_decoder, frameIndex);
+    ma_uint64 cursor = 0;
+    ma_decoder_get_cursor_in_pcm_frames(&m_decoder, &cursor);
+    m_playbackCursorFrames.store(cursor, std::memory_order_relaxed);
 }
 
 void AudioSystem::Play() {
-    m_isPlaying = true;
-    if (currentAudioSource == AudioSource::AudioFile && audioFileLoaded) {
+    m_isPlaying.store(true, std::memory_order_relaxed);
+    if (currentAudioSource.load(std::memory_order_relaxed) == AudioSource::AudioFile && audioFileLoaded.load(std::memory_order_relaxed)) {
         InitializeAndStartPlaybackDevice();
     }
 }
 
-void AudioSystem::Pause() { m_isPlaying = false; }
+void AudioSystem::Pause() { m_isPlaying.store(false, std::memory_order_relaxed); }
 
 void AudioSystem::Stop() {
-    m_isPlaying = false;
-    if (audioFileLoaded) ma_decoder_seek_to_pcm_frame(&m_decoder, 0);
+    m_isPlaying.store(false, std::memory_order_relaxed);
+    {
+        std::lock_guard<std::mutex> decoderLock(m_decoderMutex);
+        if (audioFileLoaded.load(std::memory_order_relaxed)) ma_decoder_seek_to_pcm_frame(&m_decoder, 0);
+        m_playbackCursorFrames.store(0, std::memory_order_relaxed);
+    }
     StopActiveDevice();
 }
 
@@ -302,75 +400,150 @@ void AudioSystem::data_callback_static(ma_device* pDevice, void* pOutput, const 
 }
 
 void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uint32 frameCount) {
+    // Runs on the miniaudio device thread (H1). No allocation, no blocking lock, and
+    // every member read here is atomic or protected by a lock this function only ever
+    // takes with try_lock. See the threading contract in AudioSystem.h.
+    if (frameCount == 0) return;
+
+    // Emit one block of silence without touching the decoder (which may be mid reload) by
+    // using the frame size cached when the playback device was started.
+    auto silenceOutput = [&]() {
+        const ma_uint32 bytesPerFrame = m_playbackBytesPerFrame.load(std::memory_order_relaxed);
+        memset(pOutput, 0, (size_t)frameCount * (bytesPerFrame ? bytesPerFrame : (ma_uint32)sizeof(float)));
+    };
+
+    // Set first by Shutdown(); the playback output must still be filled (an unwritten
+    // miniaudio output block is garbage, which would click on the way out).
+    if (m_shuttingDown.load(std::memory_order_acquire)) {
+        if (pOutput != nullptr) silenceOutput();
+        return;
+    }
+
+    const AudioSource source = currentAudioSource.load(std::memory_order_acquire);
+
     // Playback Logic
-    if (pOutput != nullptr && currentAudioSource == AudioSource::AudioFile) {
-        if (audioFileLoaded && m_isPlaying) {
-            ma_uint64 framesRead;
-            ma_decoder_read_pcm_frames(&m_decoder, pOutput, frameCount, &framesRead);
-
-            float* pSamples = static_cast<float*>(pOutput);
-            for (IAudioListener* listener : m_listeners) {
-                listener->onAudioData(pSamples, framesRead, m_decoder.outputChannels, m_decoder.outputSampleRate);
-            }
-
-            // Feed the FFT buffer (mix to mono if stereo)
-            if (m_decoder.outputChannels == 1) {
-                m_file_fft_buffer.insert(m_file_fft_buffer.end(), pSamples, pSamples + framesRead);
-            } else if (m_decoder.outputChannels >= 2) {
-                for (ma_uint64 i = 0; i < framesRead; ++i) {
-                    m_file_fft_buffer.push_back((pSamples[i * 2] + pSamples[i * 2 + 1]) * 0.5f);
+    if (pOutput != nullptr && source == AudioSource::AudioFile) {
+        if (audioFileLoaded.load(std::memory_order_acquire) && m_isPlaying.load(std::memory_order_acquire)) {
+            ma_uint64 framesRead = 0;
+            ma_uint32 channels = 0;
+            ma_uint32 sampleRate = 0;
+            bool readOk = false;
+            {
+                // try_lock: never wait on the decoder from the audio thread. On contention
+                // the main thread is loading/seeking, so this block becomes silence.
+                std::unique_lock<std::mutex> decoderLock(m_decoderMutex, std::try_to_lock);
+                if (decoderLock.owns_lock() &&
+                    audioFileLoaded.load(std::memory_order_relaxed) &&
+                    m_isPlaying.load(std::memory_order_relaxed)) {
+                    channels = m_decoder.outputChannels;
+                    sampleRate = m_decoder.outputSampleRate;
+                    ma_decoder_read_pcm_frames(&m_decoder, pOutput, frameCount, &framesRead);
+                    ma_uint64 cursor = 0;
+                    ma_decoder_get_cursor_in_pcm_frames(&m_decoder, &cursor);
+                    m_playbackCursorFrames.store(cursor, std::memory_order_relaxed);
+                    readOk = true;
                 }
             }
 
-            ma_uint32 totalSamples = (ma_uint32)framesRead * m_decoder.outputChannels;
+            if (!readOk) {
+                silenceOutput();
+                currentAudioAmplitude.store(0.0f, std::memory_order_relaxed);
+                return;
+            }
+
+            float* pSamples = static_cast<float*>(pOutput);
+            for (auto& slot : m_listeners) {
+                IAudioListener* listener = slot.load(std::memory_order_acquire);
+                if (listener) listener->onAudioData(pSamples, (uint32_t)framesRead, (int)channels, (int)sampleRate);
+            }
+
+            // Feed the FFT ring (mono for mono, pair-averaged for anything with >1 channel)
+            pushFileFftSamples(pSamples, (size_t)framesRead, (size_t)channels);
+
+            ma_uint32 totalSamples = (ma_uint32)framesRead * channels;
             float sumOfAbsoluteSamples = 0.0f;
             for (ma_uint32 i = 0; i < totalSamples; ++i) sumOfAbsoluteSamples += fabsf(pSamples[i]);
-            currentAudioAmplitude = totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) * m_amplitudeScale : 0.0f;
+            currentAudioAmplitude.store(totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) * m_amplitudeScale.load(std::memory_order_relaxed) : 0.0f,
+                                        std::memory_order_relaxed);
 
             if (framesRead < frameCount) {
-                m_isPlaying = false;
-                ma_decoder_seek_to_pcm_frame(&m_decoder, 0);
+                m_isPlaying.store(false, std::memory_order_relaxed);
+                {
+                    // try_lock again: if the main thread is already reloading/stopping the
+                    // decoder, rewinding it is both unnecessary and unsafe.
+                    std::unique_lock<std::mutex> decoderLock(m_decoderMutex, std::try_to_lock);
+                    if (decoderLock.owns_lock()) ma_decoder_seek_to_pcm_frame(&m_decoder, 0);
+                }
+                m_playbackCursorFrames.store(0, std::memory_order_relaxed);
             }
         } else {
-            memset(pOutput, 0, frameCount * ma_get_bytes_per_frame(m_decoder.outputFormat, m_decoder.outputChannels));
-            currentAudioAmplitude = 0.0f;
+            silenceOutput();
+            currentAudioAmplitude.store(0.0f, std::memory_order_relaxed);
         }
     }
 
     // Capture Logic
-    if (pInput != nullptr && currentAudioSource == AudioSource::Microphone) {
-        if (!miniaudioDeviceInitialized) { currentAudioAmplitude = 0.0f; return; }
+    if (pInput != nullptr && source == AudioSource::Microphone) {
+        if (!miniaudioDeviceInitialized.load(std::memory_order_acquire)) { currentAudioAmplitude.store(0.0f, std::memory_order_relaxed); return; }
 
-        for (IAudioListener* listener : m_listeners) {
-            listener->onAudioData(static_cast<const float*>(pInput), frameCount, device.capture.channels, device.sampleRate);
+        // Capture parameters are cached at device start; the audio thread must not read
+        // `device`, which the main thread rewrites across init/uninit.
+        const ma_uint32 captureChannels = m_captureChannels.load(std::memory_order_relaxed);
+        const ma_uint32 captureSampleRate = m_captureSampleRate.load(std::memory_order_relaxed);
+        if (captureChannels == 0) {
+            // Nothing was published (device start did not happen / is mid teardown):
+            // there is no frame layout to interpret pInput with.
+            currentAudioAmplitude.store(0.0f, std::memory_order_relaxed);
+            return;
+        }
+
+        for (auto& slot : m_listeners) {
+            IAudioListener* listener = slot.load(std::memory_order_acquire);
+            if (listener) listener->onAudioData(static_cast<const float*>(pInput), frameCount, (int)captureChannels, (int)captureSampleRate);
         }
 
         const float* inputFrames = static_cast<const float*>(pInput);
-        ma_uint32 samplesToProcess = frameCount * device.capture.channels;
-        m_mic_fft_buffer.insert(m_mic_fft_buffer.end(), inputFrames, inputFrames + samplesToProcess);
+        ma_uint32 samplesToProcess = frameCount * captureChannels;
+        // The original appended the raw interleaved samples here (no mono mixing).
+        pushMicFftSamples(inputFrames, (size_t)frameCount, (size_t)captureChannels);
 
         float sumOfAbsoluteSamples = 0.0f;
         for (ma_uint32 i = 0; i < samplesToProcess; ++i) sumOfAbsoluteSamples += fabsf(inputFrames[i]);
-        currentAudioAmplitude = samplesToProcess > 0 ? (sumOfAbsoluteSamples / samplesToProcess) * m_amplitudeScale : 0.0f;
+        currentAudioAmplitude.store(samplesToProcess > 0 ? (sumOfAbsoluteSamples / samplesToProcess) * m_amplitudeScale.load(std::memory_order_relaxed) : 0.0f,
+                                    std::memory_order_relaxed);
     }
 }
 
 void AudioSystem::ProcessAudio() {
-    const size_t hopSize = FFT_SIZE / 2; // 50% overlap
-    std::vector<float>* buffer_to_process = nullptr;
+    SampleRing* buffer_to_process = nullptr;
 
-    if (currentAudioSource == AudioSource::Microphone) {
+    const AudioSource source = currentAudioSource.load(std::memory_order_acquire);
+    if (source == AudioSource::Microphone) {
         buffer_to_process = &m_mic_fft_buffer;
-    } else if (currentAudioSource == AudioSource::AudioFile) {
+    } else if (source == AudioSource::AudioFile) {
         buffer_to_process = &m_file_fft_buffer;
     } else {
         std::fill(m_fftData.begin(), m_fftData.end(), 0.0f);
         return;
     }
 
-    if (buffer_to_process && buffer_to_process->size() >= FFT_SIZE) {
-        // Copy the latest FFT_SIZE samples into the input buffer
-        std::copy(buffer_to_process->end() - FFT_SIZE, buffer_to_process->end(), m_fft_input.begin());
+    // Copy just the newest FFT_SIZE samples out of the ring under a short lock and do the
+    // FFT outside it. The ring is capped (4 x FFT_SIZE) and drained by index, so there is
+    // no unbounded growth and no per-frame memmove any more (P4). The samples we read are
+    // the newest ones, exactly what the old `end() - FFT_SIZE` copy produced.
+    bool haveWindow = false;
+    float window[FFT_SIZE];
+    {
+        std::lock_guard<std::mutex> bufferLock(m_bufferMutex);
+        if (buffer_to_process->size() >= (size_t)FFT_SIZE) {
+            buffer_to_process->copyLatest(window, (size_t)FFT_SIZE);
+            haveWindow = true;
+        }
+    }
+
+    if (haveWindow) {
+        // Same conversion std::copy did into the complex input vector.
+        for (int i = 0; i < FFT_SIZE; ++i) m_fft_input[i] = std::complex<float>(window[i], 0.0f);
 
         // Perform FFT
         auto fft_output = dj::fft1d(m_fft_input, dj::fft_dir::DIR_FWD);
@@ -389,9 +562,6 @@ void AudioSystem::ProcessAudio() {
         m_audioBands[1] = low_mids / (LOW_MIDS_BINS_END - BASS_BINS_END);
         m_audioBands[2] = high_mids / (HIGH_MIDS_BINS_END - LOW_MIDS_BINS_END);
         m_audioBands[3] = highs / (HIGHS_BINS_END - HIGH_MIDS_BINS_END);
-
-        // Remove old samples from the front of the circular buffer
-        buffer_to_process->erase(buffer_to_process->begin(), buffer_to_process->begin() + hopSize);
     } else {
         // Not enough data, can optionally clear or just leave stale
         m_audioBands.fill(0.0f);
@@ -399,17 +569,33 @@ void AudioSystem::ProcessAudio() {
 }
 
 bool AudioSystem::InitializeAndStartPlaybackDevice() {
-    if (!audioFileLoaded) return false;
+    if (!audioFileLoaded.load(std::memory_order_acquire)) return false;
     if (m_playbackDeviceInitialized) StopActiveDevice();
 
+    // Snapshot the decoder properties under the lock: the audio callback reads the same
+    // decoder and LoadWavFile() can uninit/re-init it, and these values decide the output
+    // format of the new device.
+    ma_format decoderFormat;
+    ma_uint32 decoderChannels;
+    ma_uint32 decoderSampleRate;
+    {
+        std::lock_guard<std::mutex> decoderLock(m_decoderMutex);
+        decoderFormat     = m_decoder.outputFormat;
+        decoderChannels   = m_decoder.outputChannels;
+        decoderSampleRate = m_decoder.outputSampleRate;
+    }
+
     ma_device_config playbackConfig = ma_device_config_init(ma_device_type_playback);
-    playbackConfig.playback.format   = m_decoder.outputFormat;
-    playbackConfig.playback.channels = m_decoder.outputChannels;
-    playbackConfig.sampleRate        = m_decoder.outputSampleRate;
+    playbackConfig.playback.format   = decoderFormat;
+    playbackConfig.playback.channels = decoderChannels;
+    playbackConfig.sampleRate        = decoderSampleRate;
     playbackConfig.dataCallback      = data_callback_static;
     playbackConfig.pUserData         = this;
 
     if (ma_device_init(&miniaudioContext, &playbackConfig, &m_playbackDevice) != MA_SUCCESS) return false;
+    // Cached before ma_device_start, so the callback can silence an output block without
+    // reading the decoder (which may be mid reload).
+    m_playbackBytesPerFrame.store(ma_get_bytes_per_frame(decoderFormat, decoderChannels), std::memory_order_relaxed);
     if (ma_device_start(&m_playbackDevice) != MA_SUCCESS) {
         ma_device_uninit(&m_playbackDevice);
         return false;
