@@ -58,6 +58,24 @@ public:
     static const int HIGH_MIDS_BINS_END = 170; // ~7968 Hz
     static const int HIGHS_BINS_END = 426;   // ~19968 Hz
 
+    // Audio band contract (owner-approved): src/AudioSystem.cpp publishes iAudioBands
+    // (raw, normalised, clamped, per frame) and iAudioBandsAtt (the same values through a
+    // snap-attack / 250 ms-decay envelope).
+    //   .x = bass   mean of the band's bins, DC bin 0 excluded (the mic path has no DC
+    //               blocking, so an offset would sit in bin 0 and inflate .x/.w forever)
+    //   .y = mids   mean over BASS_BINS_END..HIGH_MIDS_BINS_END (165 bins), i.e. the old
+    //               low_mids + high_mids merged *bin-weighted*, not their average
+    //   .z = treble mean over HIGH_MIDS_BINS_END..HIGHS_BINS_END (256 bins) - the old .w
+    //   .w = overall = (x + y + z) / 3 of the normalised components
+    //        Deliberately NOT the mean over all bins: the bins split 5 / 165 / 256, so a
+    //        bin-weighted overall mean is ~60 % treble by construction and would quietly
+    //        re-introduce exactly the bug this contract fixes.
+    static constexpr float BAND_REFERENCE = 32.0f;      // measured band peak -> normalisation reference
+    static constexpr float BAND_NORM = 1.0f / BAND_REFERENCE;
+    static constexpr float TAU_DECAY = 0.250f;          // seconds; envelope decay time constant
+    static constexpr float ENVELOPE_MIN_DT = 0.004f;    // clamp for the per-frame dt handed to the envelope
+    static constexpr float ENVELOPE_MAX_DT = 0.100f;
+
     AudioSystem();
     ~AudioSystem();
 
@@ -72,8 +90,10 @@ public:
     void LoadWavFile(const char* filePath);
     ma_uint64 ReadOfflineAudio(float* pOutput, ma_uint32 frameCount);
 
-    // Audio Processing (called from main thread)
-    void ProcessAudio();
+    // Audio Processing (called from main thread). frameDeltaSeconds is the frame time the
+    // main loop already computed; the envelope is advanced with it rather than measuring
+    // its own interval (see the band contract above).
+    void ProcessAudio(float frameDeltaSeconds);
 
     // Listener Registration
     void RegisterListener(IAudioListener* listener);
@@ -93,7 +113,10 @@ public:
     float GetPlaybackProgress();
     float GetPlaybackDuration() const;
     const std::vector<float>& GetFFTData() const;
+    // iAudioBands: normalised 0..1, clamped, per frame, no smoothing.
     const std::array<float, 4>& GetAudioBands() const;
+    // iAudioBandsAtt: the same components through a snap-attack / TAU_DECAY-decay envelope.
+    const std::array<float, 4>& GetAudioBandsAtt() const;
     ma_uint32 GetCurrentInputSampleRate() const;
     ma_uint32 GetCurrentInputChannels() const;
 
@@ -237,7 +260,8 @@ private:
     SampleRing m_file_fft_buffer; // ring buffer for audio file FFT analysis
     std::vector<std::complex<float>> m_fft_input; // main thread only
     std::vector<float> m_fftData;                 // main thread only
-    std::array<float, 4> m_audioBands;            // main thread only
+    std::array<float, 4> m_audioBands;            // main thread only, normalised 0..1 (raw)
+    std::array<float, 4> m_audioBandsAtt;         // main thread only, enveloped 0..1
 
     // Capture device information
     std::vector<ma_device_info> miniaudioAvailableCaptureDevicesInfo; // main thread only

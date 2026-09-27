@@ -1801,7 +1801,7 @@ int main(int argc, char** argv) {
             hot_reload_timer = 0.0f;
         }
 
-        g_audioSystem.ProcessAudio(); // Process audio for FFT
+        g_audioSystem.ProcessAudio(deltaTime); // Process audio for FFT + advance the band envelope
 
         // Advance g_timelineState.currentTime_seconds based on its own UI controls (play/pause)
         // This happens if the timeline's UI playback controls are active AND it's not paused.
@@ -1853,6 +1853,7 @@ int main(int argc, char** argv) {
         std::vector<Effect*> renderQueue = GetRenderOrder(activeEffects);
         float audioAmp = g_enableAudioLink ? g_audioSystem.GetCurrentAmplitude() : 0.0f;
         const auto& audioBands = g_audioSystem.GetAudioBands();
+        const auto& audioBandsAtt = g_audioSystem.GetAudioBandsAtt();
 
         // Spherical to Cartesian conversion for camera position
         glm::vec3 cameraPos;
@@ -1880,6 +1881,7 @@ int main(int argc, char** argv) {
                 se->IncrementFrameCount();
                 se->SetAudioAmplitude(audioAmp);
                 se->SetAudioBands(audioBands);
+                se->SetAudioBandsAtt(audioBandsAtt);
                 se->SetCameraState(cameraPos, cameraMatrix);
                 se->SetLightPosition(lightPos);
             }

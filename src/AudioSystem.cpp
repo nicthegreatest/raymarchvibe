@@ -33,6 +33,7 @@ AudioSystem::AudioSystem() {
     m_fft_input.resize(FFT_SIZE);
     m_fftData.resize(FFT_SIZE / 2, 0.0f);
     m_audioBands.fill(0.0f);
+    m_audioBandsAtt.fill(0.0f);
     // The FFT rings (m_mic_fft_buffer / m_file_fft_buffer) preallocate themselves.
 }
 
@@ -215,11 +216,11 @@ ma_uint64 AudioSystem::ReadOfflineAudio(float* pOutput, ma_uint32 frameCount) {
     // Feed the FFT ring (mono for mono, pair-averaged for anything with >1 channel)
     pushFileFftSamples(pSamples, (size_t)framesRead, (size_t)channels);
 
-    // Calculate amplitude
+    // Calculate amplitude (M12: no m_amplitudeScale here - GetCurrentAmplitude() applies it)
     ma_uint32 totalSamples = (ma_uint32)framesRead * channels;
     float sumOfAbsoluteSamples = 0.0f;
     for (ma_uint32 i = 0; i < totalSamples; ++i) sumOfAbsoluteSamples += fabsf(pSamples[i]);
-    currentAudioAmplitude.store(totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) * m_amplitudeScale.load(std::memory_order_relaxed) : 0.0f,
+    currentAudioAmplitude.store(totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) : 0.0f,
                                 std::memory_order_relaxed);
 
     return framesRead;
@@ -268,6 +269,10 @@ void AudioSystem::UnregisterListener(IAudioListener* listener) {
 }
 
 // --- Getters ---
+// The amplitude scale is applied HERE and only here (M12): the three sites that store
+// currentAudioAmplitude previously multiplied the scale in as well, so the scale was
+// applied twice and any non-default SetAmplitudeScale() was squared. The stored atomic is
+// now always the plain mean magnitude of the block.
 float AudioSystem::GetCurrentAmplitude() const {
     return currentAudioAmplitude.load(std::memory_order_relaxed) * m_amplitudeScale.load(std::memory_order_relaxed);
 }
@@ -297,6 +302,8 @@ float AudioSystem::GetPlaybackDuration() const {
 const std::vector<float>& AudioSystem::GetFFTData() const { return m_fftData; }
 
 const std::array<float, 4>& AudioSystem::GetAudioBands() const { return m_audioBands; }
+
+const std::array<float, 4>& AudioSystem::GetAudioBandsAtt() const { return m_audioBandsAtt; }
 
 ma_uint32 AudioSystem::GetCurrentInputSampleRate() const {
     if (currentAudioSource.load(std::memory_order_relaxed) == AudioSource::Microphone) {
@@ -463,7 +470,8 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
             ma_uint32 totalSamples = (ma_uint32)framesRead * channels;
             float sumOfAbsoluteSamples = 0.0f;
             for (ma_uint32 i = 0; i < totalSamples; ++i) sumOfAbsoluteSamples += fabsf(pSamples[i]);
-            currentAudioAmplitude.store(totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) * m_amplitudeScale.load(std::memory_order_relaxed) : 0.0f,
+            // M12: scaled in GetCurrentAmplitude() only.
+            currentAudioAmplitude.store(totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) : 0.0f,
                                         std::memory_order_relaxed);
 
             if (framesRead < frameCount) {
@@ -509,12 +517,13 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
 
         float sumOfAbsoluteSamples = 0.0f;
         for (ma_uint32 i = 0; i < samplesToProcess; ++i) sumOfAbsoluteSamples += fabsf(inputFrames[i]);
-        currentAudioAmplitude.store(samplesToProcess > 0 ? (sumOfAbsoluteSamples / samplesToProcess) * m_amplitudeScale.load(std::memory_order_relaxed) : 0.0f,
+        // M12: scaled in GetCurrentAmplitude() only.
+        currentAudioAmplitude.store(samplesToProcess > 0 ? (sumOfAbsoluteSamples / samplesToProcess) : 0.0f,
                                     std::memory_order_relaxed);
     }
 }
 
-void AudioSystem::ProcessAudio() {
+void AudioSystem::ProcessAudio(float frameDeltaSeconds) {
     SampleRing* buffer_to_process = nullptr;
 
     const AudioSource source = currentAudioSource.load(std::memory_order_acquire);
@@ -523,7 +532,11 @@ void AudioSystem::ProcessAudio() {
     } else if (source == AudioSource::AudioFile) {
         buffer_to_process = &m_file_fft_buffer;
     } else {
+        // No source at all: silence. Zero the bands and reset the envelope, so a hot band
+        // cannot hang after playback stops.
         std::fill(m_fftData.begin(), m_fftData.end(), 0.0f);
+        m_audioBands.fill(0.0f);
+        m_audioBandsAtt.fill(0.0f);
         return;
     }
 
@@ -551,20 +564,60 @@ void AudioSystem::ProcessAudio() {
             m_fftData[i] = std::abs(fft_output[i]);
         }
 
-        // Calculate frequency band averages
-        float bass = 0.0f, low_mids = 0.0f, high_mids = 0.0f, highs = 0.0f;
-        for (int i = 0; i < BASS_BINS_END; ++i) bass += m_fftData[i];
-        for (int i = BASS_BINS_END; i < LOW_MIDS_BINS_END; ++i) low_mids += m_fftData[i];
-        for (int i = LOW_MIDS_BINS_END; i < HIGH_MIDS_BINS_END; ++i) high_mids += m_fftData[i];
-        for (int i = HIGH_MIDS_BINS_END; i < HIGHS_BINS_END; ++i) highs += m_fftData[i];
+        // Frequency band means (owner-approved audio band contract).
+        // The metric is unchanged: the mean of the bin *magnitudes* over the band - NOT a
+        // per-band energy sum. Every shader gain in the set is tuned against this metric.
+        //
+        //   .x bass   bins [1, BASS_BINS_END)   - DC bin 0 excluded: the mic path has no DC
+        //              blocking and the FFT no window, so an input offset lands in bin 0 and
+        //              would permanently inflate .x and .w.
+        //   .y mids   bins [BASS_BINS_END, HIGH_MIDS_BINS_END) - the old low_mids (37 bins)
+        //              and high_mids (128 bins) merged and bin-weighted, i.e.
+        //              (37*low + 128*high)/165. NOT the average of the two old bands.
+        //   .z treble bins [HIGH_MIDS_BINS_END, HIGHS_BINS_END) - what the old .w held.
+        //   .w        (x + y + z) / 3 of the normalised components. Deliberately not a mean
+        //              over all bins: the split is 5 / 165 / 256 bins, so a bin-weighted
+        //              overall mean is ~60 % treble by construction and would quietly
+        //              re-introduce exactly the bug this contract fixes.
+        float bass = 0.0f, mids = 0.0f, treble = 0.0f;
+        for (int i = 1; i < BASS_BINS_END; ++i) bass += m_fftData[i];  // DC bin skipped
+        for (int i = BASS_BINS_END; i < HIGH_MIDS_BINS_END; ++i) mids += m_fftData[i];
+        for (int i = HIGH_MIDS_BINS_END; i < HIGHS_BINS_END; ++i) treble += m_fftData[i];
 
-        m_audioBands[0] = bass / (BASS_BINS_END);
-        m_audioBands[1] = low_mids / (LOW_MIDS_BINS_END - BASS_BINS_END);
-        m_audioBands[2] = high_mids / (HIGH_MIDS_BINS_END - LOW_MIDS_BINS_END);
-        m_audioBands[3] = highs / (HIGHS_BINS_END - HIGH_MIDS_BINS_END);
+        // One normalisation constant in one place: BAND_REFERENCE = 32.0f (the measured
+        // band peak) via BAND_NORM, clamped at BOTH ends. The top clamp takes the hot /
+        // clipped input and the (excluded) DC bin's excess; the non-finite guard takes a NaN
+        // that survived the FFT, which would otherwise poison the vector and - through the
+        // envelope below - every later frame too.
+        // A full-scale sine confined to one band reads low here (~0.1) because a band mean
+        // divides by its bin count; music spreads over the bins and reads much higher. That
+        // is expected: do not "fix" it by switching to a per-band energy sum.
+        const auto normalise = [](float bandMean) {
+            if (!std::isfinite(bandMean)) return 0.0f;
+            return std::min(std::max(bandMean * BAND_NORM, 0.0f), 1.0f);
+        };
+
+        m_audioBands[0] = normalise(bass / (BASS_BINS_END - 1));
+        m_audioBands[1] = normalise(mids / (HIGH_MIDS_BINS_END - BASS_BINS_END));
+        m_audioBands[2] = normalise(treble / (HIGHS_BINS_END - HIGH_MIDS_BINS_END));
+        m_audioBands[3] = (m_audioBands[0] + m_audioBands[1] + m_audioBands[2]) / 3.0f;
+
+        // iAudioBandsAtt: snap attack, exponential decay. Advanced once per frame with the
+        // dt the main loop hands in, clamped so a stalled or resumed frame cannot jump the
+        // envelope. .w is enveloped on its own input rather than derived from the enveloped
+        // x/y/z, so the master stays self-consistent under a sub-frame attack.
+        const float dt = std::min(std::max(frameDeltaSeconds, ENVELOPE_MIN_DT), ENVELOPE_MAX_DT);
+        const float k = 1.0f - std::exp(-dt / TAU_DECAY);  // ~0.065 at 60 fps with TAU_DECAY = 250 ms
+        for (size_t c = 0; c < m_audioBands.size(); ++c) {
+            const float target = m_audioBands[c];
+            float& att = m_audioBandsAtt[c];
+            att = (target >= att) ? target : att + (target - att) * k;
+        }
     } else {
-        // Not enough data, can optionally clear or just leave stale
+        // Not enough data: zero the bands and reset the envelope (the previous code zeroed
+        // the bands here but had no envelope to reset).
         m_audioBands.fill(0.0f);
+        m_audioBandsAtt.fill(0.0f);
     }
 }
 

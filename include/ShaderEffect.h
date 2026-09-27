@@ -36,7 +36,10 @@ public:
     void SetDeltaTime(float dt) { m_deltaTime = dt; }
     void IncrementFrameCount() { m_frameCount++; }
     void SetAudioAmplitude(float amp);
+    // iAudioBands: normalised 0..1, per frame, no smoothing.
     void SetAudioBands(const std::array<float, 4>& bands);
+    // iAudioBandsAtt: the same components through the snap-attack / decay envelope.
+    void SetAudioBandsAtt(const std::array<float, 4>& bandsAtt);
     void SetCameraState(const glm::vec3& pos, const glm::mat4& viewMatrix);
     void SetLightPosition(const glm::vec3& pos);
 
@@ -86,6 +89,7 @@ private:
     int m_frameCount;
     float m_audioAmp;
     GLint m_iAudioAmpLoc;
+    GLint m_iAudioBandsLoc;
     GLint m_iAudioBandsAttLoc;
     ShaderParser m_shaderParser;
     GLint m_iChannel0SamplerLoc;
@@ -110,7 +114,8 @@ private:
     int m_currentDisplayWidth, m_currentDisplayHeight;
 
     // Shadertoy user uniforms
-    std::array<float, 4> m_audioBands;
+    std::array<float, 4> m_audioBands;     // raw band contract vector (normalised 0..1)
+    std::array<float, 4> m_audioBandsAtt;  // same, through the envelope
 
     std::vector<ShaderToyUniformControl> m_shadertoyUniformControls;
     std::vector<DefineControl> m_defineControls;
