@@ -29,6 +29,7 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
       m_frameCount(0),
       m_audioAmp(0.0f),
       m_iAudioAmpLoc(-1),
+      m_iAudioBandsLoc(-1),
       m_iAudioBandsAttLoc(-1),
       m_shaderParser(),
       m_iChannel0SamplerLoc(-1),
@@ -51,6 +52,7 @@ ShaderEffect::ShaderEffect(const std::string& initialShaderPath, int initialWidt
 
     std::fill_n(m_mouseState, 4, 0.0f);
     m_audioBands.fill(0.0f);
+    m_audioBandsAtt.fill(0.0f);
 
     if (!initialShaderPath.empty()) {
         m_shaderFilePath = initialShaderPath;
@@ -318,8 +320,14 @@ void ShaderEffect::Render() {
     if (m_iAudioAmpLoc != -1) {
         glUniform1f(m_iAudioAmpLoc, m_audioAmp);
     }
+    // iAudioBands: the raw normalised band vector (this lookup was missing entirely before
+    // the band contract - the uniform was never uploaded, so every shader that declared it
+    // read a permanent zero).
+    if (m_iAudioBandsLoc != -1) {
+        glUniform4fv(m_iAudioBandsLoc, 1, m_audioBands.data());
+    }
     if (m_iAudioBandsAttLoc != -1) {
-        glUniform4fv(m_iAudioBandsAttLoc, 1, m_audioBands.data());
+        glUniform4fv(m_iAudioBandsAttLoc, 1, m_audioBandsAtt.data());
     }
 
     if (m_iCameraPositionLocation != -1) {
@@ -342,6 +350,10 @@ void ShaderEffect::SetAudioAmplitude(float amp) {
 
 void ShaderEffect::SetAudioBands(const std::array<float, 4>& bands) {
     m_audioBands = bands;
+}
+
+void ShaderEffect::SetAudioBandsAtt(const std::array<float, 4>& bandsAtt) {
+    m_audioBandsAtt = bandsAtt;
 }
 
 void ShaderEffect::SetCameraState(const glm::vec3& pos, const glm::mat4& viewMatrix) {
@@ -1030,6 +1042,9 @@ void ShaderEffect::FetchUniformLocations() {
     m_iFrameLocation = glGetUniformLocation(m_shaderProgram, "iFrame");
     m_iMouseLocation = glGetUniformLocation(m_shaderProgram, "iMouse");
     m_iAudioAmpLoc = glGetUniformLocation(m_shaderProgram, "iAudioAmp");
+    // Both audio band uniforms: this runs on every successful (re)compile, so a shader that
+    // is hot-reloaded or swapped by the C1 keep-last-good path picks the locations up again.
+    m_iAudioBandsLoc = glGetUniformLocation(m_shaderProgram, "iAudioBands");
     m_iAudioBandsAttLoc = glGetUniformLocation(m_shaderProgram, "iAudioBandsAtt");
     m_iCameraPositionLocation = glGetUniformLocation(m_shaderProgram, "iCameraPosition");
     m_iCameraMatrixLocation = glGetUniformLocation(m_shaderProgram, "iCameraMatrix");
