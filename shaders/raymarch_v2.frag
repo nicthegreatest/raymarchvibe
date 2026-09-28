@@ -15,7 +15,9 @@ uniform vec3 u_objectColor = vec3(1.0, 0.0, 0.5);       // {"widget":"color", "p
 uniform float u_timeSpeed = 0.5;                        // {"widget":"slider", "min": 0.0, "max": 2.0, "label": "Warp Speed"}
 uniform float u_detail = 1.0;                           // {"widget":"slider", "min": 0.1, "max": 3.0, "label": "Lattice Density"}
 uniform float u_bloom = 0.4;                            // {"widget":"slider", "min": 0.0, "max": 1.0, "label": "Glow Intensity"}
-uniform float u_audioReact = 1.0;                       // {"widget":"slider", "min": 0.0, "max": 2.0, "label": "Audio Pulse"}
+// Deliberately minimal x4 retune (normalised 0..1 bands only); per-component retuning of this
+// shader is an owner-pending question, so the shared gain is the only thing changed here.
+uniform float u_audioReact = 4.0;                       // {"widget":"slider", "min": 0.0, "max": 8.0, "label": "Audio Pulse"}
 uniform int u_iterations = 60;                          // {"widget":"slider", "min": 20, "max": 100, "label":"Ray Steps"}
 
 // --- Constants ---

@@ -34,7 +34,8 @@ uniform float u_recursion = 5.0;       // {"widget":"slider", "min":1.0, "max":8
 uniform float u_radius = 0.5;          // {"widget":"slider", "min":0.1, "max":2.0, "label":"Helix Radius"}
 uniform float u_twist = 5.0;           // {"widget":"slider", "min":0.1, "max":15.0, "label":"Twist Amount"}
 uniform float u_speed = 0.6;           // {"widget":"slider", "min":0.0, "max":3.0, "label":"Motion Speed"}
-uniform float u_audio_react = 0.003;   // {"widget":"slider", "min":0.0, "max":0.01, "label":"Audio Reactivity"}
+// Gain x33 for the normalised 0..1 band contract: bands were raw means of ~1-8, so 0.003 went dead
+uniform float u_audio_react = 0.1;   // {"widget":"slider", "min":0.0, "max":0.32, "label":"Audio Reactivity"}
 uniform float u_morph_amount = 0.3;    // {"widget":"slider", "min":0.0, "max":1.0, "label":"Morph Amount"}
 uniform float u_fractal_scale = 2.3;   // {"widget":"slider", "min":0.5, "max":4.0, "label":"Fractal Scale"}
 uniform float u_connection_spacing = 0.5; // {"widget":"slider", "min":0.2, "max":1.5, "label":"Connection Spacing"}
@@ -505,7 +506,7 @@ vec3 applyFog(vec3 color, float distance) {
     if (!u_enable_fog) return color;
 
     float fogAmount = 1.0 - exp(-distance * 0.01);
-    vec3 fogColor = blackbody(8000.0 + iAudioBandsAtt.w * 1000.0) * 0.1;
+    vec3 fogColor = blackbody(8000.0 + iAudioBandsAtt.w * 25000.0) * 0.1; // gain x25: .w is normalised 0..1 (was a raw ~1-8 mean)
     return mix(color, fogColor, fogAmount);
 }
 
@@ -519,7 +520,8 @@ vec3 iridescence(vec3 normal, vec3 viewDir, float intensity) {
 // --- Stabilized Temporal Glow (Reduced feedback to prevent ghost artifacts) ---
 vec3 temporalGlow(vec2 uv, vec3 currentColor) {
     vec4 previous = texture(iChannel0, uv);
-    vec3 glow = u_glowSecondary * u_glow_intensity * (iAudioBandsAtt.x * 0.0001 + 0.1); // Secondary glow - syncs from gradient
+    // Secondary glow - syncs from gradient; gain x32: .x is normalised 0..1 (was a raw ~1-8 mean)
+    vec3 glow = u_glowSecondary * u_glow_intensity * (iAudioBandsAtt.x * 0.0032 + 0.1);
     return mix(previous.rgb, currentColor + glow, 0.3) * 0.98; // Much more subtle blending
 }
 
@@ -578,7 +580,7 @@ void main() {
     } else {
         // Add audio-reactive stars on top of gradient
         if (length(uv) > 0.3 && fract(sin(dot(uv + iTime * 0.1, vec2(12.9898, 78.233))) * 43758.5453) > 0.995) {
-            col += u_glowSecondary * iAudioBandsAtt.w; // Use secondary glow color - syncs from gradient
+            col += u_glowSecondary * iAudioBandsAtt.w * 6.0; // gain x6: .w is normalised 0..1 (was a raw ~1-8 mean)
         }
     }
 

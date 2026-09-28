@@ -20,7 +20,8 @@ uniform vec3 u_tertiaryColor = vec3(1.0, 1.0, 0.0); // {"widget":"color", "palet
 
 // Controls for the Rubik's Cube effect
 uniform float u_rotationSpeed = 0.2;      // {"widget":"slider", "min":0.0, "max":2.0, "step":0.01}
-uniform float u_audioStrength = 0.5;      // {"widget":"slider", "min":0.0, "max":2.0, "step":0.01}
+// Gain x8 for the normalised 0..1 band contract: a raw ~1-8 mean was pushing cubes out of their cells
+uniform float u_audioStrength = 4.0;      // {"widget":"slider", "min":0.0, "max":16.0, "step":0.01}
 uniform float u_recursiveScale = 3.5;     // {"widget":"slider", "min":2.0, "max":5.0, "step":0.1}
 uniform float u_cubeGap = 0.1;            // {"widget":"slider", "min":0.0, "max":0.5, "step":0.01}
 uniform int u_iterations = 4;             // {"widget":"slider", "min":1, "max":8"}
@@ -161,7 +162,7 @@ void main() {
     
     // --- Post-processing and Feedback ---
     vec3 prevFrame = texture(iChannel0, gl_FragCoord.xy / iResolution.xy).rgb;
-    col = mix(col, prevFrame, 0.85 - iAudioBands.z * 0.1);
+    col = mix(col, prevFrame, clamp(0.85 - iAudioBands.z * 0.6, 0.0, 1.0)); // gain x6 + clamp: .z is normalised treble 0..1 (was a raw ~1-8 mean)
 
     FragColor = vec4(sqrt(clamp(col, 0.0, 1.0)), 1.0); // Gamma correction
 }

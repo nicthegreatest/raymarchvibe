@@ -19,7 +19,7 @@
 
 // Global Uniforms provided by the application
 uniform float iAudioAmp; // Expected to be a normalized amplitude [0, 1]
-uniform float iAudioBands[4]; // Bass, Low-Mids, High-Mids, Highs
+uniform vec4 iAudioBands; // x=bass, y=mids, z=treble, w=overall; normalised 0..1, clamped, unsmoothed
 
 // Custom Uniforms for UI control
 uniform vec3 u_color;
@@ -51,9 +51,9 @@ void main()
 
     // 3. Calculate dynamic angle for animation and audio reactivity
     float timeSway = sin(iTime * 0.5) * u_sway;
-    float audioSway = iAudioBands[0] * u_audio_reactivity; // Bass affects angle
+    float audioSway = iAudioBands.x * u_audio_reactivity; // Bass affects angle
     float dynamicAngle = u_angle + timeSway + audioSway;
-    float dynamicThickness = u_thickness + iAudioBands[3] * 0.5; // Highs affect thickness
+    float dynamicThickness = u_thickness + iAudioBands.w * 1.0; // Overall energy; gain 0.5->1.0 (normalised bands are ~32x smaller, and this uniform was never uploaded before)
 
     // 4. Fractal generation loop
     vec2 p = uv;
