@@ -15,7 +15,9 @@ uniform vec3 PrimaryColor = vec3(0.8, 0.4, 1.0); // {"widget":"color", "palette"
 uniform vec3 SecondaryColor = vec3(0.4, 0.8, 1.0); // {"widget":"color", "palette":true}
 uniform vec3 AccentColor = vec3(1.0, 0.8, 0.4); // {"widget":"color", "palette":true}
 uniform vec3 HighlightColor = vec3(1.0, 0.4, 0.8); // {"widget":"color", "palette":true}
-uniform float u_audioSensitivity = 1.0; // {"widget":"slider", "min":0.1, "max":3.0, "step":0.1}
+// Gain x4 for the normalised 0..1 band contract: the old raw means were saturating the star
+// threshold and star-size sites, so the low end of the 4-8x range keeps this from collapsing
+uniform float u_audioSensitivity = 4.0; // {"widget":"slider", "min":0.4, "max":12.0, "step":0.1}
 
 // === PERFORMANCE CONTROLS ===
 uniform int u_maxIters = 50; // {"widget":"slider", "min":10, "max":100, "step":1}

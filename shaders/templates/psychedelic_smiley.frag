@@ -1,5 +1,5 @@
 uniform float iAudioAmp;
-uniform vec4 iAudioBands; // x:bass, y:mid-low, z:mid-high, w:treble
+uniform vec4 iAudioBands; // x:bass, y:mids, z:treble, w:overall; normalised 0..1, clamped, unsmoothed
 
 // UI Controls
 uniform float u_scale = 1.5; // {"label": "Scale", "min": 0.1, "max": 5.0}
