@@ -68,7 +68,15 @@ vec2 map(vec3 p) {
 
         // Add audio reactivity - displace cubes based on their position and audio
         float audio = iAudioBandsAtt.x * u_audioStrength;
-        vec3 hash33 = vec3(fract(sin(floor(q*10.))*1234.5), fract(cos(floor(q*10.))*678.9), fract(sin(floor(q*10.))*345.6));
+        // One hash component per axis. floor(q*10.) keeps the value constant across a cell, and
+        // the three different sin/cos mixes keep the axes decorrelated. (The old line passed
+        // three vec3s -- 9 components -- to a 3-component constructor, which is a GLSL error,
+        // so the shader never compiled and this displacement never ran.)
+        vec3 hash33 = vec3(
+            fract(sin(floor(q.x * 10.)) * 1234.5),
+            fract(cos(floor(q.y * 10.)) * 678.9),
+            fract(sin(floor(q.z * 10.)) * 345.6)
+        );
         q += hash33 * audio * 0.2;
         
         // Single cube SDF
@@ -85,7 +93,10 @@ vec2 map(vec3 p) {
 
         // --- Recursion Step ---
         orbit.xyz = abs(orbit.xyz) - rubikOffset * scale;
-        orbit.xyz *= rot(iTime * 0.1);
+        // rot() returns a mat2, so it can only be applied to a 2-component swizzle -- this is
+        // the same idiom as the camera rotations in main() (ro.yz *= rot(...), ro.xz *= rot(...)).
+        // The old line did `orbit.xyz *= mat2(...)`, which is a GLSL type error.
+        orbit.xz *= rot(iTime * 0.1);
         orbit.w *= scale;
         orbit.xyz /= scale*scale;
     }
