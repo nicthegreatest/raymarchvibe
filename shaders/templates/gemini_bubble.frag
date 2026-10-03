@@ -174,6 +174,11 @@ vec3 warpSpace(vec3 p, float time, float audio_factor) {
     return p;
 }
 
+// Forward declaration: map() is defined under "--- Advanced Scene Mapping ---" further
+// down this file, but rayMarch() below calls it first. GLSL requires a declaration
+// before use, so declare the prototype here.
+vec2 map(vec3 pos, float time);
+
 // --- Advanced Raymarching ---
 float rayMarch(vec3 ro, vec3 rd, float time, float maxDist) {
     float t = 0.0;
