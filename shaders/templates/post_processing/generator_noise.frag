@@ -9,8 +9,12 @@ uniform float u_scale;      // {"widget":"slider", "default": 5.0, "min": 1.0, "
 uniform float u_timeFactor; // {"widget":"slider", "default": 0.2, "min": 0.0, "max": 2.0, "step": 0.05, "label": "Time Factor"}
 
 // --- Utility Functions ---
-float random (vec2 st) {
-    return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+// Hash two decorrelated pseudo-random values out of a cell coordinate.
+// (The Book of Shaders' random2; the single-float hash this file used to
+// carry could not feed `point`, which is a vec2 cell offset.)
+vec2 random2(vec2 st) {
+    return fract(sin(vec2(dot(st, vec2(127.1, 311.7)),
+                          dot(st, vec2(269.5, 183.3)))) * 43758.5453123);
 }
 
 // --- Worley Noise (Cellular) ---
@@ -22,7 +26,7 @@ float worley(vec2 uv) {
     for (int y= -1; y <= 1; y++) {
         for (int x= -1; x <= 1; x++) {
             vec2 neighbor = vec2(float(x),float(y));
-            vec2 point = random(i_uv + neighbor);
+            vec2 point = random2(i_uv + neighbor);
             point = 0.5 + 0.5*sin(iTime * u_timeFactor + 6.2831*point);
             vec2 diff = neighbor + point - f_uv;
             float dist = length(diff);
