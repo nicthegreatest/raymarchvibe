@@ -234,23 +234,48 @@ When writing or adapting raymarching shaders:
 
 **Key Takeaway**: The `.x` component is mandatory when using the result of `map()` for distance calculations. This is the single most important difference between RaymarchVibe and Shadertoy raymarching code.
 
-## 3. Mandatory Built-in Uniforms
+## 3. Built-in Uniforms
 
-These uniforms are automatically provided by RaymarchVibe's ShaderEffect class and must be referenced exactly as documented:
+Declare the uniforms your shader uses. Each one is uploaded only if the compiled shader declares it (every lookup in `ShaderEffect::Render` is guarded with `!= -1`), and the app injects the *declaration* of `iResolution` and `iTime` for you if you leave them out (`InjectStandardUniforms` in `src/ShaderEffect.cpp`).
 
 | Name | Type | Description | Example Usage |
 |---|---|---|---|
-| `iTime` | `float` | Current application time in seconds | `sin(iTime * 2.0)` |
+| `iTime` | `float` | Time in seconds | `sin(iTime * 2.0)` |
 | `iResolution` | `vec2` | Viewport resolution (width, height) in pixels | `iResolution.x` for aspect ratios |
-| `iFps` | `float` | Current framerate | `smoothstep(30.0, 60.0, iFps)` |
-| `iFrame` | `float` | Frame counter | `float currentFrame = iFrame;` |
-| `iProgress` | `float` | Application progress (0.0-1.0) | For transitions |
-| `iAudioBands` | `vec4` | Audio frequency bands (x=bass, y=mids, z=treble, w=all) | `iAudioBands.x * 2.0` |
-| `iAudioBandsAtt` | `vec4` | Audio frequency bands with attack (smoothed) | `iAudioBandsAtt.y` |
-| `iChannel0` | `sampler2D` | Previous frame/feedback buffer | `texture(iChannel0, uv)` |
-| `iChannel1` | `sampler2D` | Additional texture input | `texture(iChannel1, uv)` |
-| `iChannel2` | `sampler2D` | Additional texture input | `texture(iChannel2, uv)` |
-| `iChannel3` | `sampler2D` | Additional texture input | `texture(iChannel3, uv)` |
+| `iAudioAmp` | `float` | Overall level: the mean of the absolute samples over the analysed audio block. Reads `0.0` when Audio Link is off | `iAudioAmp * 0.5` |
+| `iAudioBands` | `vec4` | Raw audio bands, normalised 0..1 — see §3.1 | `iAudioBands.x * 2.0` |
+| `iAudioBandsAtt` | `vec4` | The same four values through a snap-attack / ~250 ms-decay envelope, 0..1 — see §3.1 | `iAudioBandsAtt.y` |
+| `iChannel0` | `sampler2D` | Output texture of the node wired to input pin 0; a 1×1 black texture when nothing is connected | `texture(iChannel0, uv)` |
+| `iChannel1` | `sampler2D` | As `iChannel0`, for input pin 1 | `texture(iChannel1, uv)` |
+| `iChannel2` | `sampler2D` | As `iChannel0`, for input pin 2 | `texture(iChannel2, uv)` |
+| `iChannel3` | `sampler2D` | As `iChannel0`, for input pin 3 | `texture(iChannel3, uv)` |
+| `iFrame` | `int` | Frame counter, uploaded with `glUniform1i` **in Shadertoy mode only** — in the standard `void main()` path it is never uploaded, so a shader that declares it reads 0 | `float(iFrame)` |
+| `iTimeDelta` | `float` | Seconds since the previous frame — **Shadertoy mode only** | `iTimeDelta` |
+| `iMouse` | `vec4` | Mouse state — **Shadertoy mode only** | `iMouse.xy` |
+
+**Not provided:** there is no `iFps` and no `iProgress` uniform — the app has no lookup for either, so a shader that declares them silently reads `0.0`. Five in-repo templates still declare them, and none of the five reads the value (`bezier_fractal_visualizer.frag`, `gemini_bubble.frag`, `organic_audio_viz.frag`, `organic_fractal_tree.frag`, `viz_circular_audio.frag`).
+
+### 3.1 Audio bands
+
+`iAudioBands` and `iAudioBandsAtt` are both `vec4`, both normalised to **0..1 and clamped at both ends**, and both refreshed once per frame in `AudioSystem::ProcessAudio()` from an un-windowed 1024-point FFT of the newest samples (one bin ≈ 46.875 Hz at 48 kHz).
+
+| Component | Band | FFT bins | Notes |
+|---|---|---|---|
+| `.x` | bass | 1–4 | Bin 0 (DC) is deliberately **skipped**: the microphone path has no DC blocking and the FFT has no window, so an input offset would sit in bin 0 and inflate `.x` and `.w` permanently. |
+| `.y` | mids | 5–169 | The old low-mids (37 bins) and high-mids (128 bins) merged **bin-weighted** — `(37*low + 128*high)/165`, not the average of the two old bands. |
+| `.z` | treble | 170–425 | What the old `.w` held. |
+| `.w` | overall | — | `(x + y + z) / 3` of the **normalised** components. |
+
+Each component is the mean magnitude of its band's bins, multiplied by `BAND_NORM = 1/32` (`BAND_REFERENCE`, the measured band peak, in `src/AudioSystem.h`) and clamped to 0..1. `iAudioBands` is **not smoothed** — it is that value for the frame.
+
+`.w` is a mean of the three bands, **not** a bin-weighted average over all bins: the bins split 5 / 165 / 256, so a bin-weighted overall mean is ~60 % treble by construction — which is the bug this contract replaced.
+
+- Normalisation divides by 32, so a gain tuned against the old raw values (typically 1–8, peak ~32) needs multiplying by ~32 to keep its amplitude, up to the clamp at 1.0. Seven shaders were retuned for this.
+- A full-scale sine confined to one band reads low (~0.1), because a band mean divides by its bin count. Music spreads across the bins and reads much higher. That is expected — do not "fix" it with a per-band energy sum.
+
+`iAudioBandsAtt` carries the same four components through a snap-attack / exponential-decay envelope (`TAU_DECAY` = 250 ms) advanced once per frame; both vectors are zeroed when the audio source stops or starves. **Use `iAudioBandsAtt` for motion, and `iAudioBands` when you want the transient itself** (thresholds, beat detection, colour flashes).
+
+> **Open question (owner decision):** `templates/viz_circular_audio.frag` and `templates/organic_audio_viz.frag` read band 2 (`.z`, treble) through controls labelled *High-Mid Boost* / *Color High-Mid*, and band 3 (`.w`, overall) through *Treble Boost* / *Color Treble* (`viz_circular_audio.frag:253–262`, `organic_audio_viz.frag:310–319`). Those labels no longer match the values they scale. Whether the labels are renamed or the bands reassigned is undecided; the table above is the current truth.
 
 ## 4. UI Controls Specification
 
@@ -457,21 +482,24 @@ See `documentation/PALETTE_FEATURE.md` for comprehensive technical details and `
 
 ## 5. Node-Based Architecture Constraints
 
-### 5.1 Feedback Loop Handling
-Shaders must properly handle the feedback loop through `iChannel0`:
+### 5.1 Input Channels (`iChannel0`–`iChannel3`)
+
+Each `iChannelN` is bound to the output texture of the node wired to input pin N of this node. With nothing connected the app binds a 1×1 black dummy texture (`ShaderEffect::InitializeDummyTexture`, `src/ShaderEffect.cpp`). Sampling `iChannel0` therefore reads an **upstream node's output, not this node's own previous frame** — the app has no ping-pong feedback buffer, and a cyclic graph is not rendered as feedback either — nodes are rendered in topological order and a cycle is reported as a graph error (`src/main.cpp:2210`). The persist/decay idiom below therefore blends against the input node's output (black if nothing is wired there), not against the last frame.
 
 ```glsl
 void main() {
-    // Sample previous frame
-    vec4 feedback = texture(iChannel0, uv);
+    // Sample the node wired to input pin 0
+    vec4 inputNode = texture(iChannel0, uv);
 
     // Apply temporal effects (decay, blending)
     vec4 newContent = computeContent(uv);
 
-    // Combine feedback with new content
-    FragColor = mix(feedback * 0.9, newContent, 0.1);
+    // Combine the input with the new content
+    FragColor = mix(inputNode * 0.9, newContent, 0.1);
 }
 ```
+
+> **Open question (owner decision):** whether a node gets a real self-feedback buffer, or whether self-feedback stays documented as unsupported (tracked as H4). Until that is decided, do not write shaders that depend on reading their own previous frame.
 
 ### 5.2 Input Pin Conventions
 Shaders may receive inputs from other nodes via `iChannel1-3` uniforms. Each input pin should be documented in the shader comments.
@@ -489,14 +517,17 @@ The Milk-Converter must map MilkDrop variables to RaymarchVibe uniforms:
 | MilkDrop Variable | RaymarchVibe Uniform | Notes |
 |---|---|---|
 | `time` | `iTime` | Direct mapping |
-| `fps` | `iFps` | Direct mapping |
-| `frame` | `iFrame` | Direct mapping |
-| `bass` | `iAudioBands.x` | Audio frequency band |
-| `mid` | `iAudioBands.y` | Audio frequency band |
-| `treb` | `iAudioBands.z` | Audio frequency band |
-| `bass_att` | `iAudioBandsAtt.x` | Attack-smooth audio |
-| `mid_att` | `iAudioBandsAtt.y` | Attack-smooth audio |
-| `treb_att` | `iAudioBandsAtt.z` | Attack-smooth audio |
+| `frame` | `iFrame` | Shadertoy mode only, and it is an `int` |
+| `fps` | *(none)* | RaymarchVibe has no framerate uniform — drop the term or replace it with a constant |
+| `progress` | *(none)* | There is no `iProgress` uniform — drive transitions from `iTime` |
+| `bass` | `iAudioBands.x` | Band 1, FFT bins 1–4 (~234 Hz and below) |
+| `mid` | `iAudioBands.y` | Band 2, bins 5–169 (~234 Hz to ~8 kHz) |
+| `treb` | `iAudioBands.z` | Band 3, bins 170–425 (~8 kHz to ~20 kHz) |
+| `vol` (overall level) | `iAudioBands.w` | Band 4: the mean of bands 1–3, **not** a bin-weighted average over all bins |
+| `bass_att` | `iAudioBandsAtt.x` | Band 1 through the snap-attack / ~250 ms-decay envelope |
+| `mid_att` | `iAudioBandsAtt.y` | Band 2, enveloped |
+| `treb_att` | `iAudioBandsAtt.z` | Band 3, enveloped |
+| `vol_att` (overall level) | `iAudioBandsAtt.w` | Band 4, enveloped |
 | `rad` | `length(uv - vec2(0.5))` | Computed in fragment shader |
 | `ang` | `atan(uv.y - 0.5, uv.x - 0.5)` | Computed in fragment shader |
 
@@ -543,7 +574,7 @@ If your shader declares `iChannelX` uniforms, ensure that the C++ `ShaderEffect`
 Shaders should be tested for:
 1. **Compilation success** in ShaderEffect
 2. **UI control generation** in ShaderParser
-3. **Feedback loop stability** (no infinite feedback)
+3. **Input channels** resolve to a bound texture (the app binds a 1x1 black dummy when a pin is unconnected)
 4. **Performance benchmark** (<10ms per effect)
 
 ### 8.2 Milk-Converter Validation
@@ -1057,25 +1088,28 @@ float easeInOutCubic(float t) {
     return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0;
 }
 
-// Audio-reactive organic motion
+// Audio-reactive organic motion.
+// The 0.1 / 0.05 / 0.02 offsets below were written when the bands carried the old
+// raw values (typically 1-8). Normalisation divides them by 32 (see 3.1), so each
+// factor is multiplied by 32 here to keep the same displacement as before.
 vec3 audioReactiveMotion(vec3 pos, float time) {
     float bassPhase = iAudioBands.x * 6.28318;
     float midPhase = iAudioBands.y * 6.28318;
     float treblePhase = iAudioBands.z * 6.28318;
     
-    pos.x += sin(bassPhase + time) * iAudioBandsAtt.x * 0.1;
-    pos.y += cos(midPhase + time * 1.5) * iAudioBandsAtt.y * 0.05;
-    pos.z += sin(treblePhase + time * 2.0) * iAudioBandsAtt.z * 0.02;
+    pos.x += sin(bassPhase + time) * iAudioBandsAtt.x * 3.2;   // was 0.1
+    pos.y += cos(midPhase + time * 1.5) * iAudioBandsAtt.y * 1.6;  // was 0.05
+    pos.z += sin(treblePhase + time * 2.0) * iAudioBandsAtt.z * 0.64; // was 0.02
     
     return pos;
 }
 ```
 
-#### 9.4.2 Temporal Effects & Feedback
-Use the feedback buffer for temporal continuity:
+#### 9.4.2 Temporal Effects & Input Channels
+Use the node wired to an input channel for temporal continuity. `iChannel0` is that node's output, not this node's previous frame (see 5.1):
 
 ```glsl
-// Motion blur using feedback buffer
+// Motion blur using the input node on pin 0
 vec3 motionBlur(vec2 uv, vec3 velocity) {
     vec2 blurDir = velocity.xy * 0.02;
     vec3 accumulated = vec3(0.0);
@@ -1090,7 +1124,7 @@ vec3 motionBlur(vec2 uv, vec3 velocity) {
     return accumulated / samples;
 }
 
-// Trails and persistence effect
+// Trails and persistence against the input node
 vec3 temporalTrails(vec2 uv, vec3 newColor, float persistence) {
     vec3 previous = texture(iChannel0, uv).rgb;
     return mix(previous, newColor, persistence);
@@ -1536,7 +1570,7 @@ Before considering a shader complete, verify it has:
 - Single-parameter audio reactivity
 - Flat 2D shapes without depth
 - Overcomplication without compositional purpose
-- Ignoring the feedback buffer for temporal effects
+- Ignoring the input channels for temporal continuity
 
 #### 9.11.3 The "Stop-and-Stare" Test
 A great shader should make people:
@@ -1557,18 +1591,19 @@ Use this as a starting point for production-quality shaders:
 #version 330 core
 out vec4 FragColor;
 
-// Standard RaymarchVibe uniforms
-uniform vec2 iResolution;
-uniform float iTime;
-uniform float iFps;
-uniform float iFrame;
-uniform float iProgress;
-uniform vec4 iAudioBands;
-uniform vec4 iAudioBandsAtt;
-uniform sampler2D iChannel0;
+// Injected by the app if you do not declare them; declare them explicitly for clarity.
+uniform vec2 iResolution;      // native mode: (width, height)
+uniform float iTime;           // seconds since start
+
+// Declare the ones you use - the app uploads each only if it is declared.
+uniform float iAudioAmp;       // mean |sample| over the audio block; 0 when Audio Link is off
+uniform vec4 iAudioBands;      // normalised bands: x=bass, y=mids, z=treble, w=overall (see 3.1)
+uniform vec4 iAudioBandsAtt;   // the same through the snap-attack / ~250 ms-decay envelope (see 3.1)
+uniform sampler2D iChannel0;   // output of the node on input pin 0 (black if unconnected)
 uniform sampler2D iChannel1;
 uniform sampler2D iChannel2;
 uniform sampler2D iChannel3;
+// Shadertoy mode only (uploaded only for mainImage() shaders): iFrame (int), iTimeDelta, iMouse.
 
 // --- Creative Parameters ---
 uniform vec3 u_baseHue = vec3(0.6, 0.8, 0.9); // {"widget":"color", "label":"Base Hue"}
@@ -1713,7 +1748,7 @@ The inspiration shaders (especially 11-20) demonstrate these key patterns:
 - **Scanline borders** for retro aesthetics (Section 9.8.2)
 - **Temperature-based color gradients** (Section 9.2.3)
 - **Multi-source lighting setups** (Section 9.3.1)
-- **Temporal continuity** through feedback (Section 9.4.2)
+- **Temporal continuity** by blending with an input channel (Section 9.4.2)
 
 #### 12.3 Advanced Rendering Approaches
 - **Logarithmic ray termination** for optimization (Section 9.8.1)
@@ -1742,7 +1777,14 @@ Study these patterns, understand the underlying mathematics, then apply them wit
 
 ## 13. Change Log
 
-- **v2.2** (Current): Advanced Color Palette System Documentation
+- **v2.3** (Current): Audio band contract
+  - Added **3.1 Audio bands**: the frozen contract for `iAudioBands` / `iAudioBandsAtt` (bin edges, DC bin excluded, `BAND_REFERENCE = 32`, `.w` as the mean of the three normalised bands, raw vs enveloped)
+  - Rewrote **3 Built-in Uniforms**: the uniforms are not all mandatory, `iFps` and `iProgress` do not exist, `iFrame` is an `int` uploaded in Shadertoy mode only, `iChannel0` is an input node's output and not a feedback buffer
+  - Corrected the input-channel and temporal-continuity sections (5.1, 9.4.2, 8.1) away from the missing feedback buffer
+  - Retuned the 9.4.1 audio-reactive motion example for the normalised bands and added the normalisation note to the 10.1 template
+  - Extended the Milk-Converter mapping (6.1) with the band edges and the overall-level rows
+
+- **v2.2** (Previous): Advanced Color Palette System Documentation
   - Added comprehensive **Color Palette Widgets** section (4.3) with `{"palette":true}` semantics
   - Documented **Primary vs Secondary** color control roles and auto-detection
   - Implemented **semantic naming conventions** (PrimaryColor, SecondaryColor, AccentColor, etc.)
