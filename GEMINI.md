@@ -76,7 +76,7 @@ The `ShaderParser` class is responsible for extracting uniform declarations and 
 
 *   **Regex Robustness:** The internal regular expression (`uniform_control_regex`) has been refined to be more robust in parsing uniform declarations, especially those with optional default values and varying whitespace. This ensures that all valid uniform controls are correctly detected and exposed to the UI.
 
-*   **Dependencies:** Most dependencies are fetched automatically using CMake's `FetchContent`. This includes `ImGui`, `glfw`, `nlohmann_json`, `miniaudio`, and `cpp-httplib`.
+*   **Dependencies:** Most dependencies are fetched and built by CMake's `FetchContent`: `ImGui` (v1.90.8), `glfw` (3.4), `nlohmann_json`, `ImGuiColorTextEdit`, `miniaudio` and `cpp-httplib`. `glfw` is compiled from source with Wayland enabled, so its X11/Wayland/`libxkbcommon` development packages must be installed on the host (see the README's Dependencies section). `GLM` is system-first — `find_package(glm)` with a pinned `FetchContent` fallback — and `GLAD`, `imnodes`, `ImGuiFileDialog`, `stb` and `dj_fft` are vendored in the tree. Check the README before adding a new external library.
 *   **FFmpeg:** This is a special case. It is built from source as an `ExternalProject`. This means CMake will download and compile FFmpeg during the first build. This process can be slow.
 *   **Adding New Files:** If you add a new `.cpp` file to the `src/` directory, you must add it to the `add_executable(RaymarchVibe ...)` list in `CMakeLists.txt` for it to be compiled.
 
@@ -84,7 +84,7 @@ The `ShaderParser` class is responsible for extracting uniform declarations and 
 
 *   **`ShaderEffect`**
     *   `Load()`: Compiles the shader and parses UI controls.
-    *   `ApplyShaderCode(const std::string&)`: Re-compiles the shader with new source code.
+    *   `ApplyShaderCode(const std::string&)`: Re-compiles the shader with the new source code. Compile and link happen into a fresh program that replaces `m_shaderProgram` only on success, so a failed recompile keeps the last-good program rendering instead of leaving a deleted handle behind; the error text goes to `m_compileErrorLog`, which the Console and the editor's error markers display. `m_shaderLoaded` stays `true` in that case, because the node is still rendering the previous shader.
     *   `RenderUI()`: Renders the dynamically generated UI controls for the shader's uniforms.
     *   `SetInputEffect(int pinIndex, Effect* inputEffect)`: Connects another effect to one of this effect's input pins.
     *   `SetCameraState(const glm::vec3& pos, const glm::mat4& viewMatrix)`: Sets the camera position and matrix for the shader.
@@ -121,17 +121,20 @@ The `ShaderParser` class is responsible for extracting uniform declarations and 
         ```
 
 *   **`VideoRecorder`**
-    *   `start_recording(...)`: Begins the recording process in a separate thread.
-    *   `stop_recording()`: Stops recording and finalizes the video file.
-    *   `add_video_frame_from_pbo()`: Called every frame to capture the screen content. **Note:** Explicitly sets `glViewport` before `glReadPixels` to ensure correct frame capture, preventing off-centre video output.
-    *   **Common Usage Pattern:** The global `g_videoRecorder` is controlled by the UI. When "Start Recording" is clicked, `start_recording` is called. Every frame thereafter, `add_video_frame_from_pbo` captures the visuals. `stop_recording` is called when the user stops the recording.
+    *   `bool start_recording(filename, width, height, fps, format, record_audio, ...)`: Validates the request before touching any state — non-zero framebuffer size, and a container that supports H.264 (and the selected audio codec, when audio is on) — then sets up the encoder synchronously and only afterwards starts the encoding thread. It returns `true` on success; on any failure it returns `false`, makes no state change and stores a reason in `get_last_error()`.
+    *   `get_last_error()`: The human-readable reason for the most recent failed start, empty if none. **Caveat:** the reason is currently written to `std::cerr` only — no caller in `main.cpp` or `UIManager.cpp` checks `start_recording`'s return value or reads `get_last_error()`, so a failed start is not surfaced in the UI yet. That is an open follow-up.
+    *   `stop_recording()`: Stops recording, joins the encoding thread and finalizes the video file.
+    *   `add_video_frame_from_pbo(float deltaTime)`: Called every frame to capture the screen content. **Note:** Explicitly sets `glViewport` before `glReadPixels` to ensure correct frame capture, preventing off-centre video output.
+    *   **Common Usage Pattern:** The global `g_videoRecorder` is controlled by the UI. When "Start Recording" is clicked, `start_recording` is called. Every frame thereafter, `add_video_frame_from_pbo` captures the visuals. `stop_recording` is called when the user stops the recording. `main.cpp` currently discards the `start_recording` result; the correct pattern is:
         ```cpp
         // In UI code for the "Start Recording" button
-        g_videoRecorder.start_recording(filename, width, height, ...);
+        if (!g_videoRecorder.start_recording(filename, width, height, fps, format, record_audio, ...)) {
+            // The reason is in g_videoRecorder.get_last_error().
+        }
 
         // In main loop
         if (g_videoRecorder.is_recording()) {
-            g_videoRecorder.add_video_frame_from_pbo();
+            g_videoRecorder.add_video_frame_from_pbo(deltaTime);
         }
 
         // In UI code for the "Stop Recording" button
@@ -149,7 +152,7 @@ The UI is rendered in `main.cpp` using a series of `Render...Window()` functions
 ### 3.4 Main Loop Data Flow
 
 1.  **Input & State Update:** The loop starts by processing input and updating state (e.g., shader hot-reloads, camera controls).
-2.  **Audio Processing:** `g_audioSystem.ProcessAudio()` is called to update FFT and amplitude data.
+2.  **Audio Processing:** `g_audioSystem.ProcessAudio(deltaTime)` is called to update the FFT data, the amplitude and the band envelope.
 3.  **Camera Calculation:** The camera's Cartesian position is calculated from its spherical coordinates (`g_cameraRadius`, `g_cameraAzimuth`, `g_cameraPolar`) and the `g_cameraTarget`. The view and camera matrices are then created.
 4.  **Topological Sort:** `GetRenderOrder()` is called to determine the correct render order of the nodes.
 5.  **Effect Rendering:** The application iterates through the sorted `renderQueue`, updating uniforms (including camera uniforms) and rendering each effect to its own Framebuffer Object (FBO).

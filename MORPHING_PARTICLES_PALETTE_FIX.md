@@ -1,5 +1,7 @@
 # Morphing Particles Shader - Color Palette Fix
 
+> **Historical note (kept for the record).** This is a write-up of a one-off fix to `shaders/morphing_particles.frag`, not a specification. The changes it describes are still in the shader, but the line numbers refer to the file as it was at the time and have since shifted — the `nebulaColor *= 1.3` line it calls "line 337" is now line 360. Search for the code, not the line number.
+
 ## Problem
 The `shaders/morphing_particles.frag` shader had color uniforms (PrimaryColor, SecondaryColor, AccentColor, HighlightColor) correctly declared with palette metadata, but the colors were not being visibly applied to the final render - everything appeared white.
 
