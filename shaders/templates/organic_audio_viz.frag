@@ -52,17 +52,25 @@ uniform vec3 u_color_end = vec3(0.8, 0.1, 1.0);   // {"widget":"color", "label":
 uniform float u_band_color_mix = 0.6; // {"widget":"slider", "min":0.0, "max":1.0, "label":"Band Color Mix"}
 
 // --- Advanced Audio Reactivity ---
+// Identifiers below are legacy names from the old bass/low-mid/high-mid/treble split; the current
+// band contract (documentation/SHADERS.md 3.1) is .x bass, .y mids, .z treble, .w overall energy.
+// What each control actually scales, and the label the UI shows for it:
+//   u_bass_*     -> .x bass            "Bass ..."
+//   u_low_mid_*  -> .y mids            "Low-Mid ..."        (legacy name)
+//   u_high_mid_* -> .z treble          "Treble ..."
+//   u_treble_*   -> .w overall energy  "Overall Energy ..."
+// u_treble_boost also scales the global `treble` term in main() (legacy double use).
 uniform vec3 u_color_bass = vec3(1.0, 0.2, 0.2); // {"widget":"color", "label":"Color Bass"}
 uniform float u_bass_boost = 2.0;      // {"widget":"slider", "min":0.0, "max":5.0, "label":"Bass Boost"}
 
 uniform vec3 u_color_low_mid = vec3(1.0, 0.8, 0.2); // {"widget":"color", "label":"Color Low-Mid"}
 uniform float u_low_mid_boost = 2.5;   // {"widget":"slider", "min":0.0, "max":5.0, "label":"Low-Mid Boost"}
 
-uniform vec3 u_color_high_mid = vec3(0.2, 1.0, 0.2); // {"widget":"color", "label":"Color High-Mid"}
-uniform float u_high_mid_boost = 5.0;  // {"widget":"slider", "min":0.0, "max":10.0, "label":"High-Mid Boost"}
+uniform vec3 u_color_high_mid = vec3(0.2, 1.0, 0.2); // {"widget":"color", "label":"Color Treble"}
+uniform float u_high_mid_boost = 5.0;  // {"widget":"slider", "min":0.0, "max":10.0, "label":"Treble Boost"}
 
-uniform vec3 u_color_treble = vec3(0.2, 0.8, 1.0); // {"widget":"color", "label":"Color Treble"}
-uniform float u_treble_boost = 8.0;    // {"widget":"slider", "min":0.0, "max":10.0, "label":"Treble Boost"}
+uniform vec3 u_color_treble = vec3(0.2, 0.8, 1.0); // {"widget":"color", "label":"Color Overall Energy"}
+uniform float u_treble_boost = 8.0;    // {"widget":"slider", "min":0.0, "max":10.0, "label":"Overall Energy Boost"}
 
 // --- Composition ---
 uniform bool u_composite_over = true; // {"label":"Composite Over Input", "default":true}
