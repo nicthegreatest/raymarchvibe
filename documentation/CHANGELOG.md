@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Fixed
+- **Shader editor:** a failed live-coding recompile no longer destroys a node. The new shader is compiled and linked into a separate program and only replaces the current one on success, so the node keeps rendering its last-good shader while the error is reported in the Console and the editor.
+- **Video recording:** every failed start now goes through a single cleanup path with pre-flight validation (non-zero framebuffer size, and a container that supports H.264 plus the selected audio codec); the encoder is set up synchronously before the encoding thread is started, so `start_recording` cannot report success on a dead setup, and the reason is available from `VideoRecorder::get_last_error()`. The reason is written to `stderr` only — surfacing it in the UI is still to do.
+- **Audio system:** fixed the FFT feed and the audio-thread data races, and replaced the unbounded per-frame FFT buffers with a bounded ring buffer. Verified with a ThreadSanitizer harness over the real `AudioSystem` and a differential fuzz test against a reference model.
+- **Shaders:** four templates could not compile at all and therefore rendered nothing — `recursive_rubiks_cube` and `gemini_bubble`, plus `generator_noise`, where the type error meant *Add Node ▸ Generators ▸ Noise Generator* silently created no node.
+- **Build:** GLM is now a declared dependency (`find_package(glm)` with a pinned `FetchContent` fallback). Before this, a fresh clone failed on its first translation unit with `glm/glm.hpp: No such file`.
+
 ### Changed
 - **Audio bands (breaking for shader gains):** `iAudioBands` is uploaded again — the uniform lookup for it had been missing entirely, so every shader that declared it read a permanent zero. Both it and `iAudioBandsAtt` now carry normalised values clamped to 0..1:
   - `.x` = bass (FFT bins 1–4; the DC bin is deliberately skipped, as the mic path has no DC blocking), `.y` = mids (bins 5–169 — the old low-mids and high-mids merged bin-weighted), `.z` = treble (bins 170–425, what `.w` used to hold), `.w` = overall energy: `(x + y + z) / 3` of the normalised bands, **not** a bin-weighted average over all bins (that split would be ~60 % treble by construction).
