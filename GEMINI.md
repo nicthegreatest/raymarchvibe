@@ -98,22 +98,24 @@ The `ShaderParser` class is responsible for extracting uniform declarations and 
 
 *   **`AudioSystem`**
     *   `Initialize()`: Sets up the audio context and enumerates devices.
-    *   `ProcessAudio()`: Called every frame to process the audio buffer and perform FFT analysis.
+    *   `ProcessAudio(float frameDeltaSeconds)`: Called every frame to process the audio buffer, perform the FFT analysis and advance the band envelope.
     *   `GetCurrentAmplitude()`: Returns the overall volume of the audio input.
-    *   `GetAudioBands()`: Returns an `std::array<float, 4>` with the magnitudes of the four frequency bands.
-    *   **Common Usage Pattern:** The global `g_audioSystem` is initialized once. In the main loop, `ProcessAudio()` is called, and then its data is retrieved and passed to the active shaders.
+    *   `GetAudioBands()` / `GetAudioBandsAtt()`: Return the normalised 0..1 band vector (`.x` bass, `.y` mids, `.z` treble, `.w` overall), raw and enveloped respectively.
+    *   **Common Usage Pattern:** The global `g_audioSystem` is initialized once. In the main loop, `ProcessAudio(deltaTime)` is called, and then its data is retrieved and passed to the active shaders.
         ```cpp
         // In main()
         g_audioSystem.Initialize();
 
         // In main loop
-        g_audioSystem.ProcessAudio();
+        g_audioSystem.ProcessAudio(deltaTime);
         float audioAmp = g_audioSystem.GetCurrentAmplitude();
         const auto& audioBands = g_audioSystem.GetAudioBands();
+        const auto& audioBandsAtt = g_audioSystem.GetAudioBandsAtt();
         for (Effect* effect : renderQueue) {
             if (auto* se = dynamic_cast<ShaderEffect*>(effect)) {
                 se->SetAudioAmplitude(audioAmp);
                 se->SetAudioBands(audioBands);
+                se->SetAudioBandsAtt(audioBandsAtt);
             }
         }
         ```

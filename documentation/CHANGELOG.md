@@ -1,3 +1,14 @@
+## [Unreleased]
+
+### Changed
+- **Audio bands (breaking for shader gains):** `iAudioBands` is uploaded again — the uniform lookup for it had been missing entirely, so every shader that declared it read a permanent zero. Both it and `iAudioBandsAtt` now carry normalised values clamped to 0..1:
+  - `.x` = bass (FFT bins 1–4; the DC bin is deliberately skipped, as the mic path has no DC blocking), `.y` = mids (bins 5–169 — the old low-mids and high-mids merged bin-weighted), `.z` = treble (bins 170–425, what `.w` used to hold), `.w` = overall energy: `(x + y + z) / 3` of the normalised bands, **not** a bin-weighted average over all bins (that split would be ~60 % treble by construction).
+  - `iAudioBands` is the raw per-frame value; `iAudioBandsAtt` is the same four values through a snap-attack / ~250 ms-decay envelope advanced once per frame, and both are zeroed when audio stops or starves.
+  - Gains tuned against the old raw values (typically 1–8, peak ~32) are now ~32× too weak; seven audio-reactive shaders were retuned accordingly.
+- **Documentation:** `documentation/SHADERS.md` states the band contract once, in the new §3.1, and corrects the built-in uniform table — `iFps` and `iProgress` do not exist, `iFrame` is an `int` uploaded in Shadertoy mode only, and `iChannel0` is an input node's output texture rather than a feedback buffer.
+
+---
+
 ## [0.4.0] - 2025-11-21
 
 ### Fixed
