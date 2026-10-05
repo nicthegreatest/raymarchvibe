@@ -6,7 +6,7 @@
 
 - [ ] **Verify Compositing:** The user reported being unable to see the sphere behind the visualizer. The latest C++ fix should have resolved this, but it needs to be tested and confirmed.
 
-- [ ] **Improve Build Process:** The current build requires a full `rm -rf build && cmake .. && make` to reliably copy new shader files. Investigate modifying the `CMakeLists.txt` to create a proper dependency between the shader files and the build target to allow `make` to detect shader changes automatically.
+- [x] **Improve Build Process:** Done in PR #46. `shaders/` is copied by a `RaymarchVibeShaders` target that `RaymarchVibe` depends on, so a plain `make` re-copies after a `.frag` edit and after adding or removing a shader, and copies nothing when the tree is unchanged. The `rm -rf build` workaround is no longer needed.
 
 - [ ] **Implement WASD Camera Controls:** Add an alternative camera control scheme using WASD keys.
 

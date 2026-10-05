@@ -138,21 +138,14 @@ For detailed information about the project, see the `documentation/` directory:
 
 ### Working with Shaders
 
-The build copies the whole source `shaders/` directory into the build directory as a post-build step of the `RaymarchVibe` target, which is where the application loads shaders from.
-
-That copy is not yet declared as depending on the `.frag` files (see the shader-copy item in [TODO.md](documentation/TODO.md)), so it only runs when the `RaymarchVibe` target itself is relinked. A shader-only edit is therefore **not** picked up by a plain `make` — force the copy yourself from the `build/` directory:
+The build copies the whole source `shaders/` directory into the build directory, which is where the application loads shaders from. That copy is a real build dependency of the `RaymarchVibe` target (a `RaymarchVibeShaders` custom target, see the shader-copy block in `CMakeLists.txt`), not a post-build step of the executable — so a plain `make` deploys your shader edits:
 
 ```bash
-cmake -E copy_directory ../shaders shaders
+make -j"$(nproc)"   # edit a .frag, run this, and the build directory has the new text
 ```
 
-or configure and build a clean build directory:
+Any `.frag` (or any other file) changed under `shaders/` is re-copied by the next build, adding or removing a shader file is noticed as well, and a build with nothing changed copies nothing. You only need to re-run `cmake ..` before `make` if you add or remove C++ source files or change the project's structure in `CMakeLists.txt`.
 
-```bash
-rm -rf build && mkdir build && cd build && cmake .. && make -j"$(nproc)"
-```
-
-You only need to re-run `cmake ..` before `make` if you add or remove C++ source files or change the project's structure in `CMakeLists.txt`.
 
 ## License
 
