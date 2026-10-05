@@ -5,8 +5,8 @@ out vec4 FragColor;
 uniform vec2 iResolution;
 uniform float iTime;
 uniform float iAudioAmp;
-uniform vec4 iAudioBands;      // x:bass, y:mids, z:treble, w:overall
-uniform vec4 iAudioBandsAtt;   // Enveloped audio bands
+uniform vec4 iAudioBands;      // x:bass, y:mids, z:treble, w:overall (raw normalised 0..1)
+uniform vec4 iAudioBandsAtt;   // Enveloped audio bands (attack/decay 0..1)
 uniform sampler2D iChannel0;   // Upstream input / feedback node
 
 // --- UI Controls: PALETTE SYNCHRONIZATION & CREATIVE PARAMETERS ---
@@ -19,26 +19,33 @@ uniform vec3 u_accentColor = vec3(1.0, 0.4, 0.1);    // {"widget":"color", "pale
 uniform vec3 u_highlightColor = vec3(0.2, 0.95, 0.8); // {"widget":"color", "palette":true, "label":"Highlight Orbital Rings"}
 uniform vec3 u_glowSecondary = vec3(0.65, 0.2, 1.0);  // {"widget":"color", "palette":true, "label":"Secondary Nebula Glow"}
 
-// Non-palette controls (Geometry, Motion & Audio Reactivity)
+// Non-palette controls: Geometry & Fractal Recursion
 uniform float u_recursion = 6.0;         // {"widget":"slider", "min":2.0, "max":9.0, "step":1.0, "label":"Recursion Depth", "smooth":true}
 uniform float u_scale = 1.85;            // {"widget":"slider", "min":1.0, "max":3.0, "step":0.02, "label":"Inversion Scale"}
-uniform float u_sphere_radius = 0.85;    // {"widget":"slider", "min":0.2, "max":1.8, "step":0.02, "label":"Sphere Radius"}
-uniform float u_ring_thickness = 0.025;  // {"widget":"slider", "min":0.005, "max":0.1, "step":0.005, "label":"Orbital Ring Thickness"}
+uniform float u_sphere_radius = 0.85;    // {"widget":"slider", "min":0.1, "max":2.5, "step":0.02, "label":"Sphere Inversion Radius"}
+uniform float u_organic_morph = 0.25;    // {"widget":"slider", "min":0.0, "max":1.0, "step":0.02, "label":"Organic Nature Morph"}
+
+// Non-palette controls: Orbital Rings System
+uniform float u_ring_count = 3.0;        // {"widget":"slider", "min":1.0, "max":6.0, "step":1.0, "label":"Orbital Ring Count"}
+uniform float u_ring_radius = 1.5;       // {"widget":"slider", "min":0.5, "max":4.0, "step":0.05, "label":"Orbital Ring Radius"}
+uniform float u_ring_thickness = 0.02;   // {"widget":"slider", "min":0.005, "max":0.1, "step":0.005, "label":"Ring Thickness"}
+uniform float u_ring_tilt = 0.6;         // {"widget":"slider", "min":0.0, "max":1.57, "step":0.05, "label":"Ring Tilt Angle"}
+uniform float u_ring_speed = 1.0;        // {"widget":"slider", "min":0.0, "max":3.0, "step":0.1, "label":"Ring Spin Speed"}
+
+// Non-palette controls: Motion, Lighting & Audio Reactivity
 uniform float u_speed = 0.5;             // {"widget":"slider", "min":0.0, "max":2.5, "step":0.05, "label":"Cosmic Evolution Speed"}
-uniform float u_audio_react = 0.15;      // {"widget":"slider", "min":0.0, "max":0.5, "step":0.01, "label":"Audio Reactivity"}
-uniform float u_organic_morph = 0.35;    // {"widget":"slider", "min":0.0, "max":1.0, "step":0.02, "label":"Organic Nature Morph"}
-uniform float u_glow_intensity = 2.0;    // {"widget":"slider", "min":0.1, "max":5.0, "step":0.1, "label":"Glow Intensity"}
+uniform float u_audio_react = 0.6;       // {"widget":"slider", "min":0.0, "max":1.5, "step":0.05, "label":"Audio Reactivity Multiplier"}
+uniform float u_glow_intensity = 1.2;    // {"widget":"slider", "min":0.1, "max":4.0, "step":0.1, "label":"Glow Intensity"}
 uniform float u_brightness = 1.0;        // {"widget":"slider", "min":0.2, "max":3.0, "step":0.1, "label":"Brightness"}
 uniform bool u_enable_fog = true;        // {"label":"Enable Atmospheric Fog"}
 
 // Cosmic void background
 uniform vec3 u_bg_color_bottom = vec3(0.01, 0.003, 0.025); // {"widget":"color", "label":"Void Bottom Color"}
-uniform vec3 u_bg_color_top = vec3(0.04, 0.015, 0.08);     // {"widget":"color", "label":"Void Top Color"}
+uniform vec3 u_bg_color_top = vec3(0.03, 0.01, 0.06);      // {"widget":"color", "label":"Void Top Color"}
 
 // --- Constants ---
 const float PI = 3.14159265359;
 const float TAU = 6.28318530718;
-const float PHI = 1.61803398875;
 
 // Global orbit trap for fractal coloring
 vec4 g_orbitTrap = vec4(100.0);
@@ -115,11 +122,6 @@ float gyroid(vec3 p) {
     return dot(cos(p * 1.5707963), sin(p.yzx * 1.5707963));
 }
 
-float smin(float a, float b, float k) {
-    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
-    return mix(b, a, h) - k * h * (1.0 - h);
-}
-
 // 2D Rotation matrix
 mat2 rot2D(float angle) {
     float c = cos(angle);
@@ -127,97 +129,135 @@ mat2 rot2D(float angle) {
     return mat2(c, -s, s, c);
 }
 
-// --- 3D Apollonian Fractal & Solar Network SDF ---
+// --- 3D Apollonian Fractal & Multi-Orbital Network SDF ---
 // Returns vec2(distance, material_id)
 vec2 map(vec3 p) {
-    // Smoothed audio reactivity drivers
+    // Multi-frequency audio drivers (both enveloped for smooth flow & raw for transient bursts)
     float bass = u_audio_react * iAudioBandsAtt.x;
     float mids = u_audio_react * iAudioBandsAtt.y;
     float treb = u_audio_react * iAudioBandsAtt.z;
     float overall = u_audio_react * iAudioBandsAtt.w;
 
+    float raw_bass = u_audio_react * iAudioBands.x;
+    float raw_treb = u_audio_react * iAudioBands.z;
+
     float time = iTime * u_speed;
 
     // Organic space warping (Nature & Flow)
     if (u_organic_morph > 0.001) {
-        vec3 morph_p = p * (1.5 + bass);
-        float g = gyroid(morph_p + time * 0.2) * u_organic_morph * 0.25;
-        float n = snoise(p * 2.0 + time * 0.1) * u_organic_morph * 0.15;
-        p += vec3(g, n, g) * (1.0 + overall);
+        vec3 morph_p = p * (1.2 + bass * 0.8);
+        float g = gyroid(morph_p + time * 0.2) * u_organic_morph * 0.3;
+        float n = snoise(p * 1.8 + time * 0.15) * u_organic_morph * 0.2;
+        p += vec3(g, n, g) * (1.0 + overall * 1.2);
     }
 
-    // Central Solar Core Star Distance
-    float core_radius = 0.35 + bass * 0.25;
+    // Central Solar Core Star Distance (pulsing with audio bass)
+    float core_radius = 0.30 + bass * 0.35 + raw_bass * 0.15;
     float dCore = length(p) - core_radius;
 
-    // Base Apollonian Fractal Sphere Packing Setup
+    // --- Multi-Orbital Ring System ---
+    float dRings = 10000.0;
+    float ringMat = 2.0;
+
+    int numRings = int(clamp(u_ring_count, 1.0, 6.0));
+    float baseRadius = u_ring_radius * (1.0 + bass * 0.25);
+
+    for (int r = 0; r < 6; r++) {
+        if (r >= numRings) break;
+
+        float ringIdx = float(r);
+        vec3 pR = p;
+
+        // Individual orbital ring inclination angle and audio wobble
+        float tiltAngle = u_ring_tilt * (1.0 + ringIdx * 0.35) + sin(time * 0.2 + ringIdx) * 0.15 + mids * 0.2;
+        float spinAngle = time * u_ring_speed * (0.8 + ringIdx * 0.3) * (r % 2 == 0 ? 1.0 : -1.0) + treb * 0.5;
+
+        // Apply 3D orbital rotations
+        pR.xy = rot2D(tiltAngle) * pR.xy;
+        pR.xz = rot2D(spinAngle) * pR.xz;
+
+        float rDist = baseRadius * (0.7 + ringIdx * 0.45);
+        float distToAxis = length(pR.xz);
+
+        // Ring gap/segmentation (cosmic Saturn-style ring pattern with audio pulses)
+        float angle = atan(pR.z, pR.x);
+        float ringSegments = sin(angle * (6.0 + ringIdx * 2.0) + spinAngle * 2.0);
+        float gapFactor = smoothstep(-0.2, 0.3, ringSegments);
+
+        float dSingleRing = max(abs(distToAxis - rDist) - u_ring_thickness * (1.0 + raw_treb * 0.5), abs(pR.y) - u_ring_thickness * 0.5);
+        dSingleRing = max(dSingleRing, -gapFactor * 0.01); // Subtle gaps in ring
+
+        if (dSingleRing < dRings) {
+            dRings = dSingleRing;
+            ringMat = 2.0 + ringIdx; // Distinct material IDs for each orbital ring
+        }
+    }
+
+    // --- Apollonian Sphere Packing Fractal ---
     vec3 q = p;
 
-    // Slowly rotate camera domain for interdimensional cosmic evolution
-    q.xz = rot2D(time * 0.15 + bass * 0.5) * q.xz;
-    q.xy = rot2D(time * 0.10 + mids * 0.3) * q.xy;
+    // Slow domain rotations driven by time & audio
+    q.xz = rot2D(time * 0.12 + bass * 0.4) * q.xz;
+    q.xy = rot2D(time * 0.08 + mids * 0.3) * q.xy;
 
-    float scale = u_scale + bass * 0.2;
+    float scale = u_scale + bass * 0.3;
     float total_scale = 1.0;
 
     g_orbitTrap = vec4(100.0);
 
-    // Iterative Apollonian Sphere Inversion / Folding Loop
+    // FIXED: Sphere Inversion Radius parameter now directly drives inversion threshold!
+    float fixedRadius2 = u_sphere_radius * u_sphere_radius * (1.0 + treb * 0.6);
+    float minRadius2 = 0.08 * u_sphere_radius;
+
     int iterations = int(u_recursion);
     for (int i = 0; i < iterations; i++) {
-        // Modulo domain folding (Box/Grid lattice bounds)
+        // Modulo domain folding (Lattice symmetry)
         q = -1.0 + 2.0 * fract(0.5 * q + 0.5);
 
-        // Spherical inversion around unit sphere / packing radius
         float r2 = dot(q, q);
 
-        // Record orbit trap values for psychedelic coloring
+        // Record orbit traps for psychedelic coloring
         g_orbitTrap = min(g_orbitTrap, vec4(abs(q), r2));
 
-        // Audio-modulated inversion factor
-        float target_r2 = u_sphere_radius * u_sphere_radius * (1.0 + treb * 0.2);
-        float k = max(scale / max(r2, 0.0001), 1.0);
+        // Apollonian / Mandelbox sphere folding inversion
+        if (r2 < minRadius2) {
+            float k = fixedRadius2 / minRadius2;
+            q *= k;
+            total_scale *= k;
+        } else if (r2 < fixedRadius2) {
+            float k = fixedRadius2 / r2;
+            q *= k;
+            total_scale *= k;
+        }
 
-        // Apply spherical inversion & scale
-        q *= k;
-        total_scale *= k;
+        // Apply scale & iterative polyhedral rotations
+        q *= scale;
+        total_scale *= scale;
 
-        // Apply iterative polyhedral rotations (Solar system geometry)
-        float iter_rot = time * 0.05 + float(i) * 0.2 + mids * 0.2;
+        float iter_rot = time * 0.04 + float(i) * 0.25 + mids * 0.25;
         q.yz = rot2D(iter_rot) * q.yz;
-        q.xz = rot2D(iter_rot * 1.3) * q.xz;
+        q.xz = rot2D(iter_rot * 1.2) * q.xz;
     }
 
-    // Distance to inverted Apollonian spheres in transformed space
-    float dApollonian = (length(q) - 0.75) / total_scale;
+    // Distance to inverted Apollonian spheres
+    float dApollonian = (length(q) - 0.70) / total_scale;
 
-    // Celestial Orbital Rings (Solar System Theme)
-    vec3 pRing = p;
-    float rPlane = length(pRing.xz);
-    float dOrbitalRing1 = max(abs(rPlane - (1.2 + bass * 0.4)) - u_ring_thickness, abs(pRing.y) - u_ring_thickness * 0.5);
-
-    // Tilted second orbital ring
-    pRing.xy = rot2D(0.6 + sin(time * 0.2) * 0.2) * pRing.xy;
-    rPlane = length(pRing.xz);
-    float dOrbitalRing2 = max(abs(rPlane - (2.0 + mids * 0.5)) - u_ring_thickness * 0.8, abs(pRing.y) - u_ring_thickness * 0.4);
-
-    // Organic Energy Filaments (Recursive Nature Connection)
-    float dFilaments = length(q.xy) / total_scale - 0.008 * (1.0 + treb * 0.5);
+    // Interdimensional Energy Filaments (Recursive Nature Connections)
+    float dFilaments = length(q.xy) / total_scale - 0.006 * (1.0 + treb * 0.8);
 
     // Combine scene geometry with material IDs
     vec2 res = vec2(dApollonian, 1.0); // Material 1 = Apollonian Fractal Spheres
 
-    if (dOrbitalRing1 < res.x) res = vec2(dOrbitalRing1, 2.0); // Material 2 = Inner Orbital Ring
-    if (dOrbitalRing2 < res.x) res = vec2(dOrbitalRing2, 3.0); // Material 3 = Outer Orbital Ring
-    if (dFilaments < res.x) res = vec2(dFilaments, 5.0);    // Material 5 = Interdimensional Energy Filaments
-    if (dCore < res.x) res = vec2(dCore, 4.0);              // Material 4 = Central Solar Core Star
+    if (dRings < res.x) res = vec2(dRings, ringMat);    // Material 2.0..7.0 = Orbital Rings
+    if (dFilaments < res.x) res = vec2(dFilaments, 8.0); // Material 8 = Energy Filaments
+    if (dCore < res.x) res = vec2(dCore, 9.0);          // Material 9 = Central Solar Core Star
 
     return res;
 }
 
 // --- Normal Calculation ---
 vec3 calcNormal(vec3 p) {
-    const float h = 0.0002;
+    const float h = 0.0003;
     const vec2 k = vec2(1.0, -1.0);
     return normalize(k.xyy * map(p + k.xyy * h).x +
                      k.yyx * map(p + k.yyx * h).x +
@@ -227,22 +267,24 @@ vec3 calcNormal(vec3 p) {
 
 // --- Iridescence & Shading ---
 vec3 iridescence(vec3 normal, vec3 viewDir, float intensity) {
-    float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5);
+    float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.2);
     vec3 iridCol = hsv2rgb(vec3(fresnel * 2.0 + iTime * 0.15, 0.85, 1.0));
     return iridCol * intensity * fresnel;
 }
 
 // --- Material & Orbit Trap Color Mapping ---
 vec3 getMaterialColor(float matID, vec3 pos, vec3 normal) {
-    float bass = iAudioBandsAtt.x * u_brightness;
-    float mids = iAudioBandsAtt.y * u_brightness;
-    float treb = iAudioBandsAtt.z * u_brightness;
-    float overall = iAudioBandsAtt.w * u_brightness;
+    float bass = iAudioBandsAtt.x;
+    float mids = iAudioBandsAtt.y;
+    float treb = iAudioBandsAtt.z;
+    float overall = iAudioBandsAtt.w;
 
-    if (matID == 4.0) {
-        // Central Solar Core Star: Blackbody radiation modulated by audio
-        float temp = 4000.0 + bass * 12000.0 + overall * 6000.0;
-        vec3 starCol = blackbody(temp) * u_primaryColor * (1.5 + bass * 1.5);
+    float raw_bass = iAudioBands.x;
+
+    if (matID == 9.0) {
+        // Central Solar Core Star: Balanced Blackbody emission modulated by audio
+        float temp = 3500.0 + bass * 8000.0 + raw_bass * 4000.0;
+        vec3 starCol = blackbody(temp) * u_primaryColor * (1.1 + bass * 0.8);
         return starCol;
     }
 
@@ -250,7 +292,6 @@ vec3 getMaterialColor(float matID, vec3 pos, vec3 normal) {
         // Apollonian Fractal Spheres: Psychedelic Orbit Trap Shading
         g_orbitTrap.w = sqrt(max(g_orbitTrap.w, 0.0));
 
-        // Blend semantic palette colors based on orbit traps
         float t1 = clamp(g_orbitTrap.x * 2.0, 0.0, 1.0);
         float t2 = clamp(g_orbitTrap.y * 2.0, 0.0, 1.0);
         float t3 = clamp(g_orbitTrap.z * 2.0, 0.0, 1.0);
@@ -259,39 +300,37 @@ vec3 getMaterialColor(float matID, vec3 pos, vec3 normal) {
         vec3 colB = mix(u_accentColor, u_highlightColor, t2);
         vec3 fracCol = mix(colA, colB, t3);
 
-        // Add position-dependent psychedelic HSV hue shift
-        float hueShift = fract(dot(pos, vec3(0.12, 0.18, 0.25)) + iTime * 0.05 + bass * 0.2);
+        // Position & audio-dependent HSV hue shifts
+        float hueShift = fract(dot(pos, vec3(0.12, 0.18, 0.25)) + iTime * 0.05 + bass * 0.3);
         fracCol = mix(fracCol, hsv2rgb(vec3(hueShift, 0.9, 1.0)), 0.35);
 
-        return fracCol * (1.0 + mids * 0.5);
+        return fracCol * (0.9 + mids * 0.6);
     }
 
-    if (matID == 2.0) {
-        // Inner Orbital Ring (Accent Corona & Solar Flares)
-        float ringPos = sin(atan(pos.z, pos.x) * 8.0 + iTime * 3.0) * 0.5 + 0.5;
-        vec3 ringCol = mix(u_accentColor, u_primaryColor, ringPos);
-        return ringCol * (1.5 + bass * 2.0);
+    if (matID >= 2.0 && matID <= 7.0) {
+        // Multi-Orbital Rings with distinct gradient colors & audio flares
+        float ringIdx = matID - 2.0;
+        float ringPos = sin(atan(pos.z, pos.x) * (6.0 + ringIdx * 2.0) + iTime * (2.0 + ringIdx)) * 0.5 + 0.5;
+
+        vec3 ringBaseA = mix(u_accentColor, u_highlightColor, ringIdx / 5.0);
+        vec3 ringBaseB = mix(u_secondaryColor, u_primaryColor, ringIdx / 5.0);
+
+        vec3 ringCol = mix(ringBaseA, ringBaseB, ringPos);
+        return ringCol * (1.2 + treb * 1.5 + raw_bass * 0.8);
     }
 
-    if (matID == 3.0) {
-        // Outer Orbital Ring (Highlight Cyan/Gold Beams)
-        float beamPos = sin(atan(pos.z, pos.x) * 12.0 - iTime * 4.0) * 0.5 + 0.5;
-        vec3 ringCol = mix(u_highlightColor, u_secondaryColor, beamPos);
-        return ringCol * (1.5 + treb * 2.0);
-    }
-
-    if (matID == 5.0) {
+    if (matID == 8.0) {
         // Interdimensional Energy Filaments
-        vec3 filamentCol = u_glowSecondary * (2.0 + treb * 3.0);
+        vec3 filamentCol = u_glowSecondary * (1.5 + treb * 2.0);
         return filamentCol;
     }
 
-    return u_primaryColor * u_brightness;
+    return u_primaryColor;
 }
 
-// --- Cinematic Lighting ---
+// --- Balanced Lighting ---
 vec3 computeLighting(vec3 pos, vec3 normal, vec3 viewDir, vec3 baseColor, float matID) {
-    if (matID == 4.0) return baseColor; // Solar core is self-luminous
+    if (matID == 9.0) return baseColor; // Central Solar core is self-luminous
 
     float bass = iAudioBandsAtt.x;
     float mids = iAudioBandsAtt.y;
@@ -299,66 +338,65 @@ vec3 computeLighting(vec3 pos, vec3 normal, vec3 viewDir, vec3 baseColor, float 
 
     // Central Solar Core Light
     vec3 lightPos1 = vec3(0.0);
-    vec3 lightCol1 = blackbody(5000.0 + bass * 8000.0) * u_primaryColor * 2.0;
+    vec3 lightCol1 = blackbody(4500.0 + bass * 6000.0) * u_primaryColor * 1.2;
 
     // Orbiting Satellite Light 1
     vec3 lightPos2 = vec3(cos(iTime * 0.8) * 3.0, sin(iTime * 0.5) * 2.0, sin(iTime * 0.8) * 3.0);
-    vec3 lightCol2 = u_secondaryColor * (1.2 + mids * 1.5);
+    vec3 lightCol2 = u_secondaryColor * (0.8 + mids * 1.0);
 
     // Orbiting Satellite Light 2
     vec3 lightPos3 = vec3(sin(iTime * 0.6) * -3.5, cos(iTime * 0.7) * 2.5, cos(iTime * 0.6) * -3.5);
-    vec3 lightCol3 = u_accentColor * (1.0 + treb * 1.5);
+    vec3 lightCol3 = u_accentColor * (0.8 + treb * 1.0);
 
-    vec3 totalLighting = baseColor * 0.15; // Ambient
+    vec3 totalLighting = baseColor * 0.2; // Ambient
 
     // Light 1 (Solar Core)
     vec3 lDir1 = normalize(lightPos1 - pos);
     float dist1 = length(lightPos1 - pos);
     float diff1 = max(dot(normal, lDir1), 0.0);
-    float att1 = 1.0 / (1.0 + 0.2 * dist1 + 0.05 * dist1 * dist1);
+    float att1 = 1.0 / (1.0 + 0.3 * dist1 + 0.08 * dist1 * dist1);
     totalLighting += diff1 * baseColor * lightCol1 * att1;
 
     // Light 2 & 3
     vec3 lDir2 = normalize(lightPos2 - pos);
     float diff2 = max(dot(normal, lDir2), 0.0);
     float spec2 = pow(max(dot(viewDir, reflect(-lDir2, normal)), 0.0), 32.0);
-    totalLighting += (diff2 * baseColor + spec2 * 0.5) * lightCol2;
+    totalLighting += (diff2 * baseColor + spec2 * 0.4) * lightCol2;
 
     vec3 lDir3 = normalize(lightPos3 - pos);
     float diff3 = max(dot(normal, lDir3), 0.0);
     float spec3 = pow(max(dot(viewDir, reflect(-lDir3, normal)), 0.0), 32.0);
-    totalLighting += (diff3 * baseColor + spec3 * 0.5) * lightCol3;
+    totalLighting += (diff3 * baseColor + spec3 * 0.4) * lightCol3;
 
     // Add Iridescence on fractal surface
     if (matID == 1.0) {
-        totalLighting += iridescence(normal, viewDir, 0.4);
+        totalLighting += iridescence(normal, viewDir, 0.35);
     }
 
     return totalLighting;
 }
 
-// --- Volumetric Glow Accumulation ---
+// --- Balanced Volumetric Glow Accumulation ---
 vec3 raymarchWithGlow(vec3 ro, vec3 rd, out vec2 materialInfo, out float hitT) {
     float t = 0.001;
     float maxDist = 30.0;
     vec3 accumulatedGlow = vec3(0.0);
 
     float bass = iAudioBandsAtt.x;
-    float treb = iAudioBandsAtt.z;
     float overall = iAudioBandsAtt.w;
 
-    vec3 glowColorCore = u_accentColor * (1.0 + bass * 2.0);
-    vec3 glowColorFractal = u_glowSecondary * (1.0 + overall * 2.0);
+    vec3 glowColorCore = u_accentColor * (0.8 + bass * 1.5);
+    vec3 glowColorFractal = u_glowSecondary * (0.8 + overall * 1.5);
 
-    for (int i = 0; i < 180; i++) {
+    for (int i = 0; i < 160; i++) {
         vec3 pos = ro + rd * t;
         vec2 res = map(pos);
         float d = res.x;
 
-        // Accumulate volumetric glow from near misses with the fractal core & solar star
-        float glowFactor = 0.0015 * u_glow_intensity / (0.002 + abs(d) * abs(d) * 12.0);
-        if (res.y == 4.0) {
-            accumulatedGlow += glowColorCore * glowFactor * 2.0;
+        // Controlled volumetric glow calculation (preventing whiteout exposure)
+        float glowFactor = 0.0006 * u_glow_intensity / (0.005 + abs(d) * abs(d) * 20.0);
+        if (res.y == 9.0) {
+            accumulatedGlow += glowColorCore * glowFactor * 1.2;
         } else {
             accumulatedGlow += glowColorFractal * glowFactor;
         }
@@ -369,7 +407,7 @@ vec3 raymarchWithGlow(vec3 ro, vec3 rd, out vec2 materialInfo, out float hitT) {
             return accumulatedGlow;
         }
 
-        t += d * 0.75; // Slower stepping for detailed glow and high resolution
+        t += d * 0.75;
         if (t > maxDist) break;
     }
 
@@ -381,8 +419,8 @@ vec3 raymarchWithGlow(vec3 ro, vec3 rd, out vec2 materialInfo, out float hitT) {
 // --- Atmospheric Fog ---
 vec3 applyFog(vec3 color, float distance, vec3 rd) {
     if (!u_enable_fog) return color;
-    float fogAmount = 1.0 - exp(-distance * 0.04);
-    vec3 fogColor = mix(u_bg_color_bottom, u_glowSecondary * 0.2, 0.5 + 0.5 * rd.y);
+    float fogAmount = 1.0 - exp(-distance * 0.035);
+    vec3 fogColor = mix(u_bg_color_bottom, u_glowSecondary * 0.15, 0.5 + 0.5 * rd.y);
     return mix(color, fogColor, fogAmount);
 }
 
@@ -404,9 +442,9 @@ void main() {
     float bass = iAudioBandsAtt.x;
 
     // Interactive / Evolving Camera Orbiting Path
-    float camDist = 4.2 - bass * 0.6;
+    float camDist = 4.2 - bass * 0.8;
     float camAngleX = time * 0.15;
-    float camAngleY = sin(time * 0.10) * 0.4;
+    float camAngleY = sin(time * 0.10) * 0.35;
 
     vec3 ro = vec3(camDist * sin(camAngleX) * cos(camAngleY),
                    camDist * sin(camAngleY),
@@ -444,32 +482,36 @@ void main() {
         // Apply atmospheric fog
         col = applyFog(col, hitT, rd);
     } else {
-        // Starfield / Cosmic dust in background void
-        float starSeed = fract(sin(dot(uv * 100.0 + time * 0.01, vec2(12.9898, 78.233))) * 43758.5453);
+        // Starfield / Cosmic dust in background void with audio bursts
+        float starSeed = fract(sin(dot(uv * 120.0 + time * 0.01, vec2(12.9898, 78.233))) * 43758.5453);
         if (starSeed > 0.994) {
-            col += u_highlightColor * (starSeed - 0.994) * 200.0 * (1.0 + iAudioBandsAtt.w * 2.0);
+            col += u_highlightColor * (starSeed - 0.994) * 150.0 * (1.0 + iAudioBandsAtt.w * 3.0);
         }
     }
 
     // Add accumulated volumetric glow
     col += glow;
 
+    // Apply brightness parameter after tone mapping / properly scaled
+    col *= u_brightness;
+
+    // ACES Tone Mapping
+    col = acesFilm(col);
+
+    // Gamma correction
+    col = pow(col, vec3(1.0 / 2.2));
+
     // Temporal Blending / Motion Persistence using input node on iChannel0
     vec2 screenUV = gl_FragCoord.xy / iResolution.xy;
     vec3 prevFrame = texture(iChannel0, screenUV).rgb;
     if (length(prevFrame) > 0.001) {
-        col = mix(col, prevFrame, 0.15); // Subtle persistence trails
+        col = mix(col, prevFrame, 0.12); // Subtle persistence trails
     }
-
-    // Post-Processing Pipeline
-    col *= u_brightness;
-    col = acesFilm(col);
-    col = pow(col, vec3(1.0 / 2.2)); // Gamma correction
 
     // Subtle Chromatic Aberration toward screen edges
     float distFromCenter = length(uv);
-    if (distFromCenter > 0.3) {
-        float caAmount = (distFromCenter - 0.3) * 0.008;
+    if (distFromCenter > 0.25) {
+        float caAmount = (distFromCenter - 0.25) * 0.008;
         col.r = mix(col.r, col.r * (1.0 + caAmount), 0.5);
         col.b = mix(col.b, col.b * (1.0 - caAmount), 0.5);
     }
