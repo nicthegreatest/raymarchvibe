@@ -19,6 +19,12 @@ uniform vec3 u_accentColor = vec3(1.0, 0.4, 0.1);    // {"widget":"color", "pale
 uniform vec3 u_highlightColor = vec3(0.2, 0.95, 0.8); // {"widget":"color", "palette":true, "label":"Highlight Orbital Rings"}
 uniform vec3 u_glowSecondary = vec3(0.65, 0.2, 1.0);  // {"widget":"color", "palette":true, "label":"Secondary Nebula Glow"}
 
+// Dedicated Ring Bass Gradient & Color-Cycling Palette Controls
+uniform vec3 u_ringLowBassColor = vec3(0.1, 0.4, 0.9);   // {"widget":"color", "palette":true, "label":"Ring Low-Bass Color"}
+uniform vec3 u_ringHighBassColor = vec3(1.0, 0.2, 0.4);  // {"widget":"color", "palette":true, "label":"Ring High-Bass Color"}
+uniform bool u_enable_ring_color_cycle = true;           // {"label":"Enable Ring Color Cycling"}
+uniform float u_ring_color_cycle_speed = 1.0;            // {"widget":"slider", "min":0.0, "max":3.0, "step":0.1, "label":"Ring Color Cycle Speed"}
+
 // Non-palette controls: Geometry & Fractal Recursion
 uniform float u_recursion = 6.0;         // {"widget":"slider", "min":2.0, "max":9.0, "step":1.0, "label":"Recursion Depth", "smooth":true}
 uniform float u_scale = 1.85;            // {"widget":"slider", "min":1.0, "max":3.0, "step":0.02, "label":"Inversion Scale"}
@@ -32,9 +38,15 @@ uniform float u_ring_thickness = 0.02;   // {"widget":"slider", "min":0.005, "ma
 uniform float u_ring_tilt = 0.6;         // {"widget":"slider", "min":0.0, "max":1.57, "step":0.05, "label":"Ring Tilt Angle"}
 uniform float u_ring_speed = 1.0;        // {"widget":"slider", "min":0.0, "max":3.0, "step":0.1, "label":"Ring Spin Speed"}
 
-// Non-palette controls: Motion, Lighting & Audio Reactivity
+// Non-palette controls: Fine-Grain Audio Reactivity & Filtering
+uniform float u_audio_react = 1.0;         // {"widget":"slider", "min":0.0, "max":2.0, "step":0.05, "label":"Master Audio Reactivity"}
+uniform float u_audio_threshold = 0.05;    // {"widget":"slider", "min":0.0, "max":0.5, "step":0.01, "label":"Audio Filter Threshold"}
+uniform float u_audio_bass_boost = 1.0;    // {"widget":"slider", "min":0.0, "max":3.0, "step":0.05, "label":"Bass Boost"}
+uniform float u_audio_mids_boost = 1.0;    // {"widget":"slider", "min":0.0, "max":3.0, "step":0.05, "label":"Mids Boost"}
+uniform float u_audio_treble_boost = 1.0;  // {"widget":"slider", "min":0.0, "max":3.0, "step":0.05, "label":"Treble Boost"}
+
+// Non-palette controls: Motion, Lighting & Render Quality
 uniform float u_speed = 0.5;             // {"widget":"slider", "min":0.0, "max":2.5, "step":0.05, "label":"Cosmic Evolution Speed"}
-uniform float u_audio_react = 0.6;       // {"widget":"slider", "min":0.0, "max":1.5, "step":0.05, "label":"Audio Reactivity Multiplier"}
 uniform float u_glow_intensity = 1.2;    // {"widget":"slider", "min":0.1, "max":4.0, "step":0.1, "label":"Glow Intensity"}
 uniform float u_brightness = 1.0;        // {"widget":"slider", "min":0.2, "max":3.0, "step":0.1, "label":"Brightness"}
 uniform bool u_enable_fog = true;        // {"label":"Enable Atmospheric Fog"}
@@ -49,6 +61,13 @@ const float TAU = 6.28318530718;
 
 // Global orbit trap for fractal coloring
 vec4 g_orbitTrap = vec4(100.0);
+
+// --- Audio Band Filtering & Boosting ---
+float filterAudioBand(float rawVal, float thresh, float boost) {
+    float clampedThresh = clamp(thresh, 0.0, 0.95);
+    float val = max(rawVal - clampedThresh, 0.0) / (1.0 - clampedThresh);
+    return val * boost;
+}
 
 // --- Noise & Color Helpers ---
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -132,14 +151,14 @@ mat2 rot2D(float angle) {
 // --- 3D Apollonian Fractal & Multi-Orbital Network SDF ---
 // Returns vec2(distance, material_id)
 vec2 map(vec3 p) {
-    // Multi-frequency audio drivers (both enveloped for smooth flow & raw for transient bursts)
-    float bass = u_audio_react * iAudioBandsAtt.x;
-    float mids = u_audio_react * iAudioBandsAtt.y;
-    float treb = u_audio_react * iAudioBandsAtt.z;
-    float overall = u_audio_react * iAudioBandsAtt.w;
+    // Process fine-grained filtered & boosted audio bands
+    float bass = filterAudioBand(iAudioBandsAtt.x, u_audio_threshold, u_audio_bass_boost) * u_audio_react;
+    float mids = filterAudioBand(iAudioBandsAtt.y, u_audio_threshold, u_audio_mids_boost) * u_audio_react;
+    float treb = filterAudioBand(iAudioBandsAtt.z, u_audio_threshold, u_audio_treble_boost) * u_audio_react;
+    float overall = (bass + mids + treb) * 0.33333;
 
-    float raw_bass = u_audio_react * iAudioBands.x;
-    float raw_treb = u_audio_react * iAudioBands.z;
+    float raw_bass = filterAudioBand(iAudioBands.x, u_audio_threshold, u_audio_bass_boost) * u_audio_react;
+    float raw_treb = filterAudioBand(iAudioBands.z, u_audio_threshold, u_audio_treble_boost) * u_audio_react;
 
     float time = iTime * u_speed;
 
@@ -185,7 +204,7 @@ vec2 map(vec3 p) {
         float gapFactor = smoothstep(-0.2, 0.3, ringSegments);
 
         float dSingleRing = max(abs(distToAxis - rDist) - u_ring_thickness * (1.0 + raw_treb * 0.5), abs(pR.y) - u_ring_thickness * 0.5);
-        dSingleRing = max(dSingleRing, -gapFactor * 0.01); // Subtle gaps in ring
+        dSingleRing = max(dSingleRing, -gapFactor * 0.01);
 
         if (dSingleRing < dRings) {
             dRings = dSingleRing;
@@ -205,7 +224,7 @@ vec2 map(vec3 p) {
 
     g_orbitTrap = vec4(100.0);
 
-    // FIXED: Sphere Inversion Radius parameter now directly drives inversion threshold!
+    // Sphere Inversion Radius parameter directly drives inversion threshold
     float fixedRadius2 = u_sphere_radius * u_sphere_radius * (1.0 + treb * 0.6);
     float minRadius2 = 0.08 * u_sphere_radius;
 
@@ -274,12 +293,12 @@ vec3 iridescence(vec3 normal, vec3 viewDir, float intensity) {
 
 // --- Material & Orbit Trap Color Mapping ---
 vec3 getMaterialColor(float matID, vec3 pos, vec3 normal) {
-    float bass = iAudioBandsAtt.x;
-    float mids = iAudioBandsAtt.y;
-    float treb = iAudioBandsAtt.z;
-    float overall = iAudioBandsAtt.w;
+    // Process fine-grained filtered & boosted audio bands
+    float bass = filterAudioBand(iAudioBandsAtt.x, u_audio_threshold, u_audio_bass_boost) * u_audio_react;
+    float mids = filterAudioBand(iAudioBandsAtt.y, u_audio_threshold, u_audio_mids_boost) * u_audio_react;
+    float treb = filterAudioBand(iAudioBandsAtt.z, u_audio_threshold, u_audio_treble_boost) * u_audio_react;
 
-    float raw_bass = iAudioBands.x;
+    float raw_bass = filterAudioBand(iAudioBands.x, u_audio_threshold, u_audio_bass_boost) * u_audio_react;
 
     if (matID == 9.0) {
         // Central Solar Core Star: Balanced Blackbody emission modulated by audio
@@ -308,15 +327,31 @@ vec3 getMaterialColor(float matID, vec3 pos, vec3 normal) {
     }
 
     if (matID >= 2.0 && matID <= 7.0) {
-        // Multi-Orbital Rings with distinct gradient colors & audio flares
+        // Multi-Orbital Rings: BASS LEVEL GRADIENT & COLOR-CYCLING SYSTEM
         float ringIdx = matID - 2.0;
-        float ringPos = sin(atan(pos.z, pos.x) * (6.0 + ringIdx * 2.0) + iTime * (2.0 + ringIdx)) * 0.5 + 0.5;
 
-        vec3 ringBaseA = mix(u_accentColor, u_highlightColor, ringIdx / 5.0);
-        vec3 ringBaseB = mix(u_secondaryColor, u_primaryColor, ringIdx / 5.0);
+        // Bass factor for smooth gradient transition between u_ringLowBassColor and u_ringHighBassColor
+        float bassFactor = clamp(bass * 1.5, 0.0, 1.0);
+        vec3 ringBassGrad = mix(u_ringLowBassColor, u_ringHighBassColor, bassFactor);
 
-        vec3 ringCol = mix(ringBaseA, ringBaseB, ringPos);
-        return ringCol * (1.2 + treb * 1.5 + raw_bass * 0.8);
+        vec3 finalRingCol = ringBassGrad;
+
+        // Dynamic Color-Cycling along ring angular arcs and over time if enabled
+        if (u_enable_ring_color_cycle) {
+            float angle = atan(pos.z, pos.x) / TAU;
+            float cycleOffset = iTime * u_ring_color_cycle_speed * 0.2 + angle + ringIdx * 0.15;
+            vec3 cycleCol = hsv2rgb(vec3(fract(cycleOffset + bassFactor * 0.4), 0.85, 1.0));
+
+            // Combine low/high bass gradient with psychedelic color cycle
+            finalRingCol = mix(ringBassGrad, cycleCol, 0.5);
+        }
+
+        // Overlay ring segment brightness variation
+        float ringSeg = sin(atan(pos.z, pos.x) * (6.0 + ringIdx * 2.0) + iTime * (2.0 + ringIdx)) * 0.5 + 0.5;
+        vec3 accentBlend = mix(u_highlightColor, u_accentColor, ringSeg);
+
+        finalRingCol = mix(finalRingCol, accentBlend, 0.25);
+        return finalRingCol * (1.2 + treb * 1.5 + raw_bass * 0.8);
     }
 
     if (matID == 8.0) {
@@ -332,9 +367,9 @@ vec3 getMaterialColor(float matID, vec3 pos, vec3 normal) {
 vec3 computeLighting(vec3 pos, vec3 normal, vec3 viewDir, vec3 baseColor, float matID) {
     if (matID == 9.0) return baseColor; // Central Solar core is self-luminous
 
-    float bass = iAudioBandsAtt.x;
-    float mids = iAudioBandsAtt.y;
-    float treb = iAudioBandsAtt.z;
+    float bass = filterAudioBand(iAudioBandsAtt.x, u_audio_threshold, u_audio_bass_boost) * u_audio_react;
+    float mids = filterAudioBand(iAudioBandsAtt.y, u_audio_threshold, u_audio_mids_boost) * u_audio_react;
+    float treb = filterAudioBand(iAudioBandsAtt.z, u_audio_threshold, u_audio_treble_boost) * u_audio_react;
 
     // Central Solar Core Light
     vec3 lightPos1 = vec3(0.0);
@@ -382,8 +417,8 @@ vec3 raymarchWithGlow(vec3 ro, vec3 rd, out vec2 materialInfo, out float hitT) {
     float maxDist = 30.0;
     vec3 accumulatedGlow = vec3(0.0);
 
-    float bass = iAudioBandsAtt.x;
-    float overall = iAudioBandsAtt.w;
+    float bass = filterAudioBand(iAudioBandsAtt.x, u_audio_threshold, u_audio_bass_boost) * u_audio_react;
+    float overall = (bass + filterAudioBand(iAudioBandsAtt.y, u_audio_threshold, u_audio_mids_boost) + filterAudioBand(iAudioBandsAtt.z, u_audio_threshold, u_audio_treble_boost)) * 0.33333 * u_audio_react;
 
     vec3 glowColorCore = u_accentColor * (0.8 + bass * 1.5);
     vec3 glowColorFractal = u_glowSecondary * (0.8 + overall * 1.5);
@@ -439,7 +474,7 @@ void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
 
     float time = iTime * u_speed;
-    float bass = iAudioBandsAtt.x;
+    float bass = filterAudioBand(iAudioBandsAtt.x, u_audio_threshold, u_audio_bass_boost) * u_audio_react;
 
     // Interactive / Evolving Camera Orbiting Path
     float camDist = 4.2 - bass * 0.8;
@@ -483,16 +518,17 @@ void main() {
         col = applyFog(col, hitT, rd);
     } else {
         // Starfield / Cosmic dust in background void with audio bursts
+        float overallAudio = (bass + filterAudioBand(iAudioBandsAtt.y, u_audio_threshold, u_audio_mids_boost) + filterAudioBand(iAudioBandsAtt.z, u_audio_threshold, u_audio_treble_boost)) * 0.33333 * u_audio_react;
         float starSeed = fract(sin(dot(uv * 120.0 + time * 0.01, vec2(12.9898, 78.233))) * 43758.5453);
         if (starSeed > 0.994) {
-            col += u_highlightColor * (starSeed - 0.994) * 150.0 * (1.0 + iAudioBandsAtt.w * 3.0);
+            col += u_highlightColor * (starSeed - 0.994) * 150.0 * (1.0 + overallAudio * 3.0);
         }
     }
 
     // Add accumulated volumetric glow
     col += glow;
 
-    // Apply brightness parameter after tone mapping / properly scaled
+    // Apply brightness parameter
     col *= u_brightness;
 
     // ACES Tone Mapping
