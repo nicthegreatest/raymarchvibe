@@ -418,14 +418,42 @@ target_compile_definitions(RaymarchVibe PRIVATE
 )
 # Removed CPPHTTPLIB_OPENSSL_SUPPORT from here, it's now conditional
 
+# --- Shader deployment -------------------------------------------------------
+# The application loads shaders from "<executable dir>/shaders", so the source
+# tree's shaders/ directory is copied into the build directory. That copy used to
+# be a POST_BUILD command on the RaymarchVibe target, which only fires when the
+# executable itself is relinked: editing a .frag and running `make` deployed
+# nothing and the app silently kept loading the previous shader text.
+#
+# The copy is now a build step of its own. RaymarchVibeShaders runs on every
+# build, compares the two trees and copies only when they differ, so
+#   * editing a shader deploys it with a plain `make`,
+#   * adding or removing a shader file is noticed too (the script re-globs),
+#   * a build with nothing changed copies nothing and prints nothing.
+# cmake/DeployShaders.cmake explains why the comparison happens inside the build
+# rather than through a DEPENDS list of the shader files.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
-  add_custom_command(
-    TARGET RaymarchVibe POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            "$<TARGET_FILE_DIR:RaymarchVibe>/shaders"
-    COMMENT "Copying shaders to build directory"
+  # Where the executable lands, i.e. where the application looks for its shaders
+  # and where the old POST_BUILD copy put them. Spelled out instead of using
+  # $<TARGET_FILE_DIR:RaymarchVibe>, because a generator expression naming the
+  # target inside a step that target depends on is an inter-target dependency
+  # cycle (RaymarchVibe -> RaymarchVibeShaders -> RaymarchVibe). RaymarchVibe sets
+  # no RUNTIME_OUTPUT_DIRECTORY, so the executable lands at the top of the build
+  # tree, or in <build>/<config> for a multi-config generator.
+  if(CMAKE_CONFIGURATION_TYPES)
+    set(_rayvibe_shader_dir "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+  else()
+    set(_rayvibe_shader_dir "${CMAKE_CURRENT_BINARY_DIR}")
+  endif()
+  add_custom_target(RaymarchVibeShaders
+    COMMAND ${CMAKE_COMMAND}
+            "-DRAYVIBE_SHADER_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            "-DRAYVIBE_SHADER_DESTINATION=${_rayvibe_shader_dir}/shaders"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/DeployShaders.cmake"
+    COMMENT "Checking the shaders in the build directory"
+    VERBATIM
   )
+  add_dependencies(RaymarchVibe RaymarchVibeShaders)
 endif()
 
 if(APPLE)
