@@ -218,13 +218,13 @@ ExternalProject_Add(
         --enable-encoder=aac 
 
 
+        --enable-encoder=alac 
+
+
         --enable-muxer=mp4 
 
 
         --enable-muxer=mov 
-
-
-        --enable-muxer=mpg 
 
 
         --enable-protocol=file 

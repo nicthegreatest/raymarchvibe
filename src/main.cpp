@@ -23,6 +23,8 @@
 #include <filesystem> // For std::filesystem::path
 #include <chrono> // For recording timer
 #include <cstdlib> // For exit
+#include <cstdint>
+#include <cstring>
 
 // --- Core App Headers ---
 #include "Effect.h"
@@ -184,6 +186,13 @@ static bool g_offlineRendering = false;
 static float g_offlineTime = 0.0f;
 static int g_videoQuality = 2; // Default to High
 static int g_audioBitrate = 1; // Default to 192k
+static char g_recordingFilename[128] = "output.mp4";
+static int g_recordingFormat = 0;
+static const char* g_recordingFormats[] = { "mp4", "mov" };
+static bool g_recordAudio = true;
+static std::string g_recordingError;
+static bool g_recordingOverwritePending = false;
+static int64_t g_offlineAudioRemainder = 0;
 
 // Window visibility flags
 static bool g_showShaderEditorWindow = true;
@@ -476,6 +485,83 @@ static void ParseCommandLineArgs(int argc, char** argv) {
 
 // --- UI Window Implementations ---
 
+static void applyRecordingExtension() {
+    const char* ext = g_recordingFormats[g_recordingFormat];
+    std::string name(g_recordingFilename);
+    const auto slash = name.find_last_of("/\\");
+    const auto dot = name.find_last_of('.');
+    if (dot != std::string::npos && (slash == std::string::npos || dot > slash))
+        name.erase(dot);
+    name.push_back('.');
+    name += ext;
+    if (name.size() >= sizeof(g_recordingFilename))
+        name.resize(sizeof(g_recordingFilename) - 1);
+    std::strncpy(g_recordingFilename, name.c_str(), sizeof(g_recordingFilename) - 1);
+    g_recordingFilename[sizeof(g_recordingFilename) - 1] = '\0';
+}
+
+static void noteRecordingFailure() {
+    g_recordingError = g_videoRecorder.get_last_error();
+    if (g_recordingError.empty())
+        g_recordingError = "Could not start recording.";
+    g_consoleLog += "Recording: " + g_recordingError + "\n";
+}
+
+// Starts a take from the menu settings. Offline seek/pause runs only after the encoder is up.
+static bool beginRecording() {
+    if (g_recordAudio &&
+        g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::Microphone &&
+        !g_audioSystem.IsCaptureDeviceInitialized()) {
+        g_audioSystem.InitializeAndStartSelectedCaptureDevice();
+    }
+
+    GLFWwindow* window = glfwGetCurrentContext();
+    if (!window) {
+        g_recordingError = "Cannot start recording: no OpenGL window.";
+        g_consoleLog += "Recording: " + g_recordingError + "\n";
+        return false;
+    }
+    int fb_width = 0;
+    int fb_height = 0;
+    glfwGetFramebufferSize(window, &fb_width, &fb_height);
+    fb_width &= ~1;
+    fb_height &= ~1;
+    g_offlineAudioRemainder = 0;
+
+    const bool started = g_videoRecorder.start_recording(
+        g_recordingFilename, fb_width, fb_height, 60, g_recordingFormats[g_recordingFormat],
+        g_recordAudio,
+        static_cast<int>(g_audioSystem.GetCurrentInputSampleRate()),
+        static_cast<int>(g_audioSystem.GetCurrentInputChannels()),
+        g_offlineRendering,
+        static_cast<VideoRecorder::VideoQuality>(g_videoQuality),
+        static_cast<VideoRecorder::AudioBitrate>(g_audioBitrate));
+    if (!started) {
+        noteRecordingFailure();
+        return false;
+    }
+
+    g_recordingError.clear();
+    if (g_offlineRendering) {
+        g_offlineTime = g_timelineState.currentTime_seconds;
+        if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile) {
+            g_audioSystem.Pause();
+            const float duration = g_audioSystem.GetPlaybackDuration();
+            if (duration > 0.0f)
+                g_audioSystem.SetPlaybackProgress(g_offlineTime / duration);
+        }
+    }
+    g_recordingStartTime = std::chrono::steady_clock::now();
+    return true;
+}
+
+static void requestStartRecording() {
+    if (std::filesystem::exists(g_recordingFilename))
+        g_recordingOverwritePending = true;
+    else
+        beginRecording();
+}
+
 void RenderMenuBar() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
@@ -559,37 +645,36 @@ void RenderMenuBar() {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Recording (F1)")) {
-            static char filename[128] = "output.mp4";
-            ImGui::InputText("Filename", filename, 128);
+            ImGui::InputText("Filename", g_recordingFilename, sizeof(g_recordingFilename));
             ImGui::SameLine();
             if (ImGui::Button("Browse")) {
                 IGFD::FileDialogConfig config;
                 config.path = ".";
-                ImGuiFileDialog::Instance()->OpenDialog("SaveRecordingDlgKey", "Choose Output File", ".mp4,.mov,.mpg", config);
+                ImGuiFileDialog::Instance()->OpenDialog("SaveRecordingDlgKey", "Choose Output File", ".mp4,.mov", config);
             }
 
             ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
             if (ImGuiFileDialog::Instance()->Display("SaveRecordingDlgKey")) {
                 if (ImGuiFileDialog::Instance()->IsOk()) {
-                    std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
-                    strncpy(filename, filePath.c_str(), 128);
+                    const std::string filePath = ImGuiFileDialog::Instance()->GetFilePathName();
+                    std::strncpy(g_recordingFilename, filePath.c_str(), sizeof(g_recordingFilename) - 1);
+                    g_recordingFilename[sizeof(g_recordingFilename) - 1] = '\0';
                 }
                 ImGuiFileDialog::Instance()->Close();
             }
 
-            static int format_idx = 0;
-            const char* formats[] = { "mp4", "mov", "mpg" };
-            if (ImGui::BeginCombo("Format", formats[format_idx])) {
-                for (int i = 0; i < IM_ARRAYSIZE(formats); i++) {
-                    const bool is_selected = (format_idx == i);
-                    if (ImGui::Selectable(formats[i], is_selected))
-                        format_idx = i;
+            if (ImGui::BeginCombo("Format", g_recordingFormats[g_recordingFormat])) {
+                for (int i = 0; i < IM_ARRAYSIZE(g_recordingFormats); i++) {
+                    const bool is_selected = (g_recordingFormat == i);
+                    if (ImGui::Selectable(g_recordingFormats[i], is_selected)) {
+                        g_recordingFormat = i;
+                        applyRecordingExtension();
+                    }
                     if (is_selected) ImGui::SetItemDefaultFocus();
                 }
                 ImGui::EndCombo();
             }
 
-            static bool g_recordAudio = true;
             ImGui::Checkbox("Record Audio", &g_recordAudio);
             ImGui::Checkbox("Offline Rendering (Smooth Video)", &g_offlineRendering);
             ImGui::SameLine(); HelpMarker("Decouples rendering from real-time. Ensures smooth 60 FPS video even if the app runs slowly. Audio sync only works with Audio File source.");
@@ -610,7 +695,7 @@ void RenderMenuBar() {
                 }
                 ImGui::PopStyleColor(4);
                 ImGui::SameLine();
-                
+
                 auto duration = std::chrono::steady_clock::now() - g_recordingStartTime;
                 auto hours = std::chrono::duration_cast<std::chrono::hours>(duration);
                 duration -= hours;
@@ -624,73 +709,12 @@ void RenderMenuBar() {
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-                if (ImGui::Button("Start Recording")) {
-                    // Ensure the audio device is started if we are recording with mic input
-                    if (g_recordAudio && g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::Microphone && !g_audioSystem.IsCaptureDeviceInitialized()) {
-                        g_audioSystem.InitializeAndStartSelectedCaptureDevice();
-                    }
-
-                    if (std::filesystem::exists(filename)) {
-                        ImGui::OpenPopup("Overwrite File?");
-                    } else {
-                        int fb_width, fb_height;
-                        glfwGetFramebufferSize(glfwGetCurrentContext(), &fb_width, &fb_height);
-                        fb_width &= ~1;
-                        fb_height &= ~1;
-                        g_videoRecorder.start_recording(filename, fb_width, fb_height, 60, formats[format_idx], g_recordAudio,
-                                                    g_audioSystem.GetCurrentInputSampleRate(),
-                                                    g_audioSystem.GetCurrentInputChannels(),
-                                                    g_offlineRendering,
-                                                    static_cast<VideoRecorder::VideoQuality>(g_videoQuality),
-                                                    static_cast<VideoRecorder::AudioBitrate>(g_audioBitrate));
-                        if (g_offlineRendering) {
-                            g_offlineTime = g_timelineState.currentTime_seconds; // Start from current timeline time
-                            if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile) {
-                                g_audioSystem.Pause(); // Pause audio playback to manually step it
-                                g_audioSystem.SetPlaybackProgress(g_offlineTime / g_audioSystem.GetPlaybackDuration());
-                            }
-                        }
-                        g_recordingStartTime = std::chrono::steady_clock::now();
-                    }
-                }
+                if (ImGui::Button("Start Recording"))
+                    requestStartRecording();
                 ImGui::PopStyleColor(4);
                 ImGui::Text("Status: Idle");
-            }
-
-            // Overwrite confirmation popup
-            if (ImGui::BeginPopupModal("Overwrite File?", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::Text("File '%s' already exists.\nDo you want to overwrite it?", filename);
-                ImGui::Separator();
-                if (ImGui::Button("Overwrite", ImVec2(120, 0))) {
-                    // Ensure the audio device is started if we are recording with mic input
-                    if (g_recordAudio && g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::Microphone && !g_audioSystem.IsCaptureDeviceInitialized()) {
-                        g_audioSystem.InitializeAndStartSelectedCaptureDevice();
-                    }
-                    int fb_width, fb_height;
-                    glfwGetFramebufferSize(glfwGetCurrentContext(), &fb_width, &fb_height);
-                    fb_width &= ~1;
-                    fb_height &= ~1;
-                    g_videoRecorder.start_recording(filename, fb_width, fb_height, 60, formats[format_idx], g_recordAudio,
-                                                g_audioSystem.GetCurrentInputSampleRate(),
-                                                g_audioSystem.GetCurrentInputChannels(),
-                                                g_offlineRendering,
-                                                static_cast<VideoRecorder::VideoQuality>(g_videoQuality),
-                                                static_cast<VideoRecorder::AudioBitrate>(g_audioBitrate));
-                    if (g_offlineRendering) {
-                        g_offlineTime = g_timelineState.currentTime_seconds;
-                        if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile) {
-                            g_audioSystem.Pause();
-                            g_audioSystem.SetPlaybackProgress(g_offlineTime / g_audioSystem.GetPlaybackDuration());
-                        }
-                    }
-                    g_recordingStartTime = std::chrono::steady_clock::now();
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::EndPopup();
+                if (!g_recordingError.empty())
+                    ImGui::TextWrapped("%s", g_recordingError.c_str());
             }
 
             ImGui::EndMenu();
@@ -700,6 +724,25 @@ void RenderMenuBar() {
         ImGui::MenuItem("FPS Meter (F4)", "F4", &g_showFpsMeter);
 
         ImGui::EndMainMenuBar();
+    }
+
+    // Outside the menu so F1 can open it while the menu is closed.
+    if (g_recordingOverwritePending) {
+        ImGui::OpenPopup("Overwrite File?");
+        g_recordingOverwritePending = false;
+    }
+    if (ImGui::BeginPopupModal("Overwrite File?", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("File '%s' already exists.\nDo you want to overwrite it?", g_recordingFilename);
+        ImGui::Separator();
+        if (ImGui::Button("Overwrite", ImVec2(120, 0))) {
+            beginRecording();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 
     // --- Handle File Dialogs for Shader Load/Save ---
@@ -1749,27 +1792,30 @@ int main(int argc, char** argv) {
             deltaTime = 1.0f / 60.0f; // Fixed 60 FPS time step
             g_offlineTime += deltaTime;
             
-            // Sync audio file playback position and extract audio for recording
+            // Sync audio file playback position and extract audio for recording.
+            // Samples are pulled only when Record Audio is on. The device callback is not running:
+            // StopActiveDevice joins it, and add_audio_frame is the main-thread producer.
             if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile && g_audioSystem.IsAudioFileLoaded()) {
-                // Ensure real-time playback is stopped to prevent conflict
-                g_audioSystem.StopActiveDevice(); 
+                g_audioSystem.StopActiveDevice();
 
                 float duration = g_audioSystem.GetPlaybackDuration();
-                if (duration > 0.0f) {
+                if (duration > 0.0f)
                     g_audioSystem.SetPlaybackProgress(g_offlineTime / duration);
-                }
 
-                // Manually extract audio samples for this frame
-                int sampleRate = g_audioSystem.GetCurrentInputSampleRate();
-                int channels = g_audioSystem.GetCurrentInputChannels();
-                int samplesNeeded = (int)((float)sampleRate * deltaTime);
-                
-                // Buffer to hold interleaved samples
-                std::vector<float> audioBuffer(samplesNeeded * channels);
-                ma_uint64 framesRead = g_audioSystem.ReadOfflineAudio(audioBuffer.data(), samplesNeeded);
-                
-                if (framesRead > 0) {
-                    g_videoRecorder.add_audio_frame(audioBuffer.data(), framesRead);
+                if (g_recordAudio) {
+                    const int sampleRate = static_cast<int>(g_audioSystem.GetCurrentInputSampleRate());
+                    const int channels = static_cast<int>(g_audioSystem.GetCurrentInputChannels());
+                    if (sampleRate > 0 && channels > 0) {
+                        g_offlineAudioRemainder += sampleRate;
+                        const int framesNeeded = static_cast<int>(g_offlineAudioRemainder / 60);
+                        g_offlineAudioRemainder %= 60;
+                        if (framesNeeded > 0) {
+                            std::vector<float> audioBuffer(static_cast<size_t>(framesNeeded) * static_cast<size_t>(channels));
+                            const ma_uint64 framesRead = g_audioSystem.ReadOfflineAudio(audioBuffer.data(), framesNeeded);
+                            if (framesRead > 0)
+                                g_videoRecorder.add_audio_frame(audioBuffer.data(), static_cast<int>(framesRead));
+                        }
+                    }
                 }
             }
         }
@@ -1966,6 +2012,7 @@ int main(int argc, char** argv) {
     }
 
     g_scene.clear();
+    g_videoRecorder.stop_recording();
     g_audioSystem.Shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -1988,23 +2035,10 @@ void processInput(GLFWwindow *window) {
     static bool f1_pressed = false;
     if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS) {
         if (!f1_pressed) {
-            if (g_videoRecorder.is_recording()) {
+            if (g_videoRecorder.is_recording())
                 g_videoRecorder.stop_recording();
-            } else {
-                int fb_width, fb_height;
-                glfwGetFramebufferSize(window, &fb_width, &fb_height);
-                fb_width &= ~1;
-                fb_height &= ~1;
-                g_videoRecorder.start_recording("output.mp4", fb_width, fb_height, 60, "mp4", true, g_audioSystem.GetCurrentInputSampleRate(), g_audioSystem.GetCurrentInputChannels(), g_offlineRendering, static_cast<VideoRecorder::VideoQuality>(g_videoQuality), static_cast<VideoRecorder::AudioBitrate>(g_audioBitrate));
-                if (g_offlineRendering) {
-                    g_offlineTime = g_timelineState.currentTime_seconds;
-                     if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile) {
-                        g_audioSystem.Pause();
-                        g_audioSystem.SetPlaybackProgress(g_offlineTime / g_audioSystem.GetPlaybackDuration());
-                    }
-                }
-                g_recordingStartTime = std::chrono::steady_clock::now();
-            }
+            else
+                requestStartRecording();
             f1_pressed = true;
         }
     } else { f1_pressed = false; }

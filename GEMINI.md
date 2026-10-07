@@ -121,25 +121,14 @@ The `ShaderParser` class is responsible for extracting uniform declarations and 
         ```
 
 *   **`VideoRecorder`**
-    *   `bool start_recording(filename, width, height, fps, format, record_audio, ...)`: Validates the request before touching any state — non-zero framebuffer size, and a container that supports H.264 (and the selected audio codec, when audio is on) — then sets up the encoder synchronously and only afterwards starts the encoding thread. It returns `true` on success; on any failure it returns `false`, makes no state change and stores a reason in `get_last_error()`.
-    *   `get_last_error()`: The human-readable reason for the most recent failed start, empty if none. **Caveat:** the reason is currently written to `std::cerr` only — no caller in `main.cpp` or `UIManager.cpp` checks `start_recording`'s return value or reads `get_last_error()`, so a failed start is not surfaced in the UI yet. That is an open follow-up.
-    *   `stop_recording()`: Stops recording, joins the encoding thread and finalizes the video file.
-    *   `add_video_frame_from_pbo(float deltaTime)`: Called every frame to capture the screen content. **Note:** Explicitly sets `glViewport` before `glReadPixels` to ensure correct frame capture, preventing off-centre video output.
-    *   **Common Usage Pattern:** The global `g_videoRecorder` is controlled by the UI. When "Start Recording" is clicked, `start_recording` is called. Every frame thereafter, `add_video_frame_from_pbo` captures the visuals. `stop_recording` is called when the user stops the recording. `main.cpp` currently discards the `start_recording` result; the correct pattern is:
-        ```cpp
-        // In UI code for the "Start Recording" button
-        if (!g_videoRecorder.start_recording(filename, width, height, fps, format, record_audio, ...)) {
-            // The reason is in g_videoRecorder.get_last_error().
-        }
-
-        // In main loop
-        if (g_videoRecorder.is_recording()) {
-            g_videoRecorder.add_video_frame_from_pbo(deltaTime);
-        }
-
-        // In UI code for the "Stop Recording" button
-        g_videoRecorder.stop_recording();
-        ```
+    *   Containers are `mp4` and `mov`. Video is libx264 `yuv420p`. Lossy audio is native AAC (`FLTP`, the combo bitrate). Lossless is ALAC at `AV_SAMPLE_FMT_S32P` with `bits_per_raw_sample = 24`, which is 24-bit of the float signal, not a bit-exact float32 copy. Both codecs keep the source sample rate when the encoder lists it (the microphone is 48000 Hz mono); otherwise the nearest listed rate is used and swresample converts. Mono stays mono. A channel count the encoder lists is kept; anything else is downmixed to stereo.
+    *   `bool start_recording(...)`: Checks the framebuffer, the frame rate, and that the container can hold H.264 (and AAC or ALAC, when audio is on). The format name is guessed on its own, so a `.mp4` filename cannot make another container look legal. The encoder is opened before the thread starts. On failure it returns `false`, leaves recording stopped, and stores a reason in `get_last_error()`.
+    *   `get_last_error()`: The reason for the most recent failed start, empty after a successful start. The Recording menu and the console both show it. A failed start does not pause or seek playback.
+    *   Realtime video timestamps come from capture time. A stall repeats the previous picture so the video clock stays with the audio, for at most five seconds of repeated frames, then the timestamp jumps to the live frame. Offline rendering does not use the wall clock: video is an internal frame counter, and the first audio packet is stamped at that counter. Video is not discarded while waiting for audio.
+    *   The microphone callback must not allocate or block. Samples go into a ring allocated at start. If the ring is full, the extra frames are counted and written later as silence so the packet clock does not slip. Offline capture may wait for ring space; it runs on the main thread after the device is stopped, and only when Record Audio is on.
+    *   `stop_recording()`: Maps the last pixel read while the GL context is current, waits until the callback has left, joins the encode thread, and writes the trailer. Shutdown calls it before the audio device and the GL context are torn down.
+    *   The menu, the overwrite confirm, and F1 all go through `beginRecording()` / `requestStartRecording()` in `main.cpp`, so they share the filename, container, and Record Audio checkbox.
+    *   `add_video_frame_from_pbo(float deltaTime)`: Called every frame. Sets `glViewport` before `glReadPixels`. The first call only starts a read; the buffer is queued on the next call, and the last read is queued from `stop_recording()`.
 
 ### 3.3 UI Rendering Flow
 
