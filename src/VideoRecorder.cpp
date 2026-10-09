@@ -487,7 +487,9 @@ bool VideoRecorder::setup_encoder(const std::string& filename, const std::string
             crf = "23";
             break;
         case VideoQuality::High:
-            preset = "fast";
+            // Same CRF target as before. veryfast spends less time deciding how to
+            // compress, so the file is larger and the render thread waits less often.
+            preset = "veryfast";
             crf = "18";
             break;
         case VideoQuality::Ultra:
