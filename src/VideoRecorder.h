@@ -71,7 +71,9 @@ public:
     VideoRecorder();
     ~VideoRecorder();
 
-    bool start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels, bool offline_mode = false, VideoQuality video_quality = VideoQuality::High, AudioBitrate audio_bitrate = AudioBitrate::Kbps192);
+    // pull_audio: the main thread pushes one block per saved frame and the device
+    // callback must not also push. The audio PTS origin is sample 0, with the pictures.
+    bool start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels, bool offline_mode = false, VideoQuality video_quality = VideoQuality::High, AudioBitrate audio_bitrate = AudioBitrate::Kbps192, bool pull_audio = false);
     void stop_recording();
     void add_video_frame_from_pbo(float deltaTime);
     void add_audio_frame(const float* samples, int num_samples);
@@ -101,12 +103,11 @@ private:
 
     struct QueuedVideoFrame {
         std::vector<uint8_t> pixels;
-        int64_t frame_index = 0;
     };
 
     bool send_and_write(AVCodecContext* ctx, AVStream* stream, AVFrame* frame);
     bool receive_packets(AVCodecContext* ctx, AVStream* stream);
-    bool encode_rgba_frame(const uint8_t* rgba, int64_t frame_index);
+    bool encode_rgba_frame(const uint8_t* rgba);
     void encode_available_audio(bool flush);
     void queue_outstanding_pbo();
     void release_pbos();
@@ -114,8 +115,9 @@ private:
     void anchor_audio_origin();
 
     // Lock-free SPSC ring of interleaved floats. Indices are monotonic sample counts.
-    // The device callback is the only producer while a device is running; offline
-    // capture pushes from the main thread only after that device is stopped.
+    // One producer at a time: the device callback, or the main thread when pull_audio
+    // is set (the callback returns without pushing). Offline capture pushes from the
+    // main thread only after that device is stopped.
     size_t audio_ring_free_frames() const;
     size_t audio_ring_used_frames() const;
     size_t audio_ring_push(const float* interleaved, size_t frames);
@@ -124,6 +126,8 @@ private:
     // Recording settings
     std::atomic<bool> m_recordAudio;
     bool m_offlineMode = false;
+    // Realtime file takes. Callback audio is ignored; the PTS origin is sample 0.
+    std::atomic<bool> m_pullAudio;
     VideoQuality m_videoQuality = VideoQuality::High;
     AudioBitrate m_audioBitrate = AudioBitrate::Kbps192;
 
@@ -143,7 +147,6 @@ private:
     int64_t next_video_pts = 0;
     int64_t next_audio_pts = 0;
     int64_t m_offlineFrameIndex = 0;
-    bool m_haveEncodedVideo = false;
     bool m_audioPtsAnchored = false;
 
     // Timing. Capture time is the realtime video clock. Offline mode does not use it.
@@ -158,7 +161,6 @@ private:
     bool m_pbosAllocated = false;
     bool m_pboHasUnread = false;
     int m_unreadPbo = 0;
-    int64_t m_unreadFrameIndex = 0;
 
     // Threading and state
     std::thread encoding_thread;

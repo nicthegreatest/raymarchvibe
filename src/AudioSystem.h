@@ -90,6 +90,17 @@ public:
     void LoadWavFile(const char* filePath);
     ma_uint64 ReadOfflineAudio(float* pOutput, ma_uint32 frameCount);
 
+    // Realtime file recording. Opens a second decoder at the current playback cursor so
+    // the speakers keep reading the playback decoder. Each saved frame then pulls exactly
+    // the samples that belong to that frame. The device callback does not feed the
+    // recorder or the FFT while this is active.
+    bool BeginRecordPull();
+    void EndRecordPull();
+    bool IsRecordPullActive() const;
+    // Reads frameCount frames, pads a short read with silence, and feeds the FFT from
+    // that block. Returns frameCount, or 0 when no pull is active.
+    ma_uint64 ReadRecordPull(float* pOutput, ma_uint32 frameCount);
+
     // Audio Processing (called from main thread). frameDeltaSeconds is the frame time the
     // main loop already computed; the envelope is advanced with it rather than measuring
     // its own interval (see the band contract above).
@@ -225,6 +236,9 @@ private:
     ma_device m_playbackDevice; // For audio file playback
     ma_device_config deviceConfig;
     ma_decoder m_decoder;       // guarded by m_decoderMutex
+    ma_decoder m_recordDecoder; // main thread only; live while m_recordPullActive
+    std::atomic<bool> m_recordPullActive;
+    std::string m_loadedFilePath; // path actually opened by LoadWavFile, main thread only
 
     // State flags (touched from the audio thread -> atomic)
     bool contextInitialized;                  // main thread only
@@ -290,10 +304,10 @@ private:
     // Private helpers
     bool InitializeAndStartPlaybackDevice();
     void StopPlaybackDevice();
-    // Hand one captured / decoded block to its FFT ring. Called from the audio thread, so
-    // both use try_lock and skip the block if the main thread is mid copy.
+    // Hand one captured / decoded block to its FFT ring. The microphone path and the
+    // playback callback use try_lock. A main-thread record pull may block.
     void pushMicFftSamples(const float* pSamples, size_t frameCount, size_t channels);
-    void pushFileFftSamples(const float* pSamples, size_t frameCount, size_t channels);
+    void pushFileFftSamples(const float* pSamples, size_t frameCount, size_t channels, bool block);
 };
 
 #endif // AUDIOSYSTEM_H

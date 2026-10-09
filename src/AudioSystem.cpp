@@ -25,6 +25,7 @@ AudioSystem::AudioSystem() {
     m_isPlaying = false;
     m_shuttingDown = false;
     m_playbackCursorFrames = 0;
+    m_recordPullActive = false;
     m_captureChannels = 0;
     m_captureSampleRate = 0;
     m_playbackBytesPerFrame = 0;
@@ -65,6 +66,7 @@ void AudioSystem::Shutdown() {
     //     live callback),
     //  4. finally the miniaudio context.
     m_shuttingDown.store(true, std::memory_order_release);
+    EndRecordPull();
     StopActiveDevice();
     {
         std::lock_guard<std::mutex> decoderLock(m_decoderMutex);
@@ -73,6 +75,7 @@ void AudioSystem::Shutdown() {
             audioFileLoaded.store(false, std::memory_order_relaxed);
             m_isPlaying.store(false, std::memory_order_relaxed);
             m_playbackCursorFrames.store(0, std::memory_order_relaxed);
+            m_loadedFilePath.clear();
         }
     }
     if (contextInitialized) {
@@ -167,12 +170,14 @@ void AudioSystem::StopPlaybackDevice() {
 void AudioSystem::LoadWavFile(const char* filePath) {
     // The playback callback is reading m_decoder; stop it (ma_device_uninit joins the
     // device thread) and hold m_decoderMutex so the swap can never overlap a read.
+    EndRecordPull();
     StopPlaybackDevice();
     {
         std::lock_guard<std::mutex> decoderLock(m_decoderMutex);
         if (audioFileLoaded.load(std::memory_order_relaxed)) ma_decoder_uninit(&m_decoder);
         audioFileLoaded.store(false, std::memory_order_relaxed);
         m_playbackCursorFrames.store(0, std::memory_order_relaxed);
+        m_loadedFilePath.clear();
         if (!filePath || filePath[0] == '\0') return;
 
         ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_f32, 0, 0);
@@ -186,6 +191,7 @@ void AudioSystem::LoadWavFile(const char* filePath) {
             return;
         }
 
+        m_loadedFilePath = filePath;
         audioFileLoaded.store(true, std::memory_order_release);
     }
     m_isPlaying.store(true, std::memory_order_relaxed);
@@ -214,7 +220,7 @@ ma_uint64 AudioSystem::ReadOfflineAudio(float* pOutput, ma_uint32 frameCount) {
     float* pSamples = static_cast<float*>(pOutput);
 
     // Feed the FFT ring (mono for mono, pair-averaged for anything with >1 channel)
-    pushFileFftSamples(pSamples, (size_t)framesRead, (size_t)channels);
+    pushFileFftSamples(pSamples, (size_t)framesRead, (size_t)channels, false);
 
     // Calculate amplitude (M12: no m_amplitudeScale here - GetCurrentAmplitude() applies it)
     ma_uint32 totalSamples = (ma_uint32)framesRead * channels;
@@ -242,12 +248,75 @@ void AudioSystem::pushMicFftSamples(const float* pSamples, size_t frameCount, si
 // frame for a mono file, and for anything with more than one channel the average of the
 // first two channels of each frame (`(s[i*2] + s[i*2+1]) * 0.5f`).
 // try_lock for the same reason as above (this one also runs on the audio thread).
-void AudioSystem::pushFileFftSamples(const float* pSamples, size_t frameCount, size_t channels) {
+void AudioSystem::pushFileFftSamples(const float* pSamples, size_t frameCount, size_t channels, bool block) {
     if (pSamples == nullptr || frameCount == 0 || channels == 0) return;
-    std::unique_lock<std::mutex> bufferLock(m_bufferMutex, std::try_to_lock);
-    if (!bufferLock.owns_lock()) return;
+    std::unique_lock<std::mutex> bufferLock(m_bufferMutex, std::defer_lock);
+    if (block) {
+        bufferLock.lock();
+    } else if (!bufferLock.try_lock()) {
+        return;
+    }
     if (channels == 1) m_file_fft_buffer.pushRaw(pSamples, frameCount);
     else               m_file_fft_buffer.pushFrames(pSamples, frameCount);
+}
+
+bool AudioSystem::BeginRecordPull() {
+    EndRecordPull();
+    if (!audioFileLoaded.load(std::memory_order_acquire) || m_loadedFilePath.empty())
+        return false;
+
+    ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_f32, 0, 0);
+    if (ma_decoder_init_file(m_loadedFilePath.c_str(), &decoderConfig, &m_recordDecoder) != MA_SUCCESS)
+        return false;
+    if (m_recordDecoder.outputChannels == 0 ||
+        m_recordDecoder.outputChannels != audioFileChannels ||
+        m_recordDecoder.outputSampleRate != audioFileSampleRate) {
+        ma_decoder_uninit(&m_recordDecoder);
+        return false;
+    }
+
+    // Start where the speakers are. After this the two decoders advance on their own.
+    const ma_uint64 cursor = m_playbackCursorFrames.load(std::memory_order_relaxed);
+    if (cursor > 0 && ma_decoder_seek_to_pcm_frame(&m_recordDecoder, cursor) != MA_SUCCESS) {
+        ma_decoder_uninit(&m_recordDecoder);
+        return false;
+    }
+    m_recordPullActive.store(true, std::memory_order_release);
+    return true;
+}
+
+void AudioSystem::EndRecordPull() {
+    if (!m_recordPullActive.exchange(false, std::memory_order_acq_rel))
+        return;
+    ma_decoder_uninit(&m_recordDecoder);
+}
+
+bool AudioSystem::IsRecordPullActive() const {
+    return m_recordPullActive.load(std::memory_order_acquire);
+}
+
+ma_uint64 AudioSystem::ReadRecordPull(float* pOutput, ma_uint32 frameCount) {
+    if (!m_recordPullActive.load(std::memory_order_relaxed) || pOutput == nullptr || frameCount == 0)
+        return 0;
+
+    ma_uint64 framesRead = 0;
+    const ma_uint32 channels = m_recordDecoder.outputChannels;
+    ma_decoder_read_pcm_frames(&m_recordDecoder, pOutput, frameCount, &framesRead);
+    if (framesRead < frameCount) {
+        std::memset(pOutput + framesRead * channels, 0,
+                    (static_cast<size_t>(frameCount) - static_cast<size_t>(framesRead)) * channels * sizeof(float));
+    }
+
+    // The picture for this frame has to react to these samples, including the silence
+    // after the file ends, so the blocking push cannot drop the block.
+    pushFileFftSamples(pOutput, frameCount, channels, true);
+
+    const ma_uint32 totalSamples = frameCount * channels;
+    float sumOfAbsoluteSamples = 0.0f;
+    for (ma_uint32 i = 0; i < totalSamples; ++i) sumOfAbsoluteSamples += fabsf(pOutput[i]);
+    currentAudioAmplitude.store(totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) : 0.0f,
+                                std::memory_order_relaxed);
+    return frameCount;
 }
 
 void AudioSystem::RegisterListener(IAudioListener* listener) {
@@ -459,20 +528,25 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
             }
 
             float* pSamples = static_cast<float*>(pOutput);
-            for (auto& slot : m_listeners) {
-                IAudioListener* listener = slot.load(std::memory_order_acquire);
-                if (listener) listener->onAudioData(pSamples, (uint32_t)framesRead, (int)channels, (int)sampleRate);
+            // A realtime file take reads a second decoder on the main thread. The speakers
+            // still play this buffer; the recorder and the FFT must not also take it, or
+            // the file mixes wall-clock audio with the 1/60 blocks.
+            if (!m_recordPullActive.load(std::memory_order_acquire)) {
+                for (auto& slot : m_listeners) {
+                    IAudioListener* listener = slot.load(std::memory_order_acquire);
+                    if (listener) listener->onAudioData(pSamples, (uint32_t)framesRead, (int)channels, (int)sampleRate);
+                }
+
+                // Feed the FFT ring (mono for mono, pair-averaged for anything with >1 channel)
+                pushFileFftSamples(pSamples, (size_t)framesRead, (size_t)channels, false);
+
+                ma_uint32 totalSamples = (ma_uint32)framesRead * channels;
+                float sumOfAbsoluteSamples = 0.0f;
+                for (ma_uint32 i = 0; i < totalSamples; ++i) sumOfAbsoluteSamples += fabsf(pSamples[i]);
+                // M12: scaled in GetCurrentAmplitude() only.
+                currentAudioAmplitude.store(totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) : 0.0f,
+                                            std::memory_order_relaxed);
             }
-
-            // Feed the FFT ring (mono for mono, pair-averaged for anything with >1 channel)
-            pushFileFftSamples(pSamples, (size_t)framesRead, (size_t)channels);
-
-            ma_uint32 totalSamples = (ma_uint32)framesRead * channels;
-            float sumOfAbsoluteSamples = 0.0f;
-            for (ma_uint32 i = 0; i < totalSamples; ++i) sumOfAbsoluteSamples += fabsf(pSamples[i]);
-            // M12: scaled in GetCurrentAmplitude() only.
-            currentAudioAmplitude.store(totalSamples > 0 ? (sumOfAbsoluteSamples / totalSamples) : 0.0f,
-                                        std::memory_order_relaxed);
 
             if (framesRead < frameCount) {
                 m_isPlaying.store(false, std::memory_order_relaxed);
