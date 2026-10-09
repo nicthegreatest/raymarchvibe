@@ -48,6 +48,7 @@ int pick_output_layout(const AVCodec* codec, int input_channels, AVChannelLayout
 
 VideoRecorder::VideoRecorder()
     : m_recordAudio(false)
+    , m_pullAudio(false)
     , m_firstAudioTimeSet(false)
     , pbo_index(0)
     , recording(false)
@@ -100,7 +101,6 @@ void VideoRecorder::queue_outstanding_pbo() {
     if (ptr) {
         QueuedVideoFrame frame;
         frame.pixels.assign(ptr, ptr + static_cast<size_t>(frame_width) * static_cast<size_t>(frame_height) * 4);
-        frame.frame_index = m_unreadFrameIndex;
         {
             std::lock_guard<std::mutex> lock(queue_mutex);
             video_queue.push(std::move(frame));
@@ -121,18 +121,11 @@ void VideoRecorder::add_video_frame_from_pbo(float deltaTime) {
         return;
     if (!m_offlineMode)
         frame_accumulator -= frame_duration;
-    else
+    else {
         frame_accumulator = 0.0;
-
-    int64_t frame_index = 0;
-    if (m_offlineMode) {
-        frame_index = m_offlineFrameIndex++;
-    } else {
-        const double seconds = std::chrono::duration<double>(
-            std::chrono::steady_clock::now() - recording_start_time).count();
-        frame_index = std::llround(seconds * static_cast<double>(frame_rate));
-        if (frame_index < 0)
-            frame_index = 0;
+        // Offline audio stamps its origin from how many captures have been issued.
+        // The encoded picture clock is separate: one output frame per queued capture.
+        ++m_offlineFrameIndex;
     }
 
     const int write_pbo = pbo_index;
@@ -144,26 +137,28 @@ void VideoRecorder::add_video_frame_from_pbo(float deltaTime) {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[m_unreadPbo]);
         GLubyte* ptr = static_cast<GLubyte*>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
         if (ptr) {
-            std::unique_lock<std::mutex> lock(queue_mutex);
-            if (m_offlineMode) {
+            const size_t nbytes = static_cast<size_t>(frame_width) * static_cast<size_t>(frame_height) * 4;
+            std::vector<uint8_t> pixels(ptr, ptr + nbytes);
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            bool queued = false;
+            {
+                // Dropping a picture here shortens the video track and leaves the audio,
+                // which is kept for every tick, running on alone at the end of the file.
+                std::unique_lock<std::mutex> lock(queue_mutex);
                 queue_cv.wait(lock, [this] {
                     return video_queue.size() < MAX_QUEUE_SIZE || !recording.load();
                 });
+                if (recording.load()) {
+                    video_queue.push(QueuedVideoFrame{std::move(pixels)});
+                    queued = true;
+                }
             }
-            const bool drop = !m_offlineMode && video_queue.size() >= MAX_QUEUE_SIZE;
-            if (!drop && recording.load()) {
-                QueuedVideoFrame frame;
-                frame.pixels.assign(ptr, ptr + static_cast<size_t>(frame_width) * static_cast<size_t>(frame_height) * 4);
-                frame.frame_index = m_unreadFrameIndex;
-                video_queue.push(std::move(frame));
+            if (queued)
                 cv.notify_one();
-            }
-            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
         }
     }
 
     m_unreadPbo = write_pbo;
-    m_unreadFrameIndex = frame_index;
     m_pboHasUnread = true;
     pbo_index = (write_pbo + 1) % PBO_COUNT;
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
@@ -239,6 +234,9 @@ void VideoRecorder::anchor_audio_origin() {
         m_audioOriginSamples = std::llround(seconds * static_cast<double>(out_rate));
         if (m_audioOriginSamples < 0)
             m_audioOriginSamples = 0;
+    } else if (m_pullAudio.load(std::memory_order_relaxed)) {
+        // Each block is one saved frame of audio, so the track starts with the pictures.
+        m_audioOriginSamples = 0;
     } else {
         m_firstAudioTime = std::chrono::steady_clock::now();
     }
@@ -272,7 +270,7 @@ void VideoRecorder::onAudioData(const float* samples, uint32_t frameCount, int c
     // Increment before the accepting check so stop can wait out an in-flight copy
     // without the callback ever blocking.
     m_audioCallbackInside.fetch_add(1, std::memory_order_acq_rel);
-    if (!m_acceptingAudio.load(std::memory_order_acquire)) {
+    if (!m_acceptingAudio.load(std::memory_order_acquire) || m_pullAudio.load(std::memory_order_relaxed)) {
         m_audioCallbackInside.fetch_sub(1, std::memory_order_acq_rel);
         return;
     }
@@ -295,7 +293,7 @@ void VideoRecorder::onAudioData(const float* samples, uint32_t frameCount, int c
     m_audioCallbackInside.fetch_sub(1, std::memory_order_acq_rel);
 }
 
-bool VideoRecorder::start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels, bool offline_mode, VideoQuality video_quality, AudioBitrate audio_bitrate) {
+bool VideoRecorder::start_recording(const std::string& filename, int width, int height, int fps, const std::string& format, bool record_audio, int input_audio_sample_rate, int input_audio_channels, bool offline_mode, VideoQuality video_quality, AudioBitrate audio_bitrate, bool pull_audio) {
     if (recording.load()) {
         last_error = "Already recording.";
         std::cerr << "VideoRecorder: " << last_error << std::endl;
@@ -356,6 +354,8 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     frame_accumulator = 0.0;
     m_recordAudio.store(record_audio);
     m_offlineMode = offline_mode;
+    // Published before m_acceptingAudio so the callback never pushes a pulled take.
+    m_pullAudio.store(pull_audio, std::memory_order_relaxed);
     m_videoQuality = video_quality;
     m_audioBitrate = audio_bitrate;
     this->input_audio_sample_rate = record_audio ? input_audio_sample_rate : 0;
@@ -385,7 +385,6 @@ bool VideoRecorder::start_recording(const std::string& filename, int width, int 
     m_loggedDropout.store(false);
     m_firstAudioTimeSet.store(false);
     m_audioPtsAnchored = false;
-    m_haveEncodedVideo = false;
     next_video_pts = 0;
     next_audio_pts = 0;
     m_offlineFrameIndex = 0;
@@ -434,12 +433,15 @@ void VideoRecorder::stop_recording() {
         encoding_thread.join();
     }
 
+    // After the encode thread has finished reading the pull flag for the PTS origin.
+    m_pullAudio.store(false, std::memory_order_relaxed);
     release_pbos();
 }
 
 void VideoRecorder::fail_start(const std::string& message) {
     recording.store(false);
     m_acceptingAudio.store(false);
+    m_pullAudio.store(false, std::memory_order_relaxed);
     cv.notify_all();
     queue_cv.notify_all();
     m_audioSpaceCv.notify_all();
@@ -485,7 +487,7 @@ bool VideoRecorder::setup_encoder(const std::string& filename, const std::string
             crf = "23";
             break;
         case VideoQuality::High:
-            preset = "slow";
+            preset = "fast";
             crf = "18";
             break;
         case VideoQuality::Ultra:
@@ -495,6 +497,11 @@ bool VideoRecorder::setup_encoder(const std::string& filename, const std::string
     }
     av_opt_set(video_codec_ctx->priv_data, "preset", preset, 0);
     av_opt_set(video_codec_ctx->priv_data, "crf", crf, 0);
+    // Leave one core for the render thread. x264 treats 0 as "every core".
+    unsigned cores = std::thread::hardware_concurrency();
+    if (cores == 0)
+        cores = 2;
+    video_codec_ctx->thread_count = static_cast<int>(cores > 1 ? cores - 1 : 1);
     if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER)
         video_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     if (avcodec_open2(video_codec_ctx.get(), video_codec, nullptr) < 0) {
@@ -549,6 +556,21 @@ bool VideoRecorder::setup_encoder(const std::string& filename, const std::string
         }
         av_channel_layout_uninit(&out_layout);
         audio_codec_ctx->time_base = {1, audio_codec_ctx->sample_rate};
+        if (!lossless) {
+            // One AAC-LC frame holds 6144 bits per channel. The fast coder stops at 5800,
+            // so a higher request (320 kbps mono at 48000 Hz is about 6827) never converges.
+            const int channels = audio_codec_ctx->ch_layout.nb_channels;
+            const int rate = audio_codec_ctx->sample_rate;
+            if (channels > 0 && rate > 0) {
+                const int64_t max_rate = static_cast<int64_t>(5800) * rate * channels / 1024;
+                if (audio_codec_ctx->bit_rate > max_rate)
+                    audio_codec_ctx->bit_rate = max_rate;
+            }
+            if (av_opt_set(audio_codec_ctx->priv_data, "aac_coder", "fast", 0) < 0) {
+                fail_start("Could not select the fast AAC coder.");
+                return false;
+            }
+        }
         if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER)
             audio_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
         if (avcodec_open2(audio_codec_ctx.get(), audio_codec, nullptr) < 0) {
@@ -660,33 +682,13 @@ bool VideoRecorder::send_and_write(AVCodecContext* ctx, AVStream* stream, AVFram
     return receive_packets(ctx, stream);
 }
 
-bool VideoRecorder::encode_rgba_frame(const uint8_t* rgba, int64_t frame_index) {
+bool VideoRecorder::encode_rgba_frame(const uint8_t* rgba) {
     if (!rgba || !video_frame || !sws_ctx)
         return false;
 
-    // A realtime frame index comes from capture time, so a slow render leaves a gap.
-    // Repeat the previous image across that gap (capped) and then land on the real index,
-    // which keeps the picture clock lined up with the audio clock.
-    if (m_haveEncodedVideo && frame_index < next_video_pts)
-        return true;
-    if (!m_haveEncodedVideo)
-        next_video_pts = frame_index;
-
-    const int64_t max_repeats = static_cast<int64_t>(frame_rate) * 5;
-    if (m_haveEncodedVideo && frame_index > next_video_pts) {
-        const int64_t gap = frame_index - next_video_pts;
-        const int64_t repeats = std::min(gap, max_repeats);
-        for (int64_t i = 0; i < repeats; ++i) {
-            if (av_frame_make_writable(video_frame.get()) < 0)
-                return false;
-            video_frame->pts = next_video_pts++;
-            if (!send_and_write(video_codec_ctx.get(), video_stream, video_frame.get()))
-                return false;
-        }
-        if (frame_index > next_video_pts)
-            next_video_pts = frame_index;
-    }
-
+    // One output frame per captured picture, at a steady 1/fps. Stamping the wall
+    // clock here skips and repeats on common refresh rates (75 Hz against 60 fps
+    // does it constantly) while the picture on screen stays smooth.
     if (av_frame_make_writable(video_frame.get()) < 0)
         return false;
     const int src_stride[1] = { -frame_width * 4 };
@@ -695,7 +697,6 @@ bool VideoRecorder::encode_rgba_frame(const uint8_t* rgba, int64_t frame_index) 
     video_frame->pts = next_video_pts++;
     if (!send_and_write(video_codec_ctx.get(), video_stream, video_frame.get()))
         return false;
-    m_haveEncodedVideo = true;
     return true;
 }
 
@@ -762,7 +763,7 @@ void VideoRecorder::encode_available_audio(bool flush) {
             if (!m_audioPtsAnchored) {
                 int64_t origin = 0;
                 if (m_firstAudioTimeSet.load(std::memory_order_acquire)) {
-                    if (m_offlineMode) {
+                    if (m_offlineMode || m_pullAudio.load(std::memory_order_relaxed)) {
                         origin = m_audioOriginSamples;
                     } else {
                         double seconds = std::chrono::duration<double>(m_firstAudioTime - recording_start_time).count();
@@ -833,11 +834,13 @@ void VideoRecorder::encoding_thread_main() {
                 queue_cv.notify_one();
             }
         }
+        // Drain audio before the x264 batch. A full second of pictures can take longer
+        // than the ring holds, and a dropped block is written back as silence.
+        encode_available_audio(false);
         for (const QueuedVideoFrame& frame : frames) {
-            if (!encode_rgba_frame(frame.pixels.data(), frame.frame_index))
+            if (!encode_rgba_frame(frame.pixels.data()))
                 std::cerr << "VideoRecorder: failed to encode a video frame." << std::endl;
         }
-        encode_available_audio(false);
         // Stop has already waited out the audio callback before clearing `recording`,
         // so an empty ring here cannot gain samples afterwards.
         if (!still_recording && frames.empty() && audio_ring_used_frames() == 0 && m_pendingInput.empty())

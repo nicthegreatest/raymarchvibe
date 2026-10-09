@@ -193,6 +193,12 @@ static bool g_recordAudio = true;
 static std::string g_recordingError;
 static bool g_recordingOverwritePending = false;
 static int64_t g_offlineAudioRemainder = 0;
+static std::vector<float> g_recordPullScratch;
+// Realtime recordings step shader time by exactly 1/60. The display may be faster.
+static bool g_recordingClockLive = false;
+static double g_recordingTimeOrigin = 0.0;
+static double g_recordingTimeAccum = 0.0;
+static int g_recordingTicks = -1;
 
 // Window visibility flags
 static bool g_showShaderEditorWindow = true;
@@ -507,8 +513,32 @@ static void noteRecordingFailure() {
     g_consoleLog += "Recording: " + g_recordingError + "\n";
 }
 
+// One 1/60 of the open audio file, padded with silence if the file has ended.
+// The block is what this saved frame hears and what the shader reacts to.
+static void pullRealtimeFileAudio() {
+    if (!g_audioSystem.IsRecordPullActive())
+        return;
+    const int sampleRate = static_cast<int>(g_audioSystem.GetCurrentInputSampleRate());
+    const int channels = static_cast<int>(g_audioSystem.GetCurrentInputChannels());
+    if (sampleRate <= 0 || channels <= 0)
+        return;
+    g_offlineAudioRemainder += sampleRate;
+    const int framesNeeded = static_cast<int>(g_offlineAudioRemainder / 60);
+    g_offlineAudioRemainder %= 60;
+    if (framesNeeded <= 0)
+        return;
+    const size_t samples = static_cast<size_t>(framesNeeded) * static_cast<size_t>(channels);
+    if (g_recordPullScratch.size() < samples)
+        g_recordPullScratch.resize(samples);
+    const ma_uint64 framesRead = g_audioSystem.ReadRecordPull(g_recordPullScratch.data(), static_cast<ma_uint32>(framesNeeded));
+    if (framesRead > 0)
+        g_videoRecorder.add_audio_frame(g_recordPullScratch.data(), static_cast<int>(framesRead));
+}
+
 // Starts a take from the menu settings. Offline seek/pause runs only after the encoder is up.
 static bool beginRecording() {
+    if (g_videoRecorder.is_recording())
+        return false;
     if (g_recordAudio &&
         g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::Microphone &&
         !g_audioSystem.IsCaptureDeviceInitialized()) {
@@ -528,6 +558,17 @@ static bool beginRecording() {
     fb_height &= ~1;
     g_offlineAudioRemainder = 0;
 
+    // Realtime file audio is pulled per saved frame. The playback callback stays on the
+    // wall clock for the speakers and must not also feed the file.
+    const bool wantFilePull = g_recordAudio && !g_offlineRendering
+        && g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile
+        && g_audioSystem.IsAudioFileLoaded();
+    if (wantFilePull && !g_audioSystem.BeginRecordPull()) {
+        g_recordingError = "Could not open the audio file for recording.";
+        g_consoleLog += "Recording: " + g_recordingError + "\n";
+        return false;
+    }
+
     const bool started = g_videoRecorder.start_recording(
         g_recordingFilename, fb_width, fb_height, 60, g_recordingFormats[g_recordingFormat],
         g_recordAudio,
@@ -535,8 +576,10 @@ static bool beginRecording() {
         static_cast<int>(g_audioSystem.GetCurrentInputChannels()),
         g_offlineRendering,
         static_cast<VideoRecorder::VideoQuality>(g_videoQuality),
-        static_cast<VideoRecorder::AudioBitrate>(g_audioBitrate));
+        static_cast<VideoRecorder::AudioBitrate>(g_audioBitrate),
+        wantFilePull);
     if (!started) {
+        g_audioSystem.EndRecordPull();
         noteRecordingFailure();
         return false;
     }
@@ -1820,6 +1863,39 @@ int main(int argc, char** argv) {
             }
         }
 
+        // A 165 Hz display cannot vsync to 60 fps (165/60 is not an integer). Sampling
+        // whichever refresh falls near a 1/60 boundary records pictures 2 or 3 refreshes
+        // apart and the file plays those gaps as equal steps. While recording, step time
+        // by exactly 1/60 and capture only that step. In-between refreshes repeat it.
+        bool recordTick = false;
+        const bool realtimeRecording = g_videoRecorder.is_recording() && !g_offlineRendering;
+        if (!g_videoRecorder.is_recording())
+            g_audioSystem.EndRecordPull();
+        if (!realtimeRecording) {
+            g_recordingClockLive = false;
+        } else if (!g_recordingClockLive) {
+            g_recordingClockLive = true;
+            g_recordingTimeOrigin = g_timelineState.isEnabled
+                ? static_cast<double>(g_timelineState.currentTime_seconds)
+                : glfwGetTime();
+            g_recordingTimeAccum = 0.0;
+            g_recordingTicks = -1;
+            recordTick = true;
+        } else {
+            constexpr double kRecordStep = 1.0 / 60.0;
+            g_recordingTimeAccum += static_cast<double>(deltaTime);
+            if (g_recordingTimeAccum >= kRecordStep) {
+                g_recordingTimeAccum -= kRecordStep;
+                if (g_recordingTimeAccum > kRecordStep)
+                    g_recordingTimeAccum = kRecordStep;
+                recordTick = true;
+            }
+        }
+        if (recordTick)
+            ++g_recordingTicks;
+        const double recordingShownTime = g_recordingTimeOrigin
+            + (g_recordingTicks < 0 ? 0.0 : static_cast<double>(g_recordingTicks) / 60.0);
+
         // --- Hot-reloading Check (every second) ---
         static float hot_reload_timer = 0.0f;
         hot_reload_timer += deltaTime;
@@ -1847,12 +1923,24 @@ int main(int argc, char** argv) {
             hot_reload_timer = 0.0f;
         }
 
-        g_audioSystem.ProcessAudio(deltaTime); // Process audio for FFT + advance the band envelope
+        // File takes: the shader hears the same 1/60 block that is written into the file.
+        // Held refreshes keep that picture, so the envelope must not decay between ticks.
+        const bool filePull = g_audioSystem.IsRecordPullActive();
+        if (filePull && recordTick)
+            pullRealtimeFileAudio();
+        if (!filePull || recordTick)
+            g_audioSystem.ProcessAudio(filePull ? (1.0f / 60.0f) : deltaTime);
 
         // Advance g_timelineState.currentTime_seconds based on its own UI controls (play/pause)
         // This happens if the timeline's UI playback controls are active AND it's not paused.
         if (g_timelineControlActive && !g_timeline_paused) {
-            g_timelineState.currentTime_seconds += deltaTime;
+            if (realtimeRecording) {
+                // g_recordingTicks was just advanced, so 0 is the opening frame.
+                if (recordTick && g_recordingTicks > 0)
+                    g_timelineState.currentTime_seconds += 1.0f / 60.0f;
+            } else {
+                g_timelineState.currentTime_seconds += deltaTime;
+            }
         }
 
         // Loop timeline's current time if its UI controls are active or if it's the master time source.
@@ -1875,6 +1963,10 @@ int main(int argc, char** argv) {
         float currentTimeForEffects;
         if (g_videoRecorder.is_recording() && g_offlineRendering) {
              currentTimeForEffects = g_offlineTime;
+        } else if (realtimeRecording) {
+             currentTimeForEffects = g_timelineState.isEnabled
+                 ? g_timelineState.currentTime_seconds
+                 : static_cast<float>(recordingShownTime);
         } else {
              currentTimeForEffects = g_timelineState.isEnabled ? g_timelineState.currentTime_seconds : (float)glfwGetTime();
         }
@@ -1919,11 +2011,14 @@ int main(int argc, char** argv) {
         checkGLError("Before Effect Render Loop");
         checkGLError("Before Effect Render Loop");
         checkGLError("Before Effect Render Loop");
+        // Held refreshes during a recording repeat the last picture. Running the
+        // shader again would advance feedback effects between saved frames.
+        if (!realtimeRecording || recordTick) {
         for (Effect* effect_ptr : renderQueue) {
             if(auto* se = dynamic_cast<ShaderEffect*>(effect_ptr)) {
                 se->SetDisplayResolution(SCR_WIDTH, SCR_HEIGHT);
                 se->SetMouseState(g_mouseState[0], g_mouseState[1], g_mouseState[2], g_mouseState[3]);
-                se->SetDeltaTime(deltaTime);
+                se->SetDeltaTime(realtimeRecording ? (1.0f / 60.0f) : deltaTime);
                 se->IncrementFrameCount();
                 se->SetAudioAmplitude(audioAmp);
                 se->SetAudioBands(audioBands);
@@ -1933,6 +2028,7 @@ int main(int argc, char** argv) {
             }
             effect_ptr->Update(currentTimeForEffects); 
             effect_ptr->Render();
+        }
         }
         checkGLError("After Effect Render Loop");
         checkGLError("After Effect Render Loop");
@@ -1999,8 +2095,8 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (g_videoRecorder.is_recording()) {
-            g_videoRecorder.add_video_frame_from_pbo(deltaTime);
+        if (g_videoRecorder.is_recording() && (g_offlineRendering || recordTick)) {
+            g_videoRecorder.add_video_frame_from_pbo(1.0f / 60.0f);
         }
 
         glDisable(GL_BLEND);
