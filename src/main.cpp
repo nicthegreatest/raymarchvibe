@@ -214,6 +214,8 @@ static bool g_showFpsMeter = false;
 static char g_shadertoyApiKeyBuffer[256] = ""; // For user's API key
 
 static bool g_enableAudioLink = false; // Changed to false
+static ImFont* g_audioTitleFont = nullptr;
+static ImFont* g_audioSmallFont = nullptr;
 static std::string g_consoleLog = "Welcome to RaymarchVibe Demoscene Tool!";
 static float g_mouseState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 static bool g_timeline_paused = false; // Reverted to false for default playback
@@ -605,12 +607,35 @@ static void requestStartRecording() {
         beginRecording();
 }
 
+// Folder last used by File > Load Shader. Empty until the dialog closes on a real directory.
+static std::string g_lastShaderLoadDirectory;
+
+static void rememberShaderLoadDirectory(const std::filesystem::path& candidate) {
+    std::error_code ec;
+    std::filesystem::path directory = candidate;
+    if (directory.empty())
+        return;
+    if (!std::filesystem::is_directory(directory, ec))
+        directory = directory.parent_path();
+    if (!directory.empty() && std::filesystem::is_directory(directory, ec))
+        g_lastShaderLoadDirectory = directory.string();
+}
+
+static std::string shaderLoadDialogStartPath() {
+    std::error_code ec;
+    if (!g_lastShaderLoadDirectory.empty() && std::filesystem::is_directory(g_lastShaderLoadDirectory, ec))
+        return g_lastShaderLoadDirectory;
+    return ".";
+}
+
 void RenderMenuBar() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Load Shader...")) {
-                // Args: key, title, filters, path, fileName, count, flags, userDatas
-                ImGuiFileDialog::Instance()->OpenDialog("LoadShaderDlgKey", "Choose Shader File", ".frag,.fs,.glsl,.*", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
+                IGFD::FileDialogConfig config;
+                config.path = shaderLoadDialogStartPath();
+                config.countSelectionMax = 1;
+                ImGuiFileDialog::Instance()->OpenDialog("LoadShaderDlgKey", "Choose Shader File", ".frag,.fs,.glsl,.*", config);
             }
             bool canSave = (g_selectedEffect && dynamic_cast<ShaderEffect*>(g_selectedEffect));
             if (ImGui::MenuItem("Save Shader", nullptr, false, canSave)) {
@@ -793,6 +818,7 @@ void RenderMenuBar() {
     if (ImGuiFileDialog::Instance()->Display("LoadShaderDlgKey")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+            rememberShaderLoadDirectory(filePathName);
             std::string justFileName = std::filesystem::path(filePathName).filename().string();
 
             auto newEffect = std::make_unique<ShaderEffect>(filePathName, SCR_WIDTH, SCR_HEIGHT);
@@ -807,6 +833,8 @@ void RenderMenuBar() {
                 g_selectedEffect = g_scene.back().get(); // Select the new effect
                 g_consoleLog = "Loaded shader '" + justFileName + "' into a new effect.";
             }
+        } else {
+            rememberShaderLoadDirectory(ImGuiFileDialog::Instance()->GetCurrentPath());
         }
         ImGuiFileDialog::Instance()->Close();
     }
@@ -1057,11 +1085,19 @@ void RenderNodeEditorWindow() {
     ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
     ImGui::Begin("Node Editor");
 
+    // Node Properties width. Drag the divider between the canvas and this pane to change it.
     static float sidebar_width = 350.0f;
-    const float canvas_width = ImGui::GetContentRegionAvail().x - sidebar_width;
+    const float sidebar_default_width = 350.0f;
+    const float sidebar_min_width = 180.0f;
+    const float canvas_min_width = 160.0f;
+    const float splitter_thickness = 6.0f;
+    const ImVec2 content_avail = ImGui::GetContentRegionAvail();
+    const float sidebar_max_width = ImMax(sidebar_min_width, content_avail.x - splitter_thickness - canvas_min_width);
+    sidebar_width = ImClamp(sidebar_width, ImMin(sidebar_min_width, sidebar_max_width), sidebar_max_width);
+    const float canvas_width = ImMax(1.0f, content_avail.x - splitter_thickness - sidebar_width);
 
     // Node Editor Canvas (Left Side)
-    ImGui::BeginChild("NodeEditorCanvas", ImVec2(canvas_width > 0 ? canvas_width : 1, 0), false, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::BeginChild("NodeEditorCanvas", ImVec2(canvas_width, 0), false, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImNodes::BeginNodeEditor();
     for (const auto& effect_ptr : g_scene) {
         if (!effect_ptr) continue;
@@ -1311,10 +1347,31 @@ void RenderNodeEditorWindow() {
 
     ImGui::EndChild(); // End NodeEditorCanvas
 
-    ImGui::SameLine();
+    ImGui::SameLine(0.0f, 0.0f);
+    ImGui::PushID("NodePropertiesSplitter");
+    ImGui::InvisibleButton("##splitter", ImVec2(splitter_thickness, content_avail.y));
+    if (ImGui::IsItemActive()) {
+        sidebar_width = ImClamp(sidebar_width - ImGui::GetIO().MouseDelta.x, ImMin(sidebar_min_width, sidebar_max_width), sidebar_max_width);
+    }
+    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        sidebar_width = sidebar_default_width;
+    }
+    const bool splitter_hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
+    if (splitter_hot) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+    const ImGuiCol splitter_color_id = ImGui::IsItemActive() ? ImGuiCol_SeparatorActive : (splitter_hot ? ImGuiCol_SeparatorHovered : ImGuiCol_Separator);
+    const ImU32 splitter_col = ImGui::GetColorU32(splitter_color_id);
+    const ImVec2 splitter_min = ImGui::GetItemRectMin();
+    const ImVec2 splitter_max = ImGui::GetItemRectMax();
+    const float splitter_mid_x = (splitter_min.x + splitter_max.x) * 0.5f;
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(splitter_mid_x, splitter_min.y), ImVec2(splitter_mid_x, splitter_max.y), splitter_col, splitter_hot ? 2.0f : 1.0f);
+    ImGui::PopID();
 
-    // Sidebar (Right Side) - will contain Properties and Instructions
-    ImGui::BeginChild("SidebarChild", ImVec2(sidebar_width, 0), true); // true for border
+    ImGui::SameLine(0.0f, 0.0f);
+
+    // Sidebar (Right Side) - will contain Properties and Instructions. Width 0 fills the space left of the divider.
+    ImGui::BeginChild("SidebarChild", ImVec2(0.0f, 0.0f), true); // true for border
 
     // --- Node Properties Panel ---
     ImGui::Text("Node Properties");
@@ -1384,6 +1441,8 @@ void RenderNodeEditorWindow() {
     // --- Instructions Panel ---
     ImGui::Text("Instructions");
     ImGui::Separator();
+    ImGui::TextWrapped("Drag the divider: Resize Node Properties");
+    ImGui::TextWrapped("Double-click the divider: Reset properties width");
     ImGui::TextWrapped("Right-click canvas: Add Node");
     ImGui::TextWrapped("Drag pin to pin: Create Link");
     ImGui::TextWrapped("Select Node: Edit Properties (above)");
@@ -1513,111 +1572,1306 @@ void RenderCameraHelpText() {
     ImGui::End();
 }
 
-// Helper struct to manage and format time values, like a UI-specific hook.
-struct ChronoTimer {
-    float currentTime = 0.0f;
-    float duration = 0.0f;
-    float progress = 0.0f;
+enum class TransportIcon { Play, Pause, Stop };
 
-    void update(float newProgress, float totalDuration) {
-        progress = newProgress;
-        duration = totalDuration;
-        currentTime = progress * duration;
+// Fixed-size transport button. The active one is the full color; the others keep a darker shade.
+static bool TransportIconButton(const char* id, bool selected, const ImVec4& color, TransportIcon icon) {
+    const ImVec2 size(40.0f, 26.0f);
+    const ImVec4 face = selected ? color : ImVec4(color.x * 0.38f, color.y * 0.38f, color.z * 0.38f, 1.0f);
+    const ImVec4 hover = selected
+        ? ImVec4(ImMin(color.x + 0.10f, 1.0f), ImMin(color.y + 0.10f, 1.0f), ImMin(color.z + 0.10f, 1.0f), 1.0f)
+        : ImVec4(color.x * 0.55f, color.y * 0.55f, color.z * 0.55f, 1.0f);
+    const ImVec4 held = ImVec4(color.x * 0.78f, color.y * 0.78f, color.z * 0.78f, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, face);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hover);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, held);
+    const bool pressed = ImGui::Button(id, size);
+    ImGui::PopStyleColor(3);
+
+    const ImVec2 a = ImGui::GetItemRectMin();
+    const ImVec2 b = ImGui::GetItemRectMax();
+    const ImVec2 c((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
+    const ImU32 col = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, selected ? 1.0f : 0.88f));
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    if (icon == TransportIcon::Play) {
+        draw->AddTriangleFilled(ImVec2(c.x - 4.0f, c.y - 5.5f), ImVec2(c.x - 4.0f, c.y + 5.5f), ImVec2(c.x + 6.0f, c.y), col);
+    } else if (icon == TransportIcon::Pause) {
+        draw->AddRectFilled(ImVec2(c.x - 5.5f, c.y - 5.0f), ImVec2(c.x - 2.0f, c.y + 5.0f), col, 1.0f);
+        draw->AddRectFilled(ImVec2(c.x + 2.0f, c.y - 5.0f), ImVec2(c.x + 5.5f, c.y + 5.0f), col, 1.0f);
+    } else {
+        draw->AddRectFilled(ImVec2(c.x - 4.5f, c.y - 4.5f), ImVec2(c.x + 4.5f, c.y + 4.5f), col, 1.5f);
+    }
+    return pressed;
+}
+
+static const ImVec4 kEqColorGreen(0.20f, 0.86f, 0.22f, 1.0f);
+static const ImVec4 kEqColorYellow(0.95f, 0.85f, 0.15f, 1.0f);
+static const ImVec4 kEqColorOrange(1.00f, 0.55f, 0.10f, 1.0f);
+static const ImVec4 kEqColorRed(0.95f, 0.18f, 0.12f, 1.0f);
+static const float kEqOrangeStopDb = 6.0f;
+static const ImVec4 kEqOffGrab(0.38f, 0.38f, 0.38f, 1.0f);
+static const ImVec4 kEqOffGrabActive(0.62f, 0.62f, 0.62f, 1.0f);
+
+// -12..0 green to yellow, 0 yellow, 0..+6 yellow to orange, +6..+12 orange to red.
+static ImVec4 EqDbColor(float db) {
+    const float min_db = AudioSystem::kEqualizerMinDb;
+    const float max_db = AudioSystem::kEqualizerMaxDb;
+    db = ImClamp(db, min_db, max_db);
+    if (db < 0.0f) {
+        const float span = 0.0f - min_db;
+        const float t = span > 0.0f ? (db - min_db) / span : 1.0f;
+        return ImLerp(kEqColorGreen, kEqColorYellow, ImSaturate(t));
+    }
+    if (db < kEqOrangeStopDb) {
+        return ImLerp(kEqColorYellow, kEqColorOrange, ImSaturate(db / kEqOrangeStopDb));
+    }
+    const float span = max_db - kEqOrangeStopDb;
+    const float t = span > 0.0f ? (db - kEqOrangeStopDb) / span : 1.0f;
+    return ImLerp(kEqColorOrange, kEqColorRed, ImSaturate(t));
+}
+
+static ImVec4 EqDbActiveColor(const ImVec4& color) {
+    return ImLerp(color, ImVec4(1.0f, 1.0f, 1.0f, 1.0f), 0.22f);
+}
+
+static float EqCatmullRom(float p0, float p1, float p2, float p3, float t) {
+    const float t2 = t * t;
+    const float t3 = t2 * t;
+    return 0.5f * ((2.0f * p1) + (-p0 + p2) * t + (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 + (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3);
+}
+
+static ImVec2 EqCatmullRom(const ImVec2& p0, const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, float t) {
+    return ImVec2(EqCatmullRom(p0.x, p1.x, p2.x, p3.x, t), EqCatmullRom(p0.y, p1.y, p2.y, p3.y, t));
+}
+
+// Thin bar inside the track from the 0 dB centre to the grab. Matches ImGui's vertical slider insets.
+static void DrawEqLevelFill(const ImVec2& item_min, const ImVec2& item_max, float db, const ImVec4& color) {
+    if (std::fabs(db) < 0.05f) {
+        return;
+    }
+    const float grab_padding = 2.0f;
+    const float frame_h = item_max.y - item_min.y;
+    const float slider_sz = frame_h - grab_padding * 2.0f;
+    if (slider_sz < 1.0f) {
+        return;
+    }
+    const float grab_sz = ImMin(ImGui::GetStyle().GrabMinSize, slider_sz);
+    const float usable_top = item_min.y + grab_padding + grab_sz * 0.5f;
+    const float usable_bottom = item_max.y - grab_padding - grab_sz * 0.5f;
+    const float min_db = AudioSystem::kEqualizerMinDb;
+    const float max_db = AudioSystem::kEqualizerMaxDb;
+    const float span = max_db - min_db;
+    const float t = span > 0.0f ? ImSaturate((db - min_db) / span) : 0.5f;
+    const float grab_pos = ImLerp(usable_top, usable_bottom, 1.0f - t);
+    const float zero_pos = (usable_top + usable_bottom) * 0.5f;
+
+    float y0 = db > 0.0f ? grab_pos + grab_sz * 0.5f : zero_pos;
+    float y1 = db > 0.0f ? zero_pos : grab_pos - grab_sz * 0.5f;
+    const float y_min = item_min.y + 1.0f;
+    const float y_max = item_max.y - 1.0f;
+    y0 = ImClamp(y0, y_min, y_max);
+    y1 = ImClamp(y1, y_min, y_max);
+    if (y1 - y0 < 1.0f) {
+        return;
     }
 
-    std::string getFormattedTime(float timeInSeconds) {
-        if (timeInSeconds < 0) timeInSeconds = 0;
-        int hours = static_cast<int>(timeInSeconds) / 3600;
-        timeInSeconds -= hours * 3600;
-        int minutes = static_cast<int>(timeInSeconds) / 60;
-        timeInSeconds -= minutes * 60;
-        int seconds = static_cast<int>(timeInSeconds);
-        
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", hours, minutes, seconds);
-        return std::string(buffer);
+    const float inner_l = item_min.x + grab_padding;
+    const float inner_r = item_max.x - grab_padding;
+    const float bar_w = ImMin(3.0f, ImMax(1.0f, inner_r - inner_l));
+    const float mid_x = (item_min.x + item_max.x) * 0.5f;
+    const ImVec2 fill_min(mid_x - bar_w * 0.5f, y0);
+    const ImVec2 fill_max(mid_x + bar_w * 0.5f, y1);
+    ImVec4 fill = color;
+    fill.w = 0.40f;
+    ImGui::GetWindowDrawList()->AddRectFilled(fill_min, fill_max, ImGui::GetColorU32(fill));
+}
+
+static void DrawEqResponseGraph(const ImVec2& panel_min, const ImVec2& panel_max, const float* center_x, const float* band_db, int band_count, float preamp_db, bool eq_on) {
+    const float border_px = 1.0f;
+    if (band_count < 2 || panel_max.x <= panel_min.x + border_px * 2.0f || panel_max.y <= panel_min.y + border_px * 2.0f) {
+        return;
     }
-};
 
-void RenderAudioReactivityWindow() {
-    ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Audio Reactivity", &g_showAudioWindow);
-    ImGui::Checkbox("Enable Audio Link (iAudioAmp)", &g_enableAudioLink);
-    ImGui::Separator();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    // One pixel of slack so the border's anti-aliased edge is not shaved off.
+    ImGui::PushClipRect(ImVec2(panel_min.x - 1.0f, panel_min.y - 1.0f), ImVec2(panel_max.x + 1.0f, panel_max.y + 1.0f), true);
 
-    auto currentSource = g_audioSystem.GetCurrentAudioSource();
-    int currentSourceInt = static_cast<int>(currentSource);
+    const float panel_rounding = 2.0f;
+    const ImU32 bg = ImGui::GetColorU32(ImVec4(0.03f, 0.07f, 0.03f, 1.0f));
+    draw->AddRectFilled(panel_min, panel_max, bg, panel_rounding);
 
-    if (ImGui::RadioButton("Microphone", &currentSourceInt, static_cast<int>(AudioSystem::AudioSource::Microphone))) {
-        if (currentSource != AudioSystem::AudioSource::Microphone) {
+    // Lines sit inside the 1 px frame so the stroke stays visible on top.
+    const ImVec2 inner_min(panel_min.x + border_px, panel_min.y + border_px);
+    const ImVec2 inner_max(panel_max.x - border_px, panel_max.y - border_px);
+    ImGui::PushClipRect(inner_min, inner_max, true);
+
+    const ImU32 grid_col = eq_on ? IM_COL32(90, 150, 80, 80) : IM_COL32(150, 150, 150, 55);
+    const float min_db = AudioSystem::kEqualizerMinDb;
+    const float max_db = AudioSystem::kEqualizerMaxDb;
+    const float db_span = max_db - min_db;
+    const auto db_to_y = [&](float db) {
+        const float t = db_span > 0.0f ? ImSaturate((db - min_db) / db_span) : 0.5f;
+        return ImLerp(inner_max.y, inner_min.y, t);
+    };
+
+    const float zero_y = db_to_y(0.0f);
+    draw->AddLine(ImVec2(inner_min.x, zero_y), ImVec2(inner_max.x, zero_y), grid_col, 1.0f);
+    for (int i = 0; i < band_count; ++i) {
+        const float x = center_x[i];
+        draw->AddLine(ImVec2(x, inner_min.y), ImVec2(x, inner_max.y), grid_col, 1.0f);
+    }
+
+    ImVec4 preamp_color = eq_on ? EqDbColor(preamp_db) : ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
+    preamp_color.w = eq_on ? 0.35f : 0.28f;
+    const float preamp_y = db_to_y(preamp_db);
+    draw->AddLine(ImVec2(inner_min.x, preamp_y), ImVec2(inner_max.x, preamp_y), ImGui::GetColorU32(preamp_color), 1.0f);
+
+    ImVec2 points[AudioSystem::kEqualizerBandCount];
+    float dbs[AudioSystem::kEqualizerBandCount];
+    for (int i = 0; i < band_count; ++i) {
+        dbs[i] = band_db[i];
+        points[i] = ImVec2(center_x[i], db_to_y(dbs[i]));
+    }
+
+    const int segments = 8;
+    const ImU32 grey_curve = IM_COL32(170, 170, 170, 150);
+    const auto stroke_curve = [&](float thickness, bool glow) {
+        for (int span = 0; span < band_count - 1; ++span) {
+            const int i0 = span > 0 ? span - 1 : 0;
+            const int i3 = (span + 2 < band_count) ? span + 2 : band_count - 1;
+            ImVec2 previous = points[span];
+            for (int step = 1; step <= segments; ++step) {
+                const float t = static_cast<float>(step) / static_cast<float>(segments);
+                const ImVec2 next = EqCatmullRom(points[i0], points[span], points[span + 1], points[i3], t);
+                const float mid_t = (static_cast<float>(step) - 0.5f) / static_cast<float>(segments);
+                const float mid_db = EqCatmullRom(dbs[i0], dbs[span], dbs[span + 1], dbs[i3], mid_t);
+                ImU32 col = grey_curve;
+                if (eq_on) {
+                    ImVec4 color = EqDbColor(mid_db);
+                    if (glow) {
+                        color.w = 0.25f;
+                    } else {
+                        color.x = ImMin(1.0f, color.x + 0.10f);
+                        color.y = ImMin(1.0f, color.y + 0.10f);
+                        color.z = ImMin(1.0f, color.z + 0.05f);
+                    }
+                    col = ImGui::GetColorU32(color);
+                }
+                draw->AddLine(previous, next, col, thickness);
+                previous = next;
+            }
+        }
+    };
+    if (eq_on) {
+        stroke_curve(6.5f, true);
+    }
+    stroke_curve(3.0f, false);
+
+    ImGui::PopClipRect();
+    const ImVec2 border_min(panel_min.x + border_px * 0.5f, panel_min.y + border_px * 0.5f);
+    const ImVec2 border_max(panel_max.x - border_px * 0.5f, panel_max.y - border_px * 0.5f);
+    const ImU32 border_col = ImGui::GetColorU32(eq_on ? ImVec4(0.25f, 0.45f, 0.25f, 1.0f) : ImVec4(0.42f, 0.42f, 0.42f, 1.0f));
+    draw->AddRect(border_min, border_max, border_col, panel_rounding, 0, border_px);
+    ImGui::PopClipRect();
+}
+
+// Small-caps card title with a short green tick on the left.
+static void DrawCardTitle(const char* title) {
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const float text_h = ImGui::GetTextLineHeight();
+    const float tick_w = 3.0f;
+    draw->AddRectFilled(ImVec2(p.x, p.y + 2.0f), ImVec2(p.x + tick_w, p.y + text_h - 1.0f), ImGui::GetColorU32(ImVec4(0.35f, 0.82f, 0.38f, 1.0f)), 1.0f);
+
+    ImFont* font = ImGui::GetFont();
+    const float size = ImGui::GetFontSize();
+    const ImU32 col = ImGui::GetColorU32(ImVec4(0.76f, 0.78f, 0.82f, 1.0f));
+    float x = p.x + tick_w + 7.0f;
+    for (const char* c = title; *c != '\0'; ++c) {
+        char glyph[2] = {*c, '\0'};
+        draw->AddText(font, size, ImVec2(x, p.y), col, glyph);
+        x += font->CalcTextSizeA(size, FLT_MAX, 0.0f, glyph).x + 1.15f;
+    }
+    ImGui::Dummy(ImVec2(ImMax(1.0f, x - p.x), text_h));
+}
+
+// slider_h is the fader travel. thin_labels switches the frequency captions to the small font.
+// The band-area rect is measured once and shared by the curve and the sliders.
+static void RenderGraphicEqualizer(float slider_h, bool thin_labels) {
+    slider_h = ImMax(150.0f, slider_h);
+    const float graph_h = 50.0f;
+    const int band_count = AudioSystem::kEqualizerBandCount;
+    const ImGuiStyle& style = ImGui::GetStyle();
+
+    bool eq_on = g_audioSystem.IsEqualizerEnabled();
+    const float on_w = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x + ImGui::CalcTextSize("On").x;
+    const float reset_w = ImGui::CalcTextSize("Reset").x + style.FramePadding.x * 2.0f;
+    const float controls_w = on_w + style.ItemSpacing.x + reset_w;
+    ImGui::AlignTextToFramePadding();
+    DrawCardTitle("EQUALIZER");
+    ImGui::SameLine();
+    const float header_rest = ImGui::GetContentRegionAvail().x;
+    if (header_rest > controls_w) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + header_rest - controls_w);
+    }
+    if (ImGui::Checkbox("On##Equalizer", &eq_on)) {
+        g_audioSystem.SetEqualizerEnabled(eq_on);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset##Equalizer")) {
+        g_audioSystem.ResetEqualizer();
+    }
+
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float scale_w = ImMax(ImGui::CalcTextSize("+12").x, ImGui::CalcTextSize("-12").x);
+    const float pre_w = 36.0f;
+    const float divider_slot = 16.0f;
+    const float bands_w = ImMax(1.0f, avail - scale_w - style.ItemSpacing.x - pre_w - divider_slot);
+    const float col_w = bands_w / static_cast<float>(band_count);
+    const float band_slider_w = ImMin(44.0f, ImMax(12.0f, col_w - 8.0f));
+
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float scale_x = origin.x;
+    const float pre_x = scale_x + scale_w + style.ItemSpacing.x;
+    const float bands_x = pre_x + pre_w + divider_slot;
+    const float divider_x = pre_x + pre_w + divider_slot * 0.5f;
+    float center_x[AudioSystem::kEqualizerBandCount];
+    for (int i = 0; i < band_count; ++i) {
+        center_x[i] = bands_x + (static_cast<float>(i) + 0.5f) * col_w;
+    }
+    const ImVec2 graph_min(bands_x, origin.y);
+    const ImVec2 graph_max(bands_x + bands_w, origin.y + graph_h);
+    ImGui::Dummy(ImVec2(avail, graph_h));
+    const float slider_y = ImGui::GetCursorScreenPos().y;
+
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.03f, 0.07f, 0.03f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.08f, 0.16f, 0.08f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.10f, 0.20f, 0.10f, 1.0f));
+
+    float preamp_db = g_audioSystem.GetEqualizerPreampDb();
+    const ImVec4 preamp_grab = eq_on ? EqDbColor(preamp_db) : kEqOffGrab;
+    const ImVec4 preamp_grab_active = eq_on ? EqDbActiveColor(preamp_grab) : kEqOffGrabActive;
+    ImGui::SetCursorScreenPos(ImVec2(pre_x, slider_y));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, preamp_grab);
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, preamp_grab_active);
+    if (ImGui::VSliderFloat("##EqPreamp", ImVec2(pre_w, slider_h), &preamp_db, AudioSystem::kEqualizerMinDb, AudioSystem::kEqualizerMaxDb, "")) {
+        g_audioSystem.SetEqualizerPreampDb(preamp_db);
+    }
+    const ImVec2 preamp_rect_min = ImGui::GetItemRectMin();
+    const ImVec2 preamp_rect_max = ImGui::GetItemRectMax();
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Preamp: %+.1f dB", g_audioSystem.GetEqualizerPreampDb());
+    }
+    ImGui::PopStyleColor(2);
+    if (eq_on) {
+        DrawEqLevelFill(preamp_rect_min, preamp_rect_max, preamp_db, EqDbColor(preamp_db));
+    }
+
+    float band_db[AudioSystem::kEqualizerBandCount];
+    for (int i = 0; i < band_count; ++i) {
+        ImGui::PushID(i);
+        band_db[i] = g_audioSystem.GetEqualizerBandDb(i);
+        const ImVec4 band_grab = eq_on ? EqDbColor(band_db[i]) : kEqOffGrab;
+        const ImVec4 band_grab_active = eq_on ? EqDbActiveColor(band_grab) : kEqOffGrabActive;
+        ImGui::SetCursorScreenPos(ImVec2(center_x[i] - band_slider_w * 0.5f, slider_y));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, band_grab);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, band_grab_active);
+        if (ImGui::VSliderFloat("##EqBand", ImVec2(band_slider_w, slider_h), &band_db[i], AudioSystem::kEqualizerMinDb, AudioSystem::kEqualizerMaxDb, "")) {
+            g_audioSystem.SetEqualizerBandDb(i, band_db[i]);
+        }
+        const ImVec2 band_rect_min = ImGui::GetItemRectMin();
+        const ImVec2 band_rect_max = ImGui::GetItemRectMax();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%.0f Hz: %+.1f dB", AudioSystem::kEqualizerBands[i].hz, g_audioSystem.GetEqualizerBandDb(i));
+        }
+        ImGui::PopStyleColor(2);
+        if (eq_on) {
+            DrawEqLevelFill(band_rect_min, band_rect_max, band_db[i], EqDbColor(band_db[i]));
+        }
+        ImGui::PopID();
+    }
+    ImGui::PopStyleColor(3);
+
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImU32 scale_col = ImGui::GetColorU32(ImVec4(0.55f, 0.86f, 0.40f, eq_on ? 1.0f : 0.45f));
+    const float text_h = ImGui::GetTextLineHeight();
+    draw->AddText(ImVec2(scale_x, slider_y), scale_col, "+12");
+    draw->AddText(ImVec2(scale_x, slider_y + (slider_h - text_h) * 0.5f), scale_col, "0");
+    draw->AddText(ImVec2(scale_x, slider_y + slider_h - text_h), scale_col, "-12");
+    draw->AddLine(ImVec2(divider_x, slider_y + 2.0f), ImVec2(divider_x, slider_y + slider_h - 2.0f), IM_COL32(90, 110, 90, 140), 1.0f);
+
+    if (g_audioSmallFont != nullptr) {
+        ImGui::PushFont(g_audioSmallFont);
+    }
+    char pre_buf[32];
+    snprintf(pre_buf, sizeof(pre_buf), "%+.1f", preamp_db);
+    const float db_w = ImGui::CalcTextSize("dB").x;
+    const float val_w = ImGui::CalcTextSize(pre_buf).x;
+    const float read_x = pre_x + (pre_w - ImMax(db_w, val_w)) * 0.5f;
+    const float read_y = graph_min.y + graph_h - ImGui::GetTextLineHeight() * 2.0f - 2.0f;
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(read_x + (ImMax(db_w, val_w) - db_w) * 0.5f, read_y), IM_COL32(140, 150, 140, 200), "dB");
+    const ImVec4 pre_col = eq_on ? EqDbColor(preamp_db) : ImVec4(0.62f, 0.62f, 0.62f, 1.0f);
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(read_x + (ImMax(db_w, val_w) - val_w) * 0.5f, read_y + ImGui::GetTextLineHeight()), ImGui::GetColorU32(pre_col), pre_buf);
+    if (g_audioSmallFont != nullptr) {
+        ImGui::PopFont();
+    }
+
+    DrawEqResponseGraph(graph_min, graph_max, center_x, band_db, band_count, preamp_db, eq_on);
+
+    const float label_y = slider_y + slider_h + style.ItemSpacing.y;
+    const bool use_small = thin_labels && g_audioSmallFont != nullptr;
+    if (use_small) {
+        ImGui::PushFont(g_audioSmallFont);
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.62f, 0.90f, 0.48f, eq_on ? 1.0f : 0.45f));
+    auto place_label = [&](const char* label, float center) {
+        const float label_w = ImGui::CalcTextSize(label).x;
+        ImGui::SetCursorScreenPos(ImVec2(center - label_w * 0.5f, label_y));
+        ImGui::TextUnformatted(label);
+    };
+    place_label("Pre", pre_x + pre_w * 0.5f);
+    for (int i = 0; i < band_count; ++i) {
+        place_label(AudioSystem::kEqualizerBands[i].label, center_x[i]);
+    }
+    ImGui::PopStyleColor();
+    if (use_small) {
+        ImGui::PopFont();
+    }
+}
+
+// Fixed hue across 20 Hz..20 kHz: magenta/red, through green/cyan, out to blue/violet.
+static ImVec4 SpectrumHueColor(float freq_t, float value, float whiten) {
+    float hue = freq_t * 0.80f + 0.92f;
+    hue -= std::floor(hue);
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+    ImGui::ColorConvertHSVtoRGB(hue, 0.90f, ImSaturate(value), r, g, b);
+    const float w = ImSaturate(whiten);
+    return ImVec4(r + (1.0f - r) * w, g + (1.0f - g) * w, b + (1.0f - b) * w, 1.0f);
+}
+
+// Bin 0 is DC and is never read. Positions below bin 1 fade up from silence so
+// sub-bin bass bars don't all copy the same sample.
+static float SpectrumBinMagnitude(const float* fft, int bin_count, float bin_pos) {
+    if (fft == nullptr || bin_count < 2) {
+        return 0.0f;
+    }
+    if (bin_pos <= 1.0f) {
+        return fft[1] * ImSaturate(bin_pos);
+    }
+    const float last = static_cast<float>(bin_count - 1);
+    if (bin_pos >= last) {
+        return fft[bin_count - 1];
+    }
+    const int i0 = static_cast<int>(bin_pos);
+    const float t = bin_pos - static_cast<float>(i0);
+    return fft[i0] * (1.0f - t) + fft[i0 + 1] * t;
+}
+
+// Max magnitude of the bins inside [bin_lo, bin_hi]. Ranges narrower than one
+// bin interpolate between neighbours instead of stair-stepping.
+static float SpectrumBarMagnitude(const float* fft, int bin_count, float bin_lo, float bin_hi) {
+    if (fft == nullptr || bin_count < 2 || !(bin_hi > bin_lo)) {
+        return 0.0f;
+    }
+    const float mid = 0.5f * (bin_lo + bin_hi);
+    if ((bin_hi - bin_lo) < 1.0f || bin_hi <= 1.0f) {
+        return SpectrumBinMagnitude(fft, bin_count, mid);
+    }
+    int first = static_cast<int>(std::ceil(bin_lo));
+    int last = static_cast<int>(std::floor(bin_hi));
+    if (first < 1) {
+        first = 1;
+    }
+    if (last >= bin_count) {
+        last = bin_count - 1;
+    }
+    if (last < first) {
+        return SpectrumBinMagnitude(fft, bin_count, ImMax(mid, 1.0f));
+    }
+    float mag = 0.0f;
+    for (int i = first; i <= last; ++i) {
+        if (fft[i] > mag) {
+            mag = fft[i];
+        }
+    }
+    return mag;
+}
+
+static void RenderSpectrumMonitor(float panel_width, float height) {
+    static constexpr int kSpecBars = 64;
+    static float levels[kSpecBars] = {};
+    static float peaks[kSpecBars] = {};
+    static float peak_vel[kSpecBars] = {};
+    static float peak_hold[kSpecBars] = {};
+
+    const float plot_h = ImMax(48.0f, height);
+    ImGui::InvisibleButton("##SpectrumMonitor", ImVec2(ImMax(1.0f, panel_width), plot_h));
+    const ImVec2 panel_min = ImGui::GetItemRectMin();
+    const ImVec2 panel_max = ImGui::GetItemRectMax();
+    const bool hovered = ImGui::IsItemHovered();
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+
+    const float* fft = nullptr;
+    int bin_count = 0;
+    const auto& fft_data = g_audioSystem.GetFFTData();
+    if (!fft_data.empty()) {
+        fft = fft_data.data();
+        bin_count = static_cast<int>(fft_data.size());
+    }
+    const ma_uint32 sample_rate_u = g_audioSystem.GetCurrentInputSampleRate();
+    const float sample_rate = sample_rate_u > 0 ? static_cast<float>(sample_rate_u) : 48000.0f;
+    const float bins_per_hz = static_cast<float>(AudioSystem::FFT_SIZE) / sample_rate;
+
+    float dt = ImGui::GetIO().DeltaTime;
+    if (!(dt > 0.0f)) {
+        dt = 1.0f / 60.0f;
+    }
+    dt = ImMin(dt, 0.050f);
+    const float release = 1.0f - std::exp(-dt / 0.180f);
+    const float now = static_cast<float>(ImGui::GetTime());
+
+    const float f_min = 20.0f;
+    const float f_max = 20000.0f;
+    const float log_min = std::log(f_min);
+    const float log_span = std::log(f_max) - log_min;
+    const auto hz_at = [&](float t) {
+        return std::exp(log_min + log_span * ImSaturate(t));
+    };
+
+    float center_hz[kSpecBars];
+    float bass_sum = 0.0f;
+    int bass_n = 0;
+    float max_level = 0.0f;
+    for (int i = 0; i < kSpecBars; ++i) {
+        const float f0 = hz_at(static_cast<float>(i) / static_cast<float>(kSpecBars));
+        const float f1 = hz_at(static_cast<float>(i + 1) / static_cast<float>(kSpecBars));
+        const float fc = hz_at((static_cast<float>(i) + 0.5f) / static_cast<float>(kSpecBars));
+        center_hz[i] = fc;
+
+        float mag = 0.0f;
+        if (f0 < sample_rate * 0.5f) {
+            const float bin_lo = f0 * bins_per_hz;
+            const float bin_hi = ImMin(f1, sample_rate * 0.5f) * bins_per_hz;
+            mag = SpectrumBarMagnitude(fft, bin_count, bin_lo, bin_hi);
+        }
+        if (!std::isfinite(mag) || mag < 0.0f) {
+            mag = 0.0f;
+        }
+        const float tilt = (fc > 1000.0f) ? 3.0f * std::log2(fc / 1000.0f) : 0.0f;
+        const float db = 20.0f * std::log10(mag / AudioSystem::BAND_REFERENCE + 1.0e-6f) + tilt;
+        const float level = ImSaturate((db + 60.0f) / 60.0f);
+
+        if (level >= levels[i]) {
+            levels[i] = level;
+        } else {
+            levels[i] += (level - levels[i]) * release;
+        }
+        if (!std::isfinite(levels[i])) {
+            levels[i] = 0.0f;
+        }
+
+        if (levels[i] >= peaks[i]) {
+            peaks[i] = levels[i];
+            peak_vel[i] = 0.0f;
+            peak_hold[i] = 0.40f;
+        } else if (peak_hold[i] > 0.0f) {
+            peak_hold[i] = ImMax(0.0f, peak_hold[i] - dt);
+        } else {
+            peak_vel[i] += 3.4f * dt;
+            peaks[i] -= peak_vel[i] * dt;
+            if (peaks[i] <= levels[i]) {
+                peaks[i] = levels[i];
+                peak_vel[i] = 0.0f;
+            }
+        }
+
+        if (fc <= 160.0f) {
+            bass_sum += levels[i];
+            ++bass_n;
+        }
+        if (levels[i] > max_level) {
+            max_level = levels[i];
+        }
+    }
+    const float bass = (bass_n > 0) ? bass_sum / static_cast<float>(bass_n) : 0.0f;
+
+    if (panel_max.x <= panel_min.x + 4.0f || panel_max.y <= panel_min.y + 8.0f) {
+        return;
+    }
+
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    ImGui::PushClipRect(ImVec2(panel_min.x - 4.0f, panel_min.y - 4.0f), ImVec2(panel_max.x + 4.0f, panel_max.y + 4.0f), true);
+
+    const float panel_rounding = 2.0f;
+    draw->AddRectFilled(panel_min, panel_max, ImGui::GetColorU32(ImVec4(0.03f, 0.07f, 0.03f, 1.0f)), panel_rounding);
+
+    const float border_room = 1.0f;
+    const ImVec2 inner_min(panel_min.x + border_room, panel_min.y + border_room);
+    const ImVec2 inner_max(panel_max.x - border_room, panel_max.y - border_room);
+    ImGui::PushClipRect(inner_min, inner_max, true);
+
+    const float label_h = ImGui::GetTextLineHeight();
+    const float plot_top = inner_min.y + label_h;
+    const float plot_bot = inner_max.y;
+    const float plot_left = inner_min.x;
+    const float plot_right = inner_max.x;
+    const bool plot_ok = (plot_bot > plot_top + 8.0f) && (plot_right > plot_left + 4.0f);
+
+    int hover_bar = -1;
+    if (plot_ok) {
+        const float bar_area = (plot_bot - plot_top) * 0.74f;
+        const float baseline = plot_top + bar_area;
+        const float bar_span = ImMax(1.0f, bar_area - 2.0f);
+        const float refl_span = ImMax(1.0f, plot_bot - baseline - 1.0f);
+        const float slot = (plot_right - plot_left) / static_cast<float>(kSpecBars);
+        const float bar_w = ImMax(1.0f, slot - 1.0f);
+        const ImU32 grid_col = IM_COL32(80, 140, 70, 55);
+        const ImU32 base_col = IM_COL32(130, 190, 110, 100);
+
+        ImGui::PushClipRect(ImVec2(inner_min.x, plot_top), inner_max, true);
+
+        const float grid_hz[] = {50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f};
+        float grid_x[IM_ARRAYSIZE(grid_hz)];
+        for (int g = 0; g < IM_ARRAYSIZE(grid_hz); ++g) {
+            const float t = (std::log(grid_hz[g]) - log_min) / log_span;
+            grid_x[g] = ImLerp(plot_left, plot_right, ImSaturate(t));
+            draw->AddLine(ImVec2(grid_x[g], plot_top), ImVec2(grid_x[g], plot_bot), grid_col, 1.0f);
+        }
+        draw->AddLine(ImVec2(plot_left, baseline), ImVec2(plot_right, baseline), base_col, 1.0f);
+
+        ImVec2 tops[kSpecBars];
+        for (int i = 0; i < kSpecBars; ++i) {
+            const float freq_t = (static_cast<float>(i) + 0.5f) / static_cast<float>(kSpecBars);
+            const float cx = plot_left + (static_cast<float>(i) + 0.5f) * slot;
+            const float x0 = cx - bar_w * 0.5f;
+            const float x1 = cx + bar_w * 0.5f;
+            const float y_top = baseline - levels[i] * bar_span;
+            tops[i] = ImVec2(cx, y_top);
+
+            const ImVec4 top_col = SpectrumHueColor(freq_t, 0.62f + 0.38f * levels[i], levels[i] * levels[i] * 0.80f);
+            const ImVec4 bot_col = SpectrumHueColor(freq_t, 0.18f + 0.12f * levels[i], 0.0f);
+
+            if (levels[i] > 0.01f) {
+                ImVec4 glow = top_col;
+                glow.w = 0.15f;
+                draw->AddRectFilled(ImVec2(x0 - 1.5f, y_top), ImVec2(x1 + 1.5f, baseline), ImGui::GetColorU32(glow));
+                if (levels[i] >= 0.80f) {
+                    const float hot = (levels[i] - 0.80f) / 0.20f;
+                    ImVec4 hot_glow = top_col;
+                    hot_glow.w = 0.15f + hot * 0.12f;
+                    const float extra = 3.0f + hot * 7.0f;
+                    draw->AddRectFilled(ImVec2(x0 - 3.0f, y_top - extra), ImVec2(x1 + 3.0f, y_top + 4.0f), ImGui::GetColorU32(hot_glow));
+                }
+                draw->AddRectFilledMultiColor(
+                    ImVec2(x0, y_top), ImVec2(x1, baseline),
+                    ImGui::GetColorU32(top_col), ImGui::GetColorU32(top_col),
+                    ImGui::GetColorU32(bot_col), ImGui::GetColorU32(bot_col));
+
+                ImVec4 refl_top = bot_col;
+                refl_top.w = 0.25f;
+                ImVec4 refl_bot = bot_col;
+                refl_bot.w = 0.0f;
+                const float refl_h = levels[i] * refl_span;
+                draw->AddRectFilledMultiColor(
+                    ImVec2(x0, baseline + 1.0f), ImVec2(x1, baseline + 1.0f + refl_h),
+                    ImGui::GetColorU32(refl_top), ImGui::GetColorU32(refl_top),
+                    ImGui::GetColorU32(refl_bot), ImGui::GetColorU32(refl_bot));
+            }
+
+            if (peaks[i] > 0.02f) {
+                const float peak_y = baseline - peaks[i] * bar_span;
+                ImVec4 cap = SpectrumHueColor(freq_t, 1.0f, 0.75f);
+                ImVec4 cap_glow = cap;
+                cap_glow.w = 0.30f;
+                draw->AddLine(ImVec2(x0 - 0.5f, peak_y), ImVec2(x1 + 0.5f, peak_y), ImGui::GetColorU32(cap_glow), 5.0f);
+                draw->AddLine(ImVec2(x0, peak_y), ImVec2(x1, peak_y), ImGui::GetColorU32(cap), 2.0f);
+            }
+        }
+
+        if (max_level > 0.02f) {
+            const auto stroke_curve = [&](float thickness, float alpha, float whiten) {
+                const int steps = 4;
+                for (int span = 0; span < kSpecBars - 1; ++span) {
+                    const int i0 = span > 0 ? span - 1 : 0;
+                    const int i3 = (span + 2 < kSpecBars) ? span + 2 : kSpecBars - 1;
+                    ImVec2 previous = tops[span];
+                    for (int step = 1; step <= steps; ++step) {
+                        const float t = static_cast<float>(step) / static_cast<float>(steps);
+                        const ImVec2 next = EqCatmullRom(tops[i0], tops[span], tops[span + 1], tops[i3], t);
+                        const float mid_t = (static_cast<float>(step) - 0.5f) / static_cast<float>(steps);
+                        const float mid_level = ImSaturate(EqCatmullRom(levels[i0], levels[span], levels[span + 1], levels[i3], mid_t));
+                        if (mid_level < 0.02f) {
+                            previous = next;
+                            continue;
+                        }
+                        const float freq_t = ImSaturate((static_cast<float>(span) + mid_t) / static_cast<float>(kSpecBars - 1));
+                        ImVec4 color = SpectrumHueColor(freq_t, 0.70f + 0.30f * mid_level, whiten);
+                        color.x = ImMin(1.0f, color.x + 0.08f);
+                        color.y = ImMin(1.0f, color.y + 0.08f);
+                        color.z = ImMin(1.0f, color.z + 0.04f);
+                        color.w = alpha * (0.35f + 0.65f * mid_level);
+                        draw->AddLine(previous, next, ImGui::GetColorU32(color), thickness);
+                        previous = next;
+                    }
+                }
+            };
+
+            stroke_curve(6.5f, 0.22f, 0.0f);
+            stroke_curve(3.0f, 1.0f, 0.28f);
+        }
+
+        ImGui::PopClipRect();
+
+        const char* grid_text[] = {"50", "100", "200", "500", "1k", "2k", "5k", "10k"};
+        const ImU32 label_col = IM_COL32(150, 190, 140, 170);
+        for (int g = 0; g < IM_ARRAYSIZE(grid_text); ++g) {
+            const ImVec2 text_sz = ImGui::CalcTextSize(grid_text[g]);
+            const float tx = ImClamp(grid_x[g] - text_sz.x * 0.5f, inner_min.x, ImMax(inner_min.x, inner_max.x - text_sz.x));
+            draw->AddText(ImVec2(tx, inner_min.y), label_col, grid_text[g]);
+        }
+
+        if (hovered && slot > 0.0f) {
+            hover_bar = static_cast<int>((mouse.x - plot_left) / slot);
+            hover_bar = ImClamp(hover_bar, 0, kSpecBars - 1);
+        }
+    }
+
+    ImGui::PopClipRect();
+
+    const float wobble = 0.82f + 0.18f * std::sin(now * 3.5f);
+    const float breath = bass * wobble;
+    const float border_px = 1.0f + breath * 2.2f;
+    const ImVec2 border_min(panel_min.x + border_px * 0.5f, panel_min.y + border_px * 0.5f);
+    const ImVec2 border_max(panel_max.x - border_px * 0.5f, panel_max.y - border_px * 0.5f);
+    const ImU32 border_col = ImGui::GetColorU32(ImLerp(ImVec4(0.25f, 0.45f, 0.25f, 1.0f), ImVec4(0.75f, 1.0f, 0.70f, 1.0f), ImSaturate(breath)));
+    draw->AddRect(border_min, border_max, border_col, panel_rounding, 0, border_px);
+
+    ImGui::PopClipRect();
+
+    if (hover_bar >= 0) {
+        const float hz = center_hz[hover_bar];
+        const float shown_db = -60.0f + levels[hover_bar] * 60.0f;
+        if (hz >= 1000.0f) {
+            ImGui::SetTooltip("%.2f kHz   %+.1f dB", hz / 1000.0f, shown_db);
+        } else {
+            ImGui::SetTooltip("%.0f Hz   %+.1f dB", hz, shown_db);
+        }
+    }
+}
+
+// MM:SS, or H:MM:SS once the file runs past an hour. Truncates, matching a player clock.
+static void FormatPlaybackClock(char* buf, size_t buf_size, float seconds) {
+    if (!(seconds > 0.0f)) {
+        seconds = 0.0f;
+    }
+    int whole = static_cast<int>(seconds);
+    const int hours = whole / 3600;
+    whole %= 3600;
+    const int minutes = whole / 60;
+    const int secs = whole % 60;
+    if (hours > 0) {
+        snprintf(buf, buf_size, "%d:%02d:%02d", hours, minutes, secs);
+    } else {
+        snprintf(buf, buf_size, "%02d:%02d", minutes, secs);
+    }
+}
+
+static const char* AudioFileBasename(const char* path) {
+    if (path == nullptr || path[0] == '\0') {
+        return "";
+    }
+    const char* base = path;
+    for (const char* p = path; *p != '\0'; ++p) {
+        if (*p == '/' || *p == '\\') {
+            base = p + 1;
+        }
+    }
+    return base;
+}
+
+enum class AudioWindowLayout { Thin, Stacked, Wide };
+
+// 20 px of hysteresis so a scrollbar appearing at the breakpoint cannot flip the layout.
+static AudioWindowLayout AudioWindowLayoutFor(float width) {
+    static AudioWindowLayout mode = AudioWindowLayout::Stacked;
+    switch (mode) {
+    case AudioWindowLayout::Wide:
+        if (width < 1060.0f) {
+            mode = (width < 460.0f) ? AudioWindowLayout::Thin : AudioWindowLayout::Stacked;
+        }
+        break;
+    case AudioWindowLayout::Thin:
+        if (width >= 500.0f) {
+            mode = (width >= 1120.0f) ? AudioWindowLayout::Wide : AudioWindowLayout::Stacked;
+        }
+        break;
+    case AudioWindowLayout::Stacked:
+        if (width < 480.0f) {
+            mode = AudioWindowLayout::Thin;
+        } else if (width >= 1100.0f) {
+            mode = AudioWindowLayout::Wide;
+        }
+        break;
+    }
+    return mode;
+}
+
+static void BeginAudioCard(const char* id, const ImVec2& size, bool auto_height) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 9.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.34f, 0.35f, 0.38f, 0.90f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.11f, 0.11f, 0.13f, 1.0f));
+    ImGuiChildFlags child_flags = ImGuiChildFlags_Border;
+    if (auto_height) {
+        child_flags |= ImGuiChildFlags_AutoResizeY;
+    }
+    const ImGuiWindowFlags window_flags = auto_height ? ImGuiWindowFlags_NoScrollbar : ImGuiWindowFlags_None;
+    ImGui::BeginChild(id, size, child_flags, window_flags);
+}
+
+static float EndAudioCard() {
+    ImGui::EndChild();
+    const float height = ImGui::GetItemRectSize().y;
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
+    return height;
+}
+
+// Header, 50 px graph, and the frequency captions sit around the faders.
+// outer_h is the card's outer height. The extra pixels keep the auto card from growing a scrollbar.
+static float EqualizerSliderHeightForOuter(float outer_h, bool thin_labels) {
+    const float spacing = ImGui::GetStyle().ItemSpacing.y;
+    const float label_h = (thin_labels && g_audioSmallFont != nullptr) ? g_audioSmallFont->FontSize : ImGui::GetTextLineHeight();
+    const float chrome = 9.0f * 2.0f + ImGui::GetFrameHeight() + spacing * 3.0f + 50.0f + label_h + 8.0f;
+    return ImMax(150.0f, outer_h - chrome);
+}
+
+static float EqualizerSliderHeightFromInner(float inner_h, bool thin_labels) {
+    const float spacing = ImGui::GetStyle().ItemSpacing.y;
+    const float label_h = (thin_labels && g_audioSmallFont != nullptr) ? g_audioSmallFont->FontSize : ImGui::GetTextLineHeight();
+    const float chrome = ImGui::GetFrameHeight() + spacing * 3.0f + 50.0f + label_h + 6.0f;
+    return ImMax(150.0f, inner_h - chrome);
+}
+
+static float SourceSegmentWidth() {
+    const float label = ImMax(ImGui::CalcTextSize("Microphone").x, ImGui::CalcTextSize("Audio File").x);
+    return ImFloor(label + 28.0f);
+}
+
+static bool DrawSourceSegment(const char* id, const char* label, bool selected, bool left, float width) {
+    const float height = ImGui::GetFrameHeight();
+    const bool pressed = ImGui::InvisibleButton(id, ImVec2(width, height));
+    const ImVec2 a = ImGui::GetItemRectMin();
+    const ImVec2 b = ImGui::GetItemRectMax();
+    const bool hovered = ImGui::IsItemHovered();
+    const bool held = ImGui::IsItemActive();
+
+    ImVec4 fill = selected ? ImVec4(0.16f, 0.48f, 0.24f, 1.0f) : ImVec4(0.14f, 0.15f, 0.17f, 1.0f);
+    if (held) {
+        fill = selected ? ImVec4(0.12f, 0.36f, 0.18f, 1.0f) : ImVec4(0.18f, 0.19f, 0.22f, 1.0f);
+    } else if (hovered) {
+        fill = selected ? ImVec4(0.22f, 0.58f, 0.32f, 1.0f) : ImVec4(0.22f, 0.24f, 0.27f, 1.0f);
+    }
+
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float rounding = 5.0f;
+    const ImDrawFlags corners = left ? ImDrawFlags_RoundCornersLeft : ImDrawFlags_RoundCornersRight;
+    draw->AddRectFilled(a, b, ImGui::GetColorU32(fill), rounding, corners);
+    draw->AddRect(a, b, ImGui::GetColorU32(ImVec4(0.32f, 0.38f, 0.34f, 1.0f)), rounding, corners, 1.0f);
+
+    const ImVec2 label_size = ImGui::CalcTextSize(label);
+    const float center_x = (a.x + b.x) * 0.5f;
+    const float center_y = (a.y + b.y) * 0.5f;
+    const float text_x = center_x - label_size.x * 0.5f;
+    const ImU32 text_col = selected ? IM_COL32(236, 248, 236, 255) : IM_COL32(176, 182, 188, 255);
+    draw->AddText(ImVec2(text_x, center_y - label_size.y * 0.5f), text_col, label);
+    if (selected) {
+        draw->AddCircleFilled(ImVec2(text_x - 8.0f, center_y), 3.0f, IM_COL32(214, 245, 206, 255));
+    }
+    return pressed;
+}
+
+static void DrawSourceToggle(bool show_label) {
+    if (show_label) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Source");
+        ImGui::SameLine(0.0f, 8.0f);
+    }
+    const float half = SourceSegmentWidth();
+    const auto current = g_audioSystem.GetCurrentAudioSource();
+    if (DrawSourceSegment("##SrcMic", "Microphone", current == AudioSystem::AudioSource::Microphone, true, half)) {
+        if (current != AudioSystem::AudioSource::Microphone) {
             g_audioSystem.SetCurrentAudioSource(AudioSystem::AudioSource::Microphone);
         }
     }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Audio File", &currentSourceInt, static_cast<int>(AudioSystem::AudioSource::AudioFile))) {
-        if (currentSource != AudioSystem::AudioSource::AudioFile) {
+    ImGui::SameLine(0.0f, 0.0f);
+    if (DrawSourceSegment("##SrcFile", "Audio File", current == AudioSystem::AudioSource::AudioFile, false, half)) {
+        if (current != AudioSystem::AudioSource::AudioFile) {
             g_audioSystem.SetCurrentAudioSource(AudioSystem::AudioSource::AudioFile);
         }
     }
-    ImGui::Separator();
+}
+
+static float SourceToggleWidth(bool show_label) {
+    float width = SourceSegmentWidth() * 2.0f;
+    if (show_label) {
+        width += ImGui::CalcTextSize("Source").x + 8.0f;
+    }
+    return width;
+}
+
+static void RenderAudioLinkRow(float content_w, bool thin) {
+    const float content_x = ImGui::GetCursorPosX();
+    const bool show_label = !thin;
+    const float group_w = SourceToggleWidth(show_label);
+
+    ImGui::Checkbox("Audio Link", &g_enableAudioLink);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Feeds audio into shaders (iAudioBands / iAudioAmp)");
+    }
+
+    const float checkbox_w = ImGui::GetItemRectSize().x;
+    const float gap = ImGui::GetStyle().ItemSpacing.x;
+    const bool fits = checkbox_w + gap + group_w <= content_w;
+    if (fits) {
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::SetCursorPosX(content_x + content_w - group_w);
+    } else {
+        ImGui::SetCursorPosX(content_x + ImMax(0.0f, content_w - group_w));
+    }
+    DrawSourceToggle(show_label);
+}
+
+// Drag anywhere on the track. While the button is active the knob follows the mouse
+// so it does not wait a frame for GetPlaybackProgress().
+static void DrawSeekTimeline(float width, float progress, float duration, bool with_times) {
+    char elapsed[16];
+    char total[16];
+    const float safe_duration = duration > 0.0f ? duration : 0.0f;
+    FormatPlaybackClock(elapsed, sizeof(elapsed), ImSaturate(progress) * safe_duration);
+    FormatPlaybackClock(total, sizeof(total), safe_duration);
+
+    const float row_y = ImGui::GetCursorPosY();
+    const float text_h = ImGui::GetTextLineHeight();
+    const float widget_h = 26.0f;
+    const float gap = 8.0f;
+    const ImVec4 time_color(0.78f, 0.86f, 0.76f, 1.0f);
+    float track_w = ImMax(1.0f, width);
+    if (with_times) {
+        const float elapsed_w = ImMax(ImGui::CalcTextSize(elapsed).x, ImGui::CalcTextSize("00:00").x);
+        const float total_w = ImMax(ImGui::CalcTextSize(total).x, ImGui::CalcTextSize("00:00").x);
+        track_w = ImMax(1.0f, width - elapsed_w - total_w - gap * 2.0f);
+
+        ImGui::SetCursorPosY(row_y + (widget_h - text_h) * 0.5f);
+        ImGui::PushStyleColor(ImGuiCol_Text, time_color);
+        const float elapsed_x = ImGui::GetCursorPosX();
+        ImGui::TextUnformatted(elapsed);
+        ImGui::PopStyleColor();
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::SetCursorPosX(elapsed_x + elapsed_w + gap);
+        ImGui::SetCursorPosY(row_y);
+    }
+
+    ImGui::InvisibleButton("##Seek", ImVec2(track_w, widget_h));
+    const bool hovered = ImGui::IsItemHovered();
+    const bool active = ImGui::IsItemActive();
+    const ImVec2 a = ImGui::GetItemRectMin();
+    const ImVec2 b = ImGui::GetItemRectMax();
+    const float span = ImMax(1.0f, b.x - a.x);
+    const float mouse_t = ImSaturate((ImGui::GetIO().MousePos.x - a.x) / span);
+    float t = ImSaturate(progress);
+    if (active && safe_duration > 0.0f) {
+        t = mouse_t;
+        g_audioSystem.SetPlaybackProgress(t);
+    }
+
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float cy = (a.y + b.y) * 0.5f;
+    const float track_h = 6.0f;
+    const ImVec2 track_min(a.x, cy - track_h * 0.5f);
+    const ImVec2 track_max(b.x, cy + track_h * 0.5f);
+    draw->AddRectFilled(track_min, track_max, IM_COL32(24, 28, 26, 255), 3.0f);
+    const float head_x = ImLerp(a.x, b.x, t);
+    if (head_x > a.x + 1.0f) {
+        const ImDrawFlags fill_corners = (t > 0.995f) ? ImDrawFlags_RoundCornersAll : ImDrawFlags_RoundCornersLeft;
+        draw->AddRectFilled(track_min, ImVec2(head_x, track_max.y), IM_COL32(72, 186, 86, 255), 3.0f, fill_corners);
+    }
+    const float knob_r = (hovered || active) ? 7.0f : 5.5f;
+    const ImVec2 knob(head_x, cy);
+    draw->AddCircleFilled(knob, knob_r, IM_COL32(230, 250, 230, 255));
+    draw->AddCircle(knob, knob_r, IM_COL32(64, 190, 78, 255), 0, 2.0f);
+
+    if ((hovered || active) && safe_duration > 0.0f) {
+        char tip[16];
+        FormatPlaybackClock(tip, sizeof(tip), mouse_t * safe_duration);
+        ImGui::SetTooltip("%s", tip);
+    }
+
+    if (with_times) {
+        ImGui::SameLine(0.0f, gap);
+        ImGui::SetCursorPosY(row_y + (widget_h - text_h) * 0.5f);
+        ImGui::PushStyleColor(ImGuiCol_Text, time_color);
+        ImGui::TextUnformatted(total);
+        ImGui::PopStyleColor();
+    }
+}
+
+static void RenderTransportRow(bool thin) {
+    const float progress = g_audioSystem.GetPlaybackProgress();
+    const float duration = g_audioSystem.GetPlaybackDuration();
+    const auto transport = g_audioSystem.GetTransportState();
+    const float row_y = ImGui::GetCursorPosY();
+    const ImVec4 play_color(0.20f, 0.70f, 0.20f, 1.0f);
+    const ImVec4 pause_color(0.90f, 0.48f, 0.08f, 1.0f);
+    const ImVec4 stop_color(0.80f, 0.20f, 0.20f, 1.0f);
+
+    if (TransportIconButton("##Play", transport == AudioSystem::TransportState::Playing, play_color, TransportIcon::Play)) {
+        g_audioSystem.Play();
+    }
+    ImGui::SameLine(0.0f, 4.0f);
+    if (TransportIconButton("##Pause", transport == AudioSystem::TransportState::Paused, pause_color, TransportIcon::Pause)) {
+        g_audioSystem.Pause();
+    }
+    ImGui::SameLine(0.0f, 4.0f);
+    if (TransportIconButton("##Stop", transport == AudioSystem::TransportState::Stopped, stop_color, TransportIcon::Stop)) {
+        g_audioSystem.Stop();
+    }
+
+    char elapsed[16];
+    char total[16];
+    const float safe_duration = duration > 0.0f ? duration : 0.0f;
+    FormatPlaybackClock(elapsed, sizeof(elapsed), ImSaturate(progress) * safe_duration);
+    FormatPlaybackClock(total, sizeof(total), safe_duration);
+
+    const float stop_right = ImGui::GetItemRectMax().x;
+    const float content_right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+    const float rest = content_right - stop_right - 12.0f;
+    const float elapsed_w = ImMax(ImGui::CalcTextSize(elapsed).x, ImGui::CalcTextSize("00:00").x);
+    const float total_w = ImMax(ImGui::CalcTextSize(total).x, ImGui::CalcTextSize("00:00").x);
+    const bool inline_timeline = !thin && rest >= elapsed_w + total_w + 16.0f + 48.0f;
+
+    if (inline_timeline) {
+        ImGui::SameLine(0.0f, 12.0f);
+        DrawSeekTimeline(ImGui::GetContentRegionAvail().x, progress, duration, true);
+        return;
+    }
+
+    char clock[40];
+    snprintf(clock, sizeof(clock), "%s / %s", elapsed, total);
+    const float clock_w = ImGui::CalcTextSize(clock).x;
+    const float room = content_right - stop_right - 8.0f;
+    if (room >= clock_w) {
+        ImGui::SameLine(0.0f, 8.0f);
+        const float shift = room - clock_w;
+        if (shift > 0.0f) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + shift);
+        }
+        const float text_h = ImGui::GetTextLineHeight();
+        ImGui::SetCursorPosY(row_y + (26.0f - text_h) * 0.5f);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.78f, 0.86f, 0.76f, 1.0f));
+        ImGui::TextUnformatted(clock);
+        ImGui::PopStyleColor();
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.78f, 0.86f, 0.76f, 1.0f));
+        ImGui::TextUnformatted(clock);
+        ImGui::PopStyleColor();
+    }
+    DrawSeekTimeline(ImGui::GetContentRegionAvail().x, progress, duration, false);
+}
+
+static void RenderNowPlayingBody(bool thin) {
+    DrawCardTitle("NOW PLAYING");
 
     if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::Microphone) {
-        if (ImGui::CollapsingHeader("Microphone Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-            const auto& devices = g_audioSystem.GetCaptureDeviceGUINames();
-            int selectedDeviceIndex = g_audioSystem.GetSelectedCaptureDeviceIndex();
-            
-            if (devices.empty()) {
-                ImGui::Text("No capture devices found.");
-            } else if (ImGui::BeginCombo("Input Device", (selectedDeviceIndex >= 0 && (size_t)selectedDeviceIndex < devices.size()) ? devices[selectedDeviceIndex] : "None")) {
-                for (size_t i = 0; i < devices.size(); ++i) {
-                    const bool is_selected = (selectedDeviceIndex == (int)i);
-                    if (ImGui::Selectable(devices[i], is_selected)) {
-                        if (selectedDeviceIndex != (int)i) {
-                            g_audioSystem.SetSelectedCaptureDeviceIndex(i);
-                            g_audioSystem.InitializeAndStartSelectedCaptureDevice();
-                        }
+        ImGui::TextDisabled("Input Device");
+        const auto& devices = g_audioSystem.GetCaptureDeviceGUINames();
+        if (devices.empty()) {
+            ImGui::TextUnformatted("No capture devices found.");
+            return;
+        }
+        const int selectedDeviceIndex = g_audioSystem.GetSelectedCaptureDeviceIndex();
+        const char* preview = (selectedDeviceIndex >= 0 && (size_t)selectedDeviceIndex < devices.size()) ? devices[selectedDeviceIndex] : "None";
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::BeginCombo("##InputDevice", preview)) {
+            for (size_t i = 0; i < devices.size(); ++i) {
+                const bool is_selected = (selectedDeviceIndex == (int)i);
+                if (ImGui::Selectable(devices[i], is_selected)) {
+                    if (selectedDeviceIndex != (int)i) {
+                        g_audioSystem.SetSelectedCaptureDeviceIndex(static_cast<int>(i));
+                        g_audioSystem.InitializeAndStartSelectedCaptureDevice();
                     }
-                    if (is_selected) ImGui::SetItemDefaultFocus();
                 }
-                ImGui::EndCombo();
-            }
-        }
-    } else if (g_audioSystem.GetCurrentAudioSource() == AudioSystem::AudioSource::AudioFile) {
-        if (ImGui::CollapsingHeader("Audio File Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-            char* audioFilePath = g_audioSystem.GetAudioFilePathBuffer();
-            ImGui::InputText("File Path", audioFilePath, AUDIO_FILE_PATH_BUFFER_SIZE);
-            ImGui::SameLine();
-            if (ImGui::Button("Browse##AudioFile")) {
-                ImGuiFileDialog::Instance()->OpenDialog("ChooseAudioFileDlgKey", "Choose Audio File", ".mp3,.wav", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
-            }
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-            if (ImGui::Button("Load##AudioFile")) { g_audioSystem.LoadWavFile(audioFilePath); }
-            ImGui::PopStyleColor(4);
-            ImGui::Text("Status: %s", g_audioSystem.IsAudioFileLoaded() ? "Loaded" : "Not Loaded");
-
-            if (g_audioSystem.IsAudioFileLoaded()) {
-                static ChronoTimer timer;
-                timer.update(g_audioSystem.GetPlaybackProgress(), g_audioSystem.GetPlaybackDuration());
-
-                if (ImGui::Button("Play")) { g_audioSystem.Play(); }
-                ImGui::SameLine();
-                if (ImGui::Button("Pause")) { g_audioSystem.Pause(); }
-                ImGui::SameLine();
-                if (ImGui::Button("Stop")) { g_audioSystem.Stop(); }
-
-                ImGui::Text("%s", timer.getFormattedTime(timer.currentTime).c_str());
-                ImGui::SameLine();
-                if (ImGui::SliderFloat("##Progress", &timer.progress, 0.0f, 1.0f, "")) {
-                    g_audioSystem.SetPlaybackProgress(timer.progress);
+                if (is_selected) {
+                    ImGui::SetItemDefaultFocus();
                 }
-                ImGui::SameLine();
-                ImGui::Text("%s", timer.getFormattedTime(timer.duration).c_str());
             }
+            ImGui::EndCombo();
         }
+        return;
+    }
+
+    const char* path = g_audioSystem.GetAudioFilePathBuffer();
+    const char* base = AudioFileBasename(path);
+    const bool has_name = base[0] != '\0';
+    const char* title = has_name ? base : "No file";
+    const bool loaded = g_audioSystem.IsAudioFileLoaded();
+    const std::string& error = g_audioSystem.GetLastError();
+    const bool failed = !loaded && !error.empty();
+    const char* status = loaded ? "Loaded" : (failed ? "Error" : "Not Loaded");
+
+    const float text_h = ImGui::GetTextLineHeight();
+    const ImVec2 status_size = ImGui::CalcTextSize(status);
+    const float pill_h = text_h + 8.0f;
+    const float pill_w = status_size.x + 24.0f;
+    const float title_h = (g_audioTitleFont != nullptr) ? g_audioTitleFont->FontSize : text_h;
+    const float line_h = ImMax(title_h, pill_h);
+    const float row_w = ImMax(1.0f, ImGui::GetContentRegionAvail().x);
+    const ImVec2 row = ImGui::GetCursorScreenPos();
+    const float name_w = ImMax(0.0f, row_w - pill_w - 8.0f);
+
+    if (g_audioTitleFont != nullptr) {
+        ImGui::PushFont(g_audioTitleFont);
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, has_name ? ImVec4(0.96f, 0.97f, 0.96f, 1.0f) : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    const float title_y = row.y + (line_h - title_h) * 0.5f;
+    ImGui::RenderTextEllipsis(
+        ImGui::GetWindowDrawList(),
+        ImVec2(row.x, title_y),
+        ImVec2(row.x + name_w, title_y + title_h),
+        row.x + name_w,
+        row.x + name_w,
+        title,
+        nullptr,
+        nullptr);
+    ImGui::PopStyleColor();
+    if (g_audioTitleFont != nullptr) {
+        ImGui::PopFont();
+    }
+
+    ImVec4 pill_fill(0.16f, 0.16f, 0.18f, 1.0f);
+    ImVec4 pill_border(0.42f, 0.42f, 0.46f, 1.0f);
+    ImVec4 pill_text(0.70f, 0.70f, 0.74f, 1.0f);
+    ImVec4 pill_dot(0.55f, 0.55f, 0.58f, 1.0f);
+    if (loaded) {
+        pill_fill = ImVec4(0.08f, 0.24f, 0.12f, 1.0f);
+        pill_border = ImVec4(0.35f, 0.75f, 0.40f, 1.0f);
+        pill_text = ImVec4(0.78f, 0.95f, 0.78f, 1.0f);
+        pill_dot = ImVec4(0.45f, 0.90f, 0.50f, 1.0f);
+    } else if (failed) {
+        pill_fill = ImVec4(0.30f, 0.09f, 0.09f, 1.0f);
+        pill_border = ImVec4(0.85f, 0.28f, 0.24f, 1.0f);
+        pill_text = ImVec4(0.98f, 0.76f, 0.72f, 1.0f);
+        pill_dot = ImVec4(0.95f, 0.35f, 0.30f, 1.0f);
+    }
+    const float pill_y = row.y + (line_h - pill_h) * 0.5f;
+    const ImVec2 pill_min(row.x + row_w - pill_w, pill_y);
+    const ImVec2 pill_max(pill_min.x + pill_w, pill_y + pill_h);
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float pill_rounding = pill_h * 0.5f;
+    draw->AddRectFilled(pill_min, pill_max, ImGui::GetColorU32(pill_fill), pill_rounding);
+    draw->AddRect(pill_min, pill_max, ImGui::GetColorU32(pill_border), pill_rounding, 0, 1.0f);
+    const float pill_cy = (pill_min.y + pill_max.y) * 0.5f;
+    draw->AddCircleFilled(ImVec2(pill_min.x + 9.0f, pill_cy), 3.0f, ImGui::GetColorU32(pill_dot));
+    draw->AddText(ImVec2(pill_min.x + 16.0f, pill_cy - status_size.y * 0.5f), ImGui::GetColorU32(pill_text), status);
+    if (failed && ImGui::IsMouseHoveringRect(pill_min, pill_max)) {
+        ImGui::SetTooltip("%s", error.c_str());
+    }
+    ImGui::Dummy(ImVec2(row_w, line_h));
+
+    const ImGuiStyle& style = ImGui::GetStyle();
+    char* audioFilePath = g_audioSystem.GetAudioFilePathBuffer();
+    const float browse_w = ImFloor(ImGui::CalcTextSize("Browse").x + style.FramePadding.x * 2.0f);
+    const float load_w = ImFloor(ImGui::CalcTextSize("Load").x + style.FramePadding.x * 2.0f);
+    const float path_row_w = ImGui::GetContentRegionAvail().x;
+    const float path_w = path_row_w - browse_w - load_w - style.ItemSpacing.x * 2.0f;
+    const bool one_row = path_w >= 24.0f;
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.66f, 0.68f, 0.70f, 1.0f));
+    ImGui::SetNextItemWidth(one_row ? path_w : -1.0f);
+    ImGui::InputText("##AudioFilePath", audioFilePath, AUDIO_FILE_PATH_BUFFER_SIZE);
+    ImGui::PopStyleColor();
+    if (one_row) {
+        ImGui::SameLine();
+    }
+    if (ImGui::Button("Browse##AudioFile", ImVec2(browse_w, 0.0f))) {
+        ImGuiFileDialog::Instance()->OpenDialog("ChooseAudioFileDlgKey", "Choose Audio File", ".mp3,.wav", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
+    }
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::Button("Load##AudioFile", ImVec2(load_w, 0.0f))) {
+        g_audioSystem.LoadWavFile(audioFilePath);
+    }
+    ImGui::PopStyleColor(4);
+
+    if (loaded) {
+        RenderTransportRow(thin);
+    }
+}
+
+static ImVec4 LevelSegmentColor(float t) {
+    t = ImSaturate(t);
+    if (t < 0.62f) {
+        return kEqColorGreen;
+    }
+    if (t < 0.82f) {
+        return ImLerp(kEqColorGreen, kEqColorYellow, (t - 0.62f) / 0.20f);
+    }
+    return ImLerp(kEqColorYellow, kEqColorRed, (t - 0.82f) / 0.18f);
+}
+
+static void RenderLevelMeter(float width) {
+    static float peak = 0.0f;
+    float amp = g_audioSystem.GetCurrentAmplitude();
+    if (!(amp >= 0.0f)) {
+        amp = 0.0f;
+    }
+    const float shown = ImSaturate(amp);
+    float dt = ImGui::GetIO().DeltaTime;
+    if (dt < 0.0f) {
+        dt = 0.0f;
+    }
+    if (dt > 0.05f) {
+        dt = 0.05f;
+    }
+    if (shown >= peak) {
+        peak = shown;
+    } else {
+        peak = ImMax(0.0f, peak - dt * 0.18f);
+    }
+
+    const float db = (amp <= 1.0e-6f) ? -60.0f : ImMax(-60.0f, 20.0f * std::log10(amp));
+    char readout[48];
+    snprintf(readout, sizeof(readout), "%.0f%%  %+.1f dB", amp * 100.0f, db);
+
+    const float label_w = ImGui::CalcTextSize("Level").x;
+    const float read_w = ImMax(ImGui::CalcTextSize(readout).x, ImGui::CalcTextSize("000%  -00.0 dB").x);
+    const float gap = 8.0f;
+    const float row_h = ImGui::GetFrameHeight();
+    float meter_w = width - label_w - read_w - gap * 2.0f;
+    if (meter_w < 8.0f) {
+        meter_w = ImMax(0.0f, width - label_w - gap);
+    }
+
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float text_h = ImGui::GetTextLineHeight();
+    const float text_y = origin.y + (row_h - text_h) * 0.5f;
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddText(ImVec2(origin.x, text_y), ImGui::GetColorU32(ImGuiCol_TextDisabled), "Level");
+
+    if (meter_w >= 8.0f) {
+        const int segments = 30;
+        float gap_px = 1.5f;
+        float seg_w = (meter_w - gap_px * static_cast<float>(segments - 1)) / static_cast<float>(segments);
+        if (seg_w < 1.5f) {
+            gap_px = 1.0f;
+            seg_w = (meter_w - gap_px * static_cast<float>(segments - 1)) / static_cast<float>(segments);
+        }
+        if (seg_w < 1.0f) {
+            gap_px = 0.0f;
+            seg_w = meter_w / static_cast<float>(segments);
+        }
+        const float seg_h = 9.0f;
+        const float meter_x = origin.x + label_w + gap;
+        const float meter_y = origin.y + (row_h - seg_h) * 0.5f;
+        for (int i = 0; i < segments; ++i) {
+            const float center_t = (static_cast<float>(i) + 0.5f) / static_cast<float>(segments);
+            ImVec4 color = LevelSegmentColor(center_t);
+            if (center_t > shown) {
+                color.x *= 0.22f;
+                color.y *= 0.22f;
+                color.z *= 0.22f;
+            }
+            const float x = meter_x + static_cast<float>(i) * (seg_w + gap_px);
+            draw->AddRectFilled(ImVec2(x, meter_y), ImVec2(x + seg_w, meter_y + seg_h), ImGui::GetColorU32(color), 1.0f);
+        }
+        if (peak >= 0.005f) {
+            const float tick_x = meter_x + ImSaturate(peak) * meter_w;
+            draw->AddLine(ImVec2(tick_x, meter_y - 2.0f), ImVec2(tick_x, meter_y + seg_h + 2.0f), IM_COL32(236, 236, 220, 230), 2.0f);
+        }
+    }
+
+    const float read_x = origin.x + width - ImGui::CalcTextSize(readout).x;
+    draw->AddText(ImVec2(read_x, text_y), IM_COL32(214, 224, 208, 255), readout);
+    ImGui::Dummy(ImVec2(ImMax(1.0f, width), row_h));
+}
+
+// plot_h < 0 fills whatever vertical space the card has left under the title.
+static void RenderSpectrumBody(float plot_h) {
+    DrawCardTitle("SPECTRUM");
+    const float width = ImMax(1.0f, ImGui::GetContentRegionAvail().x);
+    float height = plot_h;
+    if (height < 0.0f) {
+        const float meter_h = ImGui::GetFrameHeight();
+        const float spacing = ImGui::GetStyle().ItemSpacing.y;
+        height = ImMax(80.0f, ImGui::GetContentRegionAvail().y - meter_h - spacing - 1.0f);
+    }
+    RenderSpectrumMonitor(width, height);
+    RenderLevelMeter(width);
+}
+
+static void RenderAudioStacked(bool thin) {
+    BeginAudioCard("##now", ImVec2(0.0f, 0.0f), true);
+    RenderNowPlayingBody(thin);
+    EndAudioCard();
+
+    BeginAudioCard("##spectrum", ImVec2(0.0f, 0.0f), true);
+    RenderSpectrumBody(170.0f);
+    EndAudioCard();
+
+    const float budget = ImGui::GetContentRegionAvail().y;
+    const float slider_h = thin ? 150.0f : EqualizerSliderHeightForOuter(budget, false);
+    BeginAudioCard("##eq", ImVec2(0.0f, 0.0f), true);
+    RenderGraphicEqualizer(slider_h, thin);
+    EndAudioCard();
+}
+
+static void RenderAudioWideColumns() {
+    const float gap = 8.0f;
+    const float content_w = ImMax(1.0f, ImGui::GetContentRegionAvail().x);
+    const float body_h = ImMax(220.0f, ImFloor(ImGui::GetContentRegionAvail().y));
+    const float col_w = ImMax(1.0f, ImFloor((content_w - gap) * 0.5f));
+    const float right_w = ImMax(1.0f, content_w - col_w - gap);
+    const ImVec2 origin = ImGui::GetCursorPos();
+
+    BeginAudioCard("##now", ImVec2(col_w, 0.0f), true);
+    RenderNowPlayingBody(false);
+    const float now_h = EndAudioCard();
+
+    const float spec_h = ImMax(220.0f, body_h - now_h - gap);
+    ImGui::SetCursorPos(ImVec2(origin.x, origin.y + now_h + gap));
+    BeginAudioCard("##spectrum", ImVec2(col_w, spec_h), false);
+    RenderSpectrumBody(-1.0f);
+    EndAudioCard();
+
+    ImGui::SetCursorPos(ImVec2(origin.x + col_w + gap, origin.y));
+    BeginAudioCard("##eq", ImVec2(right_w, body_h), false);
+    const float slider_h = EqualizerSliderHeightFromInner(ImGui::GetContentRegionAvail().y, false);
+    RenderGraphicEqualizer(slider_h, false);
+    EndAudioCard();
+
+    const float used = ImMax(body_h, now_h + gap + spec_h);
+    ImGui::SetCursorPos(ImVec2(origin.x, origin.y + used));
+}
+
+void RenderAudioReactivityWindow() {
+    ImGui::SetNextWindowSize(ImVec2(720.0f, 820.0f), ImGuiCond_FirstUseEver);
+    const bool visible = ImGui::Begin("Audio Reactivity", &g_showAudioWindow);
+    if (visible) {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 8.0f));
+        const float content_w = ImGui::GetContentRegionAvail().x;
+        const AudioWindowLayout layout = AudioWindowLayoutFor(content_w);
+        RenderAudioLinkRow(content_w, layout == AudioWindowLayout::Thin);
+        ImGui::Separator();
+        if (layout == AudioWindowLayout::Wide) {
+            RenderAudioWideColumns();
+        } else {
+            RenderAudioStacked(layout == AudioWindowLayout::Thin);
+        }
+        ImGui::PopStyleVar();
     }
 
     ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
@@ -1627,14 +2881,6 @@ void RenderAudioReactivityWindow() {
             g_audioSystem.SetAudioFilePath(filePathName.c_str());
         }
         ImGuiFileDialog::Instance()->Close();
-    }
-
-    ImGui::Separator();
-    ImGui::ProgressBar(g_audioSystem.GetCurrentAmplitude(), ImVec2(-1.0f, 0.0f));
-
-    const auto& fftData = g_audioSystem.GetFFTData();
-    if (!fftData.empty()) {
-        ImGui::PlotLines("##FFT", fftData.data(), fftData.size(), 0, NULL, 0.0f, 1.0f, ImVec2(0, 80));
     }
     ImGui::End();
 }
@@ -1683,6 +2929,13 @@ int main(int argc, char** argv) {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.IniFilename = nullptr; // Disable imgui.ini
     io.IniFilename = nullptr; // Disable imgui.ini
+    io.Fonts->AddFontDefault();
+    ImFontConfig audio_title_cfg;
+    audio_title_cfg.SizePixels = 17.0f;
+    g_audioTitleFont = io.Fonts->AddFontDefault(&audio_title_cfg);
+    ImFontConfig audio_small_cfg;
+    audio_small_cfg.SizePixels = 11.0f;
+    g_audioSmallFont = io.Fonts->AddFontDefault(&audio_small_cfg);
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     // Commenting these out again as they cause "not declared in scope" errors,
     // suggesting a deeper issue with ImGui version/include paths.

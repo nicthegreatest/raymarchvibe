@@ -48,6 +48,15 @@ public:
         AudioFile = 2 // Value 1 is reserved
     };
 
+    // Which transport button is active. Pause and stop both clear m_isPlaying, so the
+    // UI cannot tell them apart from that flag. The audio callback also stores Stopped
+    // when a file reaches the end and rewinds.
+    enum class TransportState {
+        Stopped = 0,
+        Playing,
+        Paused
+    };
+
     static const int FFT_SIZE = 1024;
 
     // Frequency band definitions for FFT analysis
@@ -141,6 +150,37 @@ public:
     void Play();
     void Pause();
     void Stop();
+    TransportState GetTransportState() const;
+
+    // Graphic EQ. Off leaves the signal untouched. On, the curve is applied to file
+    // playback (speakers and recording) and to the samples that feed the spectrum,
+    // amplitude, and shader bands. Mic input is included when that source is active.
+    static constexpr float kEqualizerMinDb = -12.0f;
+    static constexpr float kEqualizerMaxDb = 12.0f;
+    struct EqualizerBand {
+        float hz;
+        const char* label;
+    };
+    static constexpr int kEqualizerBandCount = 10;
+    static constexpr EqualizerBand kEqualizerBands[kEqualizerBandCount] = {
+        {70.0f, "70"},
+        {180.0f, "180"},
+        {320.0f, "320"},
+        {600.0f, "600"},
+        {1000.0f, "1k"},
+        {3000.0f, "3k"},
+        {6000.0f, "6k"},
+        {12000.0f, "12k"},
+        {14000.0f, "14k"},
+        {16000.0f, "16k"},
+    };
+    void SetEqualizerEnabled(bool enabled);
+    bool IsEqualizerEnabled() const;
+    void SetEqualizerPreampDb(float db);
+    float GetEqualizerPreampDb() const;
+    void SetEqualizerBandDb(int band, float db);
+    float GetEqualizerBandDb(int band) const;
+    void ResetEqualizer();
 
     // Error Handling
     void ClearLastError();
@@ -248,6 +288,7 @@ private:
     std::atomic<bool> audioFileLoaded;
     bool enableAudioShaderLink;               // main thread only
     std::atomic<bool> m_isPlaying;
+    std::atomic<TransportState> m_transportState;
     std::atomic<bool> m_shuttingDown;
 
     // Audio data and properties
@@ -308,6 +349,33 @@ private:
     // playback callback use try_lock. A main-thread record pull may block.
     void pushMicFftSamples(const float* pSamples, size_t frameCount, size_t channels);
     void pushFileFftSamples(const float* pSamples, size_t frameCount, size_t channels, bool block);
+
+    // Cascaded peaking filters. m_callbackEq is audio-thread only. m_mainEq is main-thread
+    // only (offline read and the record pull, which run while the playback callback is live).
+    struct GraphicEq {
+        static constexpr int kMaxChannels = 8;
+        struct Coeff {
+            float b0, b1, b2, a1, a2;
+        };
+        Coeff coeff[kEqualizerBandCount];
+        float z1[kEqualizerBandCount][kMaxChannels];
+        float z2[kEqualizerBandCount][kMaxChannels];
+        float preamp;
+        ma_uint32 sampleRate;
+        uint32_t revision;
+        int channels;
+        void clear();
+        void configure(ma_uint32 rate, int channelCount, uint32_t paramRevision, const float* bandDb, float preampDb, bool resetHistory);
+        void process(float* interleaved, ma_uint32 frames, int channelCount);
+    };
+    GraphicEq m_callbackEq;
+    GraphicEq m_mainEq;
+    std::atomic<bool> m_eqEnabled;
+    std::atomic<uint32_t> m_eqRevision;
+    std::atomic<float> m_eqPreampDb;
+    std::array<std::atomic<float>, kEqualizerBandCount> m_eqBandDb;
+    std::vector<float> m_micEqScratch; // audio thread only; filled in the constructor
+    void applyEqualizer(GraphicEq& eq, float* samples, ma_uint32 frames, int channels, ma_uint32 sampleRate);
 };
 
 #endif // AUDIOSYSTEM_H

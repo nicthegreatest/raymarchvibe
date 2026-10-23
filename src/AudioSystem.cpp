@@ -23,6 +23,14 @@ AudioSystem::AudioSystem() {
     enableAudioShaderLink = false;
     m_amplitudeScale = 1.0f;
     m_isPlaying = false;
+    m_transportState = TransportState::Stopped;
+    m_eqEnabled = false;
+    m_eqRevision = 0;
+    m_eqPreampDb = 0.0f;
+    for (auto& band : m_eqBandDb) band.store(0.0f, std::memory_order_relaxed);
+    m_callbackEq.clear();
+    m_mainEq.clear();
+    m_micEqScratch.assign(16384, 0.0f);
     m_shuttingDown = false;
     m_playbackCursorFrames = 0;
     m_recordPullActive = false;
@@ -74,6 +82,7 @@ void AudioSystem::Shutdown() {
             ma_decoder_uninit(&m_decoder);
             audioFileLoaded.store(false, std::memory_order_relaxed);
             m_isPlaying.store(false, std::memory_order_relaxed);
+            m_transportState.store(TransportState::Stopped, std::memory_order_relaxed);
             m_playbackCursorFrames.store(0, std::memory_order_relaxed);
             m_loadedFilePath.clear();
         }
@@ -195,6 +204,7 @@ void AudioSystem::LoadWavFile(const char* filePath) {
         audioFileLoaded.store(true, std::memory_order_release);
     }
     m_isPlaying.store(true, std::memory_order_relaxed);
+    m_transportState.store(TransportState::Playing, std::memory_order_relaxed);
     if (m_isPlaying.load(std::memory_order_relaxed) && currentAudioSource.load(std::memory_order_relaxed) == AudioSource::AudioFile) {
         InitializeAndStartPlaybackDevice();
     }
@@ -218,6 +228,7 @@ ma_uint64 AudioSystem::ReadOfflineAudio(float* pOutput, ma_uint32 frameCount) {
 
     // Process for visualization (FFT)
     float* pSamples = static_cast<float*>(pOutput);
+    applyEqualizer(m_mainEq, pSamples, static_cast<ma_uint32>(framesRead), static_cast<int>(channels), audioFileSampleRate);
 
     // Feed the FFT ring (mono for mono, pair-averaged for anything with >1 channel)
     pushFileFftSamples(pSamples, (size_t)framesRead, (size_t)channels, false);
@@ -306,6 +317,9 @@ ma_uint64 AudioSystem::ReadRecordPull(float* pOutput, ma_uint32 frameCount) {
         std::memset(pOutput + framesRead * channels, 0,
                     (static_cast<size_t>(frameCount) - static_cast<size_t>(framesRead)) * channels * sizeof(float));
     }
+
+    // Same curve as the speakers. This stream has its own filter history (m_mainEq).
+    applyEqualizer(m_mainEq, pOutput, frameCount, static_cast<int>(channels), m_recordDecoder.outputSampleRate);
 
     // The picture for this frame has to react to these samples, including the silence
     // after the file ends, so the blocking push cannot drop the block.
@@ -449,21 +463,183 @@ void AudioSystem::SetPlaybackProgress(float progress) {
 
 void AudioSystem::Play() {
     m_isPlaying.store(true, std::memory_order_relaxed);
+    m_transportState.store(TransportState::Playing, std::memory_order_relaxed);
     if (currentAudioSource.load(std::memory_order_relaxed) == AudioSource::AudioFile && audioFileLoaded.load(std::memory_order_relaxed)) {
         InitializeAndStartPlaybackDevice();
     }
 }
 
-void AudioSystem::Pause() { m_isPlaying.store(false, std::memory_order_relaxed); }
+void AudioSystem::Pause() {
+    m_isPlaying.store(false, std::memory_order_relaxed);
+    m_transportState.store(TransportState::Paused, std::memory_order_relaxed);
+}
 
 void AudioSystem::Stop() {
     m_isPlaying.store(false, std::memory_order_relaxed);
+    m_transportState.store(TransportState::Stopped, std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> decoderLock(m_decoderMutex);
         if (audioFileLoaded.load(std::memory_order_relaxed)) ma_decoder_seek_to_pcm_frame(&m_decoder, 0);
         m_playbackCursorFrames.store(0, std::memory_order_relaxed);
     }
     StopActiveDevice();
+}
+
+AudioSystem::TransportState AudioSystem::GetTransportState() const {
+    return m_transportState.load(std::memory_order_relaxed);
+}
+
+namespace {
+
+float clampEqualizerDb(float db) {
+    if (!std::isfinite(db)) return 0.0f;
+    return std::min(std::max(db, AudioSystem::kEqualizerMinDb), AudioSystem::kEqualizerMaxDb);
+}
+
+// Octave width reaching halfway to the neighbouring band centres, so the uneven
+// Winamp spacing (especially 12k/14k/16k) does not stack into one wide boost.
+float equalizerBandwidthOctaves(int index) {
+    const float f = AudioSystem::kEqualizerBands[index].hz;
+    const float prev = index == 0
+        ? (f * f / AudioSystem::kEqualizerBands[1].hz)
+        : AudioSystem::kEqualizerBands[index - 1].hz;
+    const float next = index + 1 == AudioSystem::kEqualizerBandCount
+        ? (f * f / AudioSystem::kEqualizerBands[index - 1].hz)
+        : AudioSystem::kEqualizerBands[index + 1].hz;
+    const float lower = std::sqrt(std::max(prev, 1.0f) * f);
+    const float upper = std::sqrt(f * std::max(next, 1.0f));
+    float bw = std::log2(upper / std::max(lower, 1.0f));
+    if (!std::isfinite(bw) || bw <= 0.0f) bw = 1.0f;
+    return std::min(std::max(bw, 0.20f), 2.0f);
+}
+
+} // namespace
+
+void AudioSystem::GraphicEq::clear() {
+    for (auto& c : coeff) c = Coeff{1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    std::memset(z1, 0, sizeof(z1));
+    std::memset(z2, 0, sizeof(z2));
+    preamp = 1.0f;
+    sampleRate = 0;
+    revision = 0;
+    channels = 0;
+}
+
+void AudioSystem::GraphicEq::configure(ma_uint32 rate, int channelCount, uint32_t paramRevision, const float* bandDb, float preampDb, bool resetHistory) {
+    const float pi = 3.14159265358979323846f;
+    preamp = std::pow(10.0f, clampEqualizerDb(preampDb) / 20.0f);
+    if (!std::isfinite(preamp) || preamp < 0.0f) preamp = 1.0f;
+
+    for (int i = 0; i < kEqualizerBandCount; ++i) {
+        Coeff bypass{1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+        const float hz = kEqualizerBands[i].hz;
+        const float db = clampEqualizerDb(bandDb[i]);
+        if (rate < 2 || hz <= 0.0f || hz >= static_cast<float>(rate) * 0.45f) {
+            coeff[i] = bypass;
+            continue;
+        }
+        // RBJ peaking EQ. A = 10^(dB/40) so the centre-frequency gain is 10^(dB/20).
+        const float A = std::pow(10.0f, db / 40.0f);
+        const float w0 = 2.0f * pi * hz / static_cast<float>(rate);
+        const float sinW = std::sin(w0);
+        const float cosW = std::cos(w0);
+        if (!(sinW > 0.0f)) {
+            coeff[i] = bypass;
+            continue;
+        }
+        const float bw = equalizerBandwidthOctaves(i);
+        const float alpha = sinW * std::sinh((std::log(2.0f) * 0.5f) * bw * w0 / sinW);
+        const float a0 = 1.0f + alpha / A;
+        if (!std::isfinite(alpha) || !std::isfinite(a0) || a0 == 0.0f) {
+            coeff[i] = bypass;
+            continue;
+        }
+        coeff[i].b0 = (1.0f + alpha * A) / a0;
+        coeff[i].b1 = (-2.0f * cosW) / a0;
+        coeff[i].b2 = (1.0f - alpha * A) / a0;
+        coeff[i].a1 = (-2.0f * cosW) / a0;
+        coeff[i].a2 = (1.0f - alpha / A) / a0;
+    }
+
+    if (resetHistory) {
+        std::memset(z1, 0, sizeof(z1));
+        std::memset(z2, 0, sizeof(z2));
+    }
+    sampleRate = rate;
+    channels = channelCount;
+    revision = paramRevision;
+}
+
+void AudioSystem::GraphicEq::process(float* interleaved, ma_uint32 frames, int channelCount) {
+    if (interleaved == nullptr || frames == 0 || channelCount <= 0 || channelCount > kMaxChannels) return;
+    const float gain = preamp;
+    for (ma_uint32 i = 0; i < frames; ++i) {
+        for (int c = 0; c < channelCount; ++c) {
+            float x = interleaved[i * channelCount + c] * gain;
+            for (int b = 0; b < kEqualizerBandCount; ++b) {
+                const Coeff& k = coeff[b];
+                const float y = k.b0 * x + z1[b][c];
+                z1[b][c] = k.b1 * x - k.a1 * y + z2[b][c];
+                z2[b][c] = k.b2 * x - k.a2 * y;
+                if (std::fabs(z1[b][c]) < 1.0e-20f) z1[b][c] = 0.0f;
+                if (std::fabs(z2[b][c]) < 1.0e-20f) z2[b][c] = 0.0f;
+                x = y;
+            }
+            interleaved[i * channelCount + c] = x;
+        }
+    }
+}
+
+void AudioSystem::applyEqualizer(GraphicEq& eq, float* samples, ma_uint32 frames, int channels, ma_uint32 sampleRate) {
+    if (samples == nullptr || frames == 0 || channels <= 0 || channels > GraphicEq::kMaxChannels || sampleRate == 0) return;
+    if (!m_eqEnabled.load(std::memory_order_relaxed)) {
+        if (eq.revision != 0 || eq.sampleRate != 0) eq.clear();
+        return;
+    }
+    const uint32_t revision = m_eqRevision.load(std::memory_order_acquire);
+    if (eq.revision != revision || eq.sampleRate != sampleRate || eq.channels != channels) {
+        float bandDb[kEqualizerBandCount];
+        for (int i = 0; i < kEqualizerBandCount; ++i)
+            bandDb[i] = m_eqBandDb[i].load(std::memory_order_relaxed);
+        const bool resetHistory = eq.sampleRate != sampleRate || eq.channels != channels;
+        eq.configure(sampleRate, channels, revision, bandDb, m_eqPreampDb.load(std::memory_order_relaxed), resetHistory);
+    }
+    eq.process(samples, frames, channels);
+}
+
+void AudioSystem::SetEqualizerEnabled(bool enabled) {
+    m_eqEnabled.store(enabled, std::memory_order_relaxed);
+    m_eqRevision.fetch_add(1, std::memory_order_release);
+}
+
+bool AudioSystem::IsEqualizerEnabled() const {
+    return m_eqEnabled.load(std::memory_order_relaxed);
+}
+
+void AudioSystem::SetEqualizerPreampDb(float db) {
+    m_eqPreampDb.store(clampEqualizerDb(db), std::memory_order_relaxed);
+    m_eqRevision.fetch_add(1, std::memory_order_release);
+}
+
+float AudioSystem::GetEqualizerPreampDb() const {
+    return m_eqPreampDb.load(std::memory_order_relaxed);
+}
+
+void AudioSystem::SetEqualizerBandDb(int band, float db) {
+    if (band < 0 || band >= kEqualizerBandCount) return;
+    m_eqBandDb[band].store(clampEqualizerDb(db), std::memory_order_relaxed);
+    m_eqRevision.fetch_add(1, std::memory_order_release);
+}
+
+float AudioSystem::GetEqualizerBandDb(int band) const {
+    if (band < 0 || band >= kEqualizerBandCount) return 0.0f;
+    return m_eqBandDb[band].load(std::memory_order_relaxed);
+}
+
+void AudioSystem::ResetEqualizer() {
+    m_eqPreampDb.store(0.0f, std::memory_order_relaxed);
+    for (auto& band : m_eqBandDb) band.store(0.0f, std::memory_order_relaxed);
+    m_eqRevision.fetch_add(1, std::memory_order_release);
 }
 
 // --- Error Handling ---
@@ -528,6 +704,7 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
             }
 
             float* pSamples = static_cast<float*>(pOutput);
+            applyEqualizer(m_callbackEq, pSamples, static_cast<ma_uint32>(framesRead), static_cast<int>(channels), sampleRate);
             // A realtime file take reads a second decoder on the main thread. The speakers
             // still play this buffer; the recorder and the FFT must not also take it, or
             // the file mixes wall-clock audio with the 1/60 blocks.
@@ -550,6 +727,7 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
 
             if (framesRead < frameCount) {
                 m_isPlaying.store(false, std::memory_order_relaxed);
+                m_transportState.store(TransportState::Stopped, std::memory_order_relaxed);
                 {
                     // try_lock again: if the main thread is already reloading/stopping the
                     // decoder, rewinding it is both unnecessary and unsafe.
@@ -579,13 +757,22 @@ void AudioSystem::data_callback_member(void* pOutput, const void* pInput, ma_uin
             return;
         }
 
-        for (auto& slot : m_listeners) {
-            IAudioListener* listener = slot.load(std::memory_order_acquire);
-            if (listener) listener->onAudioData(static_cast<const float*>(pInput), frameCount, (int)captureChannels, (int)captureSampleRate);
-        }
-
         const float* inputFrames = static_cast<const float*>(pInput);
         ma_uint32 samplesToProcess = frameCount * captureChannels;
+        const size_t sampleCount = static_cast<size_t>(samplesToProcess);
+        if (!m_eqEnabled.load(std::memory_order_relaxed)) {
+            // The capture buffer is const, so the disabled path cannot go through applyEqualizer.
+            if (m_callbackEq.revision != 0 || m_callbackEq.sampleRate != 0) m_callbackEq.clear();
+        } else if (sampleCount > 0 && sampleCount <= m_micEqScratch.size()) {
+            std::memcpy(m_micEqScratch.data(), inputFrames, sampleCount * sizeof(float));
+            applyEqualizer(m_callbackEq, m_micEqScratch.data(), frameCount, static_cast<int>(captureChannels), captureSampleRate);
+            inputFrames = m_micEqScratch.data();
+        }
+
+        for (auto& slot : m_listeners) {
+            IAudioListener* listener = slot.load(std::memory_order_acquire);
+            if (listener) listener->onAudioData(inputFrames, frameCount, (int)captureChannels, (int)captureSampleRate);
+        }
         // The original appended the raw interleaved samples here (no mono mixing).
         pushMicFftSamples(inputFrames, (size_t)frameCount, (size_t)captureChannels);
 
