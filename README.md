@@ -2,23 +2,24 @@
 
 ![app-screenshot](https://raw.githubusercontent.com/nicthegreatest/raymarchvibe/refs/heads/main/documentation/raymarchvibe_screen.png)
 
-## A Modern SDF / Raymarching Tool
+RaymarchVibe is a real-time SDF / raymarching shader tool for creative coding, in the demoscene spirit. Build effects by connecting shaders in a node graph, tweak their parameters live, and make them react to music.
 
-This tool is designed for shader exploration and creative coding, inspired by the demoscene spirit. It allows artists and developers to intuitively build complex visual effects by connecting shaders in a graph, manipulating their parameters in real-time, and seeing the results instantly. It aims to lower the barrier to entry for creating generative art and encourages a workflow based on experimentation and discovery.
+Repository: <https://github.com/nicthegreatest/raymarchvibe>
 
-Dive in, tweak, explore, and vibe with your shaders!
+## Features
 
-## Key Features
-
-*   **Node-Based Visual Programming:** Create complex, multi-pass effects by connecting shaders together in an intuitive node graph.
-*   **Advanced Real-time Shader Editor:** Powered by ImGuiColorTextEdit for GLSL syntax highlighting, line numbers, and error marking.
-*   **Dynamic UI Generation:** Automatically generate UI controls (sliders, color pickers) for shader uniforms by adding a single line of JSON in your shader comments.
-*   **Enhanced Color Picker with Palettes:** Generate harmonious color palettes automatically using color theory (complementary, triadic, analogous, split-complementary, square, and monochromatic harmony types) with optional smooth gradient interpolation.
-*   **Advanced Audio Reactivity:** Drive shader animations with real-time audio analysis: `iAudioAmp` (overall level), plus a `vec4` of normalised 0..1 bands — `iAudioBands.x` bass, `.y` mids, `.z` treble and `.w` overall energy — available raw (`iAudioBands`) and through a snap-attack / ~250 ms-decay envelope (`iAudioBandsAtt`). See [SHADERS.md §3.1](documentation/SHADERS.md#31-audio-bands).
-*   **Video & Audio Recording:** Record your creations to high-quality video files (MP4, MOV) with synchronized audio using a dedicated, high-performance FFmpeg backend.
-*   **Full Scene Serialization:** Save and load your entire workspace, including the node graph, shader code, and UI parameters, to a JSON file.
-*   **Shadertoy Integration:** Fetch and load shaders directly from Shadertoy.com by ID or URL, and they are instantly available as nodes.
-*   **Customizable UI Themes:** Switch between several built-in UI themes to customize the look and feel of the editor.
+*   **Node-based effects:** chain shaders in a node graph to build multi-pass effects.
+*   **Live shader editor:** GLSL syntax highlighting, line numbers and error markers (ImGuiColorTextEdit). A failed recompile keeps the last working shader on screen.
+*   **Automatic UI controls:** add a one-line JSON comment to a uniform and get a slider or colour picker.
+*   **Colour palettes:** palette-aware colour pickers generate harmonious palettes (complementary, triadic, analogous, split-complementary, square, monochromatic) with optional gradients.
+*   **Audio reactivity:** shaders get `iAudioAmp` and normalised 0..1 bands, `iAudioBands` (raw) and `iAudioBandsAtt` (snap attack, ~250 ms decay): `.x` bass, `.y` mids, `.z` treble, `.w` overall. See [AUDIO_REACTIVITY.md](documentation/AUDIO_REACTIVITY.md).
+*   **10-band graphic equaliser:** a Winamp-style EQ with a response curve and an on/off toggle, for tuning what the shaders react to.
+*   **Spectrum analyser:** a log-frequency spectrum display with rainbow colouring.
+*   **Audio Reactivity panel:** grouped into *Now Playing*, *Spectrum* and *Equalizer* cards.
+*   **Video & audio recording:** record to MP4 or MOV (H.264, with AAC or lossless ALAC audio) through a built-in FFmpeg backend.
+*   **Scene saving:** save and load the whole workspace (node graph, shader code, parameters) as JSON.
+*   **Shadertoy import:** fetch shaders from Shadertoy.com by ID or URL and use them as nodes.
+*   **UI themes:** several built-in themes.
 
 ## Dependencies
 
@@ -107,32 +108,23 @@ Notes:
 - If the provided shader fails to compile, the app will still start and show the error in the Console and mark lines in the editor.
 - If no flag is provided, the default shader is `shaders/raymarch_v2.frag`.
 
-### Milk-Converter
+## Documentation
 
-`Milk-Converter/` is empty in this repository: it is recorded only as a submodule reference with no matching entry in `.gitmodules`, so a fresh clone creates the directory and puts nothing in it, and there is no converter to build.
-
-MilkDrop preset conversion is out of scope for now. `documentation/SHADERS.md` §6 ("Milk-Converter Translation Standards") records the variable-mapping rules a future converter would have to follow.
-
+| Document | What it covers |
+|---|---|
+| **[documentation/SHADERS.md](documentation/SHADERS.md)** | **Start here.** Shader format, uniforms, UI controls, palettes, rules and testing |
+| [documentation/SHADER_WORKFLOW.md](documentation/SHADER_WORKFLOW.md) | The four-stage way to make a shader: visual pass → reactivity plan → audio pass → EQ tuning, with prompts and checklists |
+| [documentation/AUDIO_REACTIVITY.md](documentation/AUDIO_REACTIVITY.md) | Audio bands, conditioning, beats, mapping and tuning with the EQ |
+| [documentation/SHADER_TECHNIQUES.md](documentation/SHADER_TECHNIQUES.md) | Rendering techniques and quality references |
+| [documentation/PALETTE_FEATURE.md](documentation/PALETTE_FEATURE.md) | The palette colour picker in depth |
+| [documentation/CHANGELOG.md](documentation/CHANGELOG.md) | Version history |
+| [documentation/TODO.md](documentation/TODO.md) | Planned features and improvements |
+| [AGENTS.md](AGENTS.md) | Guidance for AI coding agents working on this repo |
+| [shaders/templates/](shaders/templates/) | Starter shaders, including `visual_starter.frag` and `audio_reactive_starter.frag` |
 
 ## Planned Features
 
-See the [TODO.md](documentation/TODO.md) for a complete list of planned features and improvements, including:
-
-- Switch between mouse input and WASD keys for camera control
-- Improved handling of larger, more complex shaders while maintaining real-time performance
-- Enhanced macOS and Windows compatibility
-- Text rendering effects
-- AppImage compilation for easier Linux distribution
-
-## Documentation
-
-For detailed information about the project, see the `documentation/` directory:
-
-- **[SHADERS.md](documentation/SHADERS.md)** - Complete shader specification and creative guidelines (essential reading for shader authors!)
-- **[PALETTE_FEATURE.md](documentation/PALETTE_FEATURE.md)** - Enhanced color picker with palettes, harmonies, and gradients
-- **[CHANGELOG.md](documentation/CHANGELOG.md)** - Version history and release notes
-- **[TODO.md](documentation/TODO.md)** - Planned features and improvements
-- **[CODE_REVIEW.md](documentation/CODE_REVIEW.md)** - Architectural overview and code quality assessment (a 2025-10-30 snapshot — read its status banner for what has since been fixed)
+See [TODO.md](documentation/TODO.md) for the full list.
 
 ## Development Notes
 

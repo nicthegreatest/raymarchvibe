@@ -60,3 +60,6 @@ shaders/app-screenshot.png
 output.mp4
 *.mp4
 *.mov
+
+# Local backups (not for the repo)
+/backups/

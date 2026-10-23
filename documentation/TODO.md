@@ -2,7 +2,7 @@
 
 ## Recording bugs (review 2026-10-07)
 
-Reviewed `src/VideoRecorder.cpp`, `src/VideoRecorder.h`, the menu and F1 call sites in `src/main.cpp`, the miniaudio feed in `src/AudioSystem.cpp`, and the FFmpeg 5.1.2 build. Fixed on 2026-10-07. The writeups below are the original findings. `GEMINI.md` describes the recorder as it works now.
+Reviewed `src/VideoRecorder.cpp`, `src/VideoRecorder.h`, the menu and F1 call sites in `src/main.cpp`, the miniaudio feed in `src/AudioSystem.cpp`, and the FFmpeg 5.1.2 build. Fixed on 2026-10-07. The writeups below are the original findings. `AGENTS.md` (VideoRecorder reference) describes the recorder as it works now.
 
 - [x] **Lossless is 192 kbps AAC.** The combo says "Lossless (ALAC)" (`src/main.cpp`, audio bitrate combo) and the pre-flight queries `AV_CODEC_ID_ALAC`, which MP4 and MOV tag tables allow. This build was configured with `--disable-everything` and only `--enable-encoder=libx264`, `mpeg4`, and `aac`. `avcodec_find_encoder(AV_CODEC_ID_ALAC)` is NULL, and `setup_encoder` logs a fallback and keeps the 192000 default. Enabling ALAC later is still not lossless of the captured signal: the context is hard-wired to 44100 Hz while the mic is `ma_format_f32` at 48000 Hz, and the ALAC branch forces `AV_SAMPLE_FMT_S16P` (16-bit). `alacenc.c` in this FFmpeg also accepts `S32P`.
 
@@ -55,3 +55,28 @@ Reviewed `src/VideoRecorder.cpp`, `src/VideoRecorder.h`, the menu and F1 call si
     - Ensuring all dependencies are correctly bundled.
     - Verifying cross-platform compatibility of the build process.
     - Thoroughly testing the resulting AppImage.
+    
+    # TODO addition: per-band audio conditioning in `AudioSystem` (proposal)
+
+**Problem.** One fixed normalisation (`BAND_NORM = 1/32`, `src/AudioSystem.h:73–74`) is applied to three bands with very different natural levels. In practice (measured, see SHADERS.md 3.2):
+
+- bass is pinned at 1.0 on 91–95 % of frames on loud masters;
+- mids sit at ~0.01–0.35;
+- treble sits at ~0.0005–0.04.
+
+Every shader therefore has to re-implement per-band log windows, a sensitivity control and a stuck-bass fallback (SHADERS.md 3.3), or its effects are dead or saturated.
+
+**Recommendations** (in order of value / risk):
+
+1. **Apply a window before the FFT.** Today `ProcessAudio` copies the newest 1024 samples and transforms them unwindowed (`src/AudioSystem.cpp:548–564`). A Hann window cuts low-frequency leakage into the 4-bin bass band (part of why bass pins) and the DC-offset spill the bin-0 exclusion works around (`src/AudioSystem.cpp:571–573`). Re-measure `BAND_REFERENCE` afterwards; with a Hann window, magnitudes drop by about 2×.
+2. **Per-band reference levels.** Replace the single `BAND_REFERENCE = 32` with one per band, chosen so typical music lands mid-range: on the current (unwindowed) scale, measured medians suggest roughly bass ≈ 64–128, mids ≈ 4–8, treble ≈ 0.5 (raw band means: mids 1–2.7, treble 0.04–0.22, quiet-track bass ~1.5, loud bass well above 32). No fixed set suits both quiet and loud tracks, which is why 3 and 4 matter more. Use `src/AudioSystem.h:73` and `src/AudioSystem.cpp:595–603`. Keep the clamp.
+3. **Log-domain output (opt-in).** Expose conditioned levels, `clamp((log2(band) - log2(lo)) / (log2(hi) - log2(lo)), 0, 1)` with per-band `lo`/`hi`, as a **new** uniform (e.g. `vec4 iAudioLevels`). Do not change `iAudioBands`, because shipped shaders are tuned against it. A global "Audio Sensitivity" setting in the UI could shift all windows in octaves, replacing the per-shader slider.
+4. **Adaptive reference (optional).** A slow per-band peak follower (a few seconds' attack, ~30 s release) to normalise across quiet and loud tracks. This would remove most of the need for the stuck-bass fallback. Expose it as a toggle, since some users want absolute levels.
+5. **Sample-rate-correct bins.** Band edges are fixed bin indices assuming 48 kHz (`src/AudioSystem.h:54–59`), but files are decoded at their native rate (`src/AudioSystem.cpp:178`). Compute the bin edges from the active sample rate, or resample files to 48 kHz in the decoder config.
+6. **A beat/onset uniform.** For example `vec4 iAudioBeat` (per-band onset strength, plus a time-since-onset in seconds), computed CPU-side from spectral flux. Shaders currently infer beats from the envelope decay (SHADERS.md 3.4). That works, but it can't tell a sustained loud passage from a fresh hit, and it depends on the threshold.
+
+**Compatibility.** Items 1, 2 and 5 change existing `iAudioBands` values, so the in-repo shaders need retuning (as with the v2.3 contract change). Items 3, 4 and 6 are additive. Suggested order: 3 and 6 first (additive, immediate shader benefit), then 1, 2 and 5 together with a retune pass.
+
+## Documentation / Inspiration (added 2026-10-24)
+
+- [ ] Refresh `documentation/inspiration/` with stronger, more visually striking GLSL examples (ShaderToy and similar sites) for LLMs to study and adapt. Quality bar: `inspiration/quality_ref_cathedral_v2_ornament.png` (see SHADER_TECHNIQUES.md §9.14).
