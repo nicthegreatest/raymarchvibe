@@ -191,14 +191,11 @@ bool ShaderManager::applyShaderCode(const std::string& fragmentShaderCode, bool 
         }
         m_shaderParser.ScanAndPrepareConstControls(fragmentShaderCode);
 
-        // VERBOSE LOGGING: Check for GLSL version and Milkdrop-specific patterns
+        // VERBOSE LOGGING: Check for GLSL version and common shader patterns
         std::cerr << "[ShaderManager] DEBUG: Applying converted shader successfully: program=" << newShaderProgram << std::endl;
         std::cerr << "[ShaderManager] DEBUG: Fragment shader length: " << fragmentShaderCode.length() << " characters" << std::endl;
         if (fragmentShaderCode.find("iChannel0") != std::string::npos) {
             std::cerr << "[ShaderManager] DEBUG: Shader uses feedback buffer (iChannel0)" << std::endl;
-        }
-        if (fragmentShaderCode.find("draw_wave") != std::string::npos) {
-            std::cerr << "[ShaderManager] DEBUG: Shader contains Milkdrop waveform code (draw_wave)" << std::endl;
         }
         if (fragmentShaderCode.find("zoomDenominator") != std::string::npos) {
             std::cerr << "[ShaderManager] DEBUG: Shader has coordinate transformation with zoom calculations" << std::endl;

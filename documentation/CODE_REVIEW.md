@@ -98,6 +98,7 @@ void ImageEffect::Update([[maybe_unused]] float time) {
 - The `Milk-Converter/` directory exists but is empty
 - `.gitignore` previously excluded it entirely
 - **Action:** Either populate with MilkDrop conversion tool or remove the empty directory
+- **Resolved (2026-10-24):** removed along with all MilkDrop support.
 - **Still open (2026-10-03),** with the cause now known: the path is recorded as an unregistered submodule (gitlink mode `160000`, commit `55a0a93`) and there is no `.gitmodules` entry, so every clone materialises an empty directory and there is nothing to build. The README no longer documents a build for it.
 
 #### 3. **Shader Organization** (Noted in TODO.md)
@@ -224,7 +225,7 @@ presets/
 2. ✅ **DONE:** Update `.gitignore` to prevent backup file commits
 3. ✅ **DONE:** Rename duplicate shader file properly
 4. 🔧 **TODO:** Fix unused parameter warning in `ImageEffect.cpp` — **still open (2026-10-03):** `src/ImageEffect.cpp:27`.
-5. 🔧 **TODO:** Decide fate of empty `Milk-Converter/` directory — **still open (2026-10-03)** (see the note above).
+5. 🔧 **TODO:** Decide fate of empty `Milk-Converter/` directory — **resolved (2026-10-24)**: removed with all MilkDrop support.
 
 ### Short-Term Improvements (Priority: Medium)
 1. Add `[[maybe_unused]]` annotations to suppress warnings
