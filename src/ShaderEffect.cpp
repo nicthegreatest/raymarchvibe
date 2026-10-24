@@ -1184,6 +1184,7 @@ nlohmann::json ShaderEffect::Serialize() const {
         }
     }
     j["input_ids"] = input_ids;
+    WriteTransitionIn(j, transitionIn);
 
     return j;
 }
@@ -1205,6 +1206,7 @@ void ShaderEffect::Deserialize(const nlohmann::json& data) {
     if (data.contains("input_ids")) {
         m_deserialized_input_ids = data["input_ids"].get<std::vector<int>>();
     }
+    ReadTransitionIn(data, transitionIn);
 }
 
 void ShaderEffect::ResetParameters() {
@@ -1259,6 +1261,7 @@ std::unique_ptr<Effect> ShaderEffect::Clone() const {
     newEffect->m_defineControls = this->m_defineControls;
     newEffect->m_constControls = this->m_constControls;
     newEffect->m_colorCycleState = this->m_colorCycleState;
+    newEffect->transitionIn = this->transitionIn;
 
     // The new effect will be loaded by the main loop, which will compile the shader
     // and create the FBO. We don't copy inputs here, the user can reconnect them.

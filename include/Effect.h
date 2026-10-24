@@ -5,6 +5,7 @@
 #include <memory> // For std::unique_ptr
 #include <glad/glad.h> // For GLuint in GetOutputTexture
 #include <nlohmann/json.hpp> // Added for nlohmann::json serialization
+#include "TransitionSettings.h"
 #include <iostream> // Required for std::cout (for temporary debugging ID assignment)
 
 // Forward declaration for ImGui (if RenderUI directly uses ImGui types)
@@ -54,6 +55,9 @@ public:
     std::string name = "Untitled Effect";
     float startTime = 0.0f;
     float endTime = 10.0f;
+    // Blend used when this node becomes the selected picture. overrideGlobal false uses the global settings.
+    // Not a pin and not a link.
+    TransitionSettings transitionIn;
     const int id; // Unique ID for each effect instance
 
 private:

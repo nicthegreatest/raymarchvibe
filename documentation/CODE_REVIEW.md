@@ -39,7 +39,6 @@ RaymarchVibe is a well-structured, modern C++17 desktop application for creative
 include/           → Public headers (Effect.h, ShaderEffect.h, Renderer.h, etc.)
 src/               → Implementation files with clear separation of concerns
 shaders/           → Runtime shader assets organized by category
-  ├── samples/     → Example shaders for users
   ├── templates/   → Node templates for the graph editor
   └── presets/     → Large collection of community presets
 documentation/     → Comprehensive docs (SHADERS.md, CHANGELOG.md, TODO.md)

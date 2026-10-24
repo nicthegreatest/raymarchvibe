@@ -120,6 +120,7 @@ nlohmann::json ImageEffect::Serialize() const {
     j["endTime"] = this->endTime;
     j["type"] = "ImageEffect";
     j["imagePath"] = m_imagePath;
+    WriteTransitionIn(j, transitionIn);
     return j;
 }
 
@@ -128,6 +129,7 @@ void ImageEffect::Deserialize(const nlohmann::json& j) {
     if (j.contains("startTime")) startTime = j["startTime"].get<float>();
     if (j.contains("endTime")) endTime = j["endTime"].get<float>();
 
+    ReadTransitionIn(j, transitionIn);
     if (j.contains("imagePath")) {
         std::string path = j["imagePath"].get<std::string>();
         if (!path.empty()) {
@@ -139,6 +141,7 @@ void ImageEffect::Deserialize(const nlohmann::json& j) {
 std::unique_ptr<Effect> ImageEffect::Clone() const {
     auto newEffect = std::make_unique<ImageEffect>();
     newEffect->name = this->name + " (Copy)";
+    newEffect->transitionIn = this->transitionIn;
     if (!this->m_imagePath.empty()) {
         newEffect->LoadImage(this->m_imagePath);
     }

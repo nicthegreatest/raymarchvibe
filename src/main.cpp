@@ -47,6 +47,7 @@
 #include "OutputNode.h" // For the Scene Output node
 #include "Bess/Config/Themes.h" // Added Themes header
 #include "VideoRecorder.h"
+#include "TransitionRenderer.h"
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -158,6 +159,9 @@ static std::vector<std::unique_ptr<Effect>> g_scene;
 static Effect* g_selectedEffect = nullptr;
 static int g_selectedTimelineItem = -1;
 static Renderer g_renderer;
+static TransitionRenderer g_transitions;
+// The picture last put on screen. A node click blends from this, even if ImNodes had cleared g_selectedEffect.
+static Effect* g_lastShownEffect = nullptr;
 static TextEditor g_editor;
 static AudioSystem g_audioSystem;
 VideoRecorder g_videoRecorder;
@@ -248,18 +252,6 @@ static const std::chrono::milliseconds g_drop_cooldown(100); // Minimum 100ms be
 #include "Timeline.h" // For TimelineState struct
 static TimelineState g_timelineState;
 
-// Demo shaders list - moved to global static for access by multiple UI functions
-static const std::vector<std::pair<std::string, std::string>> g_demoShaders = {
-    {"Sample: Fractal 1", "shaders/samples/fractal1.frag"},
-    {"Sample: Fractal 2", "shaders/samples/fractal2.frag"},
-    {"Sample: Fractal 3", "shaders/samples/fractal3.frag"},
-    {"Sample: Simple Red", "shaders/samples/simple_red.frag"},
-    {"Sample: UV Pattern", "shaders/samples/uv_pattern.frag"},
-    {"Sample: Fractal Tree Audio", "shaders/samples/fractal_tree_audio.frag"},
-    {"Sample: Soap Bubbles", "shaders/samples/shape_soap_bubble.frag"},
-    {"Sample: Heart Shape", "shaders/samples/shape_heart.frag"}
-};
-
 // Shader Templates
 static const std::string nativeShaderTemplate = R"(#version 330 core
 out vec4 FragColor;
@@ -322,6 +314,21 @@ static Effect* FindEffectById(int effect_id) {
         }
     }
     return nullptr;
+}
+
+// A connected Scene Output wins over the selection. outputNodeDrives is that case:
+// clicking a node must not replace the chain, and must not start a blend.
+static Effect* PresentedEffect(bool* outputNodeDrives) {
+    for (const auto& effect : g_scene) {
+        if (auto* outputNode = dynamic_cast<OutputNode*>(effect.get())) {
+            if (outputNode->GetInputEffect()) {
+                if (outputNodeDrives) *outputNodeDrives = true;
+                return outputNode->GetInputEffect();
+            }
+        }
+    }
+    if (outputNodeDrives) *outputNodeDrives = false;
+    return g_selectedEffect;
 }
 
 void MarkNodeForDeletion(int node_id) {
@@ -652,31 +659,6 @@ void RenderMenuBar() {
                  ImGuiFileDialog::Instance()->OpenDialog("SaveShaderAsDlgKey", "Save Shader As...", ".frag,.fs,.glsl", IGFD::FileDialogConfig{".", "", "", 1, nullptr, ImGuiFileDialogFlags_None, {}, 250.0f, {}});
             }
 
-            ImGui::Separator();
-            // --- Load Demo Shader Submenu ---
-            if (ImGui::BeginMenu("Load Demo Shader")) {
-                for (const auto& demo : g_demoShaders) {
-                    if (ImGui::MenuItem(demo.first.c_str())) {
-                        // Always create a new effect for a demo shader
-                        auto newEffect = std::make_unique<ShaderEffect>(demo.second, SCR_WIDTH, SCR_HEIGHT);
-                        newEffect->name = demo.first;
-                        newEffect->Load(); // This will load from file path and apply
-                        
-                        const std::string& compileLog = newEffect->GetCompileErrorLog();
-                        if (!compileLog.empty() && compileLog.find("Successfully") == std::string::npos && compileLog.find("applied successfully") == std::string::npos) {
-                            g_consoleLog = "Error loading demo shader " + demo.first + ". Log: " + compileLog;
-                            // Don't add the broken effect to the scene
-                        } else {
-                            g_editor.SetText(newEffect->GetShaderSource());
-                            ClearErrorMarkers();
-                            g_scene.push_back(std::move(newEffect));
-                            g_selectedEffect = g_scene.back().get(); // Select the new effect
-                            g_consoleLog = "Loaded demo shader '" + demo.first + "' into a new effect.";
-                        }
-                    }
-                }
-                ImGui::EndMenu();
-            }
             ImGui::Separator();
             if (ImGui::MenuItem("Save Scene...")) {
                 ImGuiFileDialog::Instance()->OpenDialog("SaveSceneDlgKey", "Save Scene File", ".json");
@@ -1384,13 +1366,35 @@ void RenderNodeEditorWindow() {
         ImNodes::GetSelectedNodes(selected_node_ids.data());
     }
 
+    Effect* transitionNode = nullptr;
+    if (selected_node_ids.size() == 1)
+        transitionNode = FindEffectById(selected_node_ids[0]);
+    g_transitions.RenderSettingsUI(transitionNode);
+
+    // ImNodes selection, not g_selectedEffect. File load writes g_selectedEffect without
+    // changing this, so it still only adds a node and does not start a blend.
+    static int lastNodeEditorSelection = -1;
     if (selected_node_ids.size() == 1) {
         int node_id = selected_node_ids[0];
         Effect* current_effect = FindEffectById(node_id);
         if (current_effect) {
+            const bool nodePickChanged = node_id != lastNodeEditorSelection;
+            lastNodeEditorSelection = node_id;
             // Update global selected effect if it's different
             if (g_selectedEffect != current_effect) {
-                g_selectedEffect = current_effect;
+                if (nodePickChanged) {
+                    bool outputBefore = false;
+                    PresentedEffect(&outputBefore);
+                    Effect* outgoing = g_transitions.IsActive() ? g_transitions.Target() : g_lastShownEffect;
+                    const bool forceCut = ImGui::GetIO().KeyShift;
+                    g_selectedEffect = current_effect;
+                    bool outputAfter = false;
+                    PresentedEffect(&outputAfter);
+                    if (!outputBefore && !outputAfter)
+                        g_transitions.OnPresentedChanged(outgoing, current_effect, forceCut);
+                } else {
+                    g_selectedEffect = current_effect;
+                }
                 // If it's a ShaderEffect, update the editor text
                 if (auto* se = dynamic_cast<ShaderEffect*>(g_selectedEffect)) {
                     g_editor.SetText(se->GetShaderSource());
@@ -1421,21 +1425,28 @@ void RenderNodeEditorWindow() {
         } else {
             ImGui::Text("Error: Selected node ID %d not found.", node_id);
             g_selectedEffect = nullptr; // Clear global selection if node not found
+            g_transitions.Cancel();
+            lastNodeEditorSelection = -1;
         }
     } else if (selected_node_ids.size() > 1) {
         ImGui::Text("%zu nodes selected.", selected_node_ids.size()); // Use %zu for size_t
         ImGui::TextWrapped("Multi-selection actions not yet implemented. Please select a single node to view/edit properties.");
         // Consider clearing g_selectedEffect or setting it to a primary if ImNodes supports that
         // For now, let's clear it to avoid confusion with shader editor
+        lastNodeEditorSelection = -1;
         if (g_selectedEffect != nullptr && std::find(selected_node_ids.begin(), selected_node_ids.end(), g_selectedEffect->id) == selected_node_ids.end()){
              g_selectedEffect = nullptr; // Clear if current g_selectedEffect is not in multi-selection
+             g_transitions.Cancel();
         }
     } else {
         ImGui::Text("No node selected.");
+        lastNodeEditorSelection = -1;
         if (g_selectedEffect != nullptr) { // If a node was previously selected
              g_selectedEffect = nullptr;
+             g_transitions.Cancel();
         }
     }
+
     ImGui::Separator(); // Separator after Node Properties section
 
     // --- Instructions Panel ---
@@ -1446,7 +1457,7 @@ void RenderNodeEditorWindow() {
     ImGui::TextWrapped("Right-click canvas: Add Node");
     ImGui::TextWrapped("Drag pin to pin: Create Link");
     ImGui::TextWrapped("Select Node: Edit Properties (above)");
-    ImGui::TextWrapped("Shift+Click Node: Add to selection");
+    ImGui::TextWrapped("Shift+click node: Instant cut");
     ImGui::TextWrapped("Ctrl+Click Node: Break all links to/from node");
     ImGui::Separator();
     ImGui::TextWrapped("Middle-mouse drag: Pan canvas");
@@ -2922,6 +2933,7 @@ int main(int argc, char** argv) {
     glfwSetDropCallback(window, drop_callback);
 
     g_renderer.Init();
+    g_transitions.Init(g_renderer, SCR_WIDTH, SCR_HEIGHT);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -3063,7 +3075,13 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                // If the deleted node was selected, deselect it
+                // If the deleted node was selected, deselect it.
+                // Snapshot a blend source before its FBO is destroyed.
+                Effect* dying = FindEffectById(node_id);
+                if (dying) {
+                    g_transitions.NotifyRemoved(dying);
+                    if (g_lastShownEffect == dying) g_lastShownEffect = nullptr;
+                }
                 if (g_selectedEffect && g_selectedEffect->id == node_id) {
                     g_selectedEffect = nullptr;
                 }
@@ -3317,28 +3335,33 @@ int main(int argc, char** argv) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        Effect* finalOutputEffect = nullptr;
-        for (const auto& effect : g_scene) {
-            if (auto* outputNode = dynamic_cast<OutputNode*>(effect.get())) {
-                if (outputNode->GetInputEffect()) {
-                    finalOutputEffect = outputNode->GetInputEffect();
-                    break;
-                }
-            }
-        }
-
-        if (!finalOutputEffect) {
-            if (g_selectedEffect) {
-                finalOutputEffect = g_selectedEffect;
-            } else if (!renderQueue.empty()) {
-                finalOutputEffect = renderQueue.back();
-            }
+        bool outputNodeDrives = false;
+        Effect* finalOutputEffect = PresentedEffect(&outputNodeDrives);
+        if (!finalOutputEffect && !renderQueue.empty()) {
+            finalOutputEffect = renderQueue.back();
         }
 
         if (finalOutputEffect) {
             checkGLError("Before Final RenderFullscreenTexture");
             GLuint finalTextureID = finalOutputEffect->GetOutputTexture();
-            
+            // A blend only replaces a selection-driven picture. A Scene Output pin still wins,
+            // which is the Cut behaviour. Both nodes were already rendered into their own FBOs.
+            if (g_transitions.IsActive()) {
+                if (!outputNodeDrives && g_transitions.Target() == g_selectedEffect) {
+                    float transitionStep = deltaTime;
+                    if (realtimeRecording)
+                        transitionStep = recordTick ? (1.0f / 60.0f) : 0.0f;
+                    const GLuint blended = g_transitions.Compose(transitionStep);
+                    if (blended != 0)
+                        finalTextureID = blended;
+                } else {
+                    g_transitions.Cancel();
+                }
+            }
+            g_lastShownEffect = (!outputNodeDrives && g_transitions.IsActive() && g_transitions.Target() != nullptr)
+                ? g_transitions.Target()
+                : finalOutputEffect;
+
             g_renderer.RenderFullscreenTexture(finalTextureID);
             checkGLError("After Final RenderFullscreenTexture");
         } else {
@@ -3361,6 +3384,7 @@ int main(int argc, char** argv) {
     }
 
     g_scene.clear();
+    g_transitions.Shutdown();
     g_videoRecorder.stop_recording();
     g_audioSystem.Shutdown();
     ImGui_ImplOpenGL3_Shutdown();
@@ -3415,6 +3439,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
             se->ResizeFrameBuffer(width, height);
         }
     }
+    g_transitions.Resize(width, height);
 }
 void mouse_cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     (void)window;
@@ -3660,6 +3685,7 @@ std::vector<Effect*> GetRenderOrder(const std::vector<Effect*>& activeEffects) {
     
         // Serialize TimelineState
     sceneJson["timelineState"] = g_timelineState; // Uses to_json for TimelineState
+    WriteTransitionObject(sceneJson["transition"], g_transitions.Global(), false);
 
     // Serialize actual effects from g_scene
     sceneJson["effects"] = nlohmann::json::array();
@@ -3694,10 +3720,15 @@ void LoadScene(const std::string& filePath) {
         return;
     }
 
+    g_transitions.Cancel();
+    g_lastShownEffect = nullptr;
     g_scene.clear();
     g_selectedEffect = nullptr;
     g_editor.SetText("");
     ClearErrorMarkers();
+    g_transitions.Global() = TransitionSettings{};
+    if (sceneJson.contains("transition"))
+        ReadTransitionObject(sceneJson["transition"], g_transitions.Global(), false);
 
     if (sceneJson.contains("timelineState")) {
         g_timelineState = sceneJson["timelineState"].get<TimelineState>();

@@ -1,11 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- **Node transitions:** Selecting a node can blend the previous picture into the new one. A collapsible Transition section in Node Properties sets the type, the duration (0.1–5 s, default 0.5), and the easing (linear or smoothstep). Cut is the default and still switches instantly. Shift+click a node to cut. Crossfade, fade through black, luma dissolve, and zoom blur are `shaders/transitions/*.frag` files loaded by name, so another blend can be dropped in later. The blend uses the two nodes' own pictures, so both keep getting time and audio. It does not add nodes or change pins and links. A click during a blend starts again from the mixed frame. Each node stores a Transition In override (off by default) in the scene file; older scenes load with the defaults. Global settings are saved on the scene too. A playlist that steps through nodes on a timer or a beat is not included.
 - **Graphic equalizer:** Winamp 2.x-style 10-band EQ (70 Hz to 16 kHz, plus preamp, -12 to +12 dB) in the Audio Reactivity window, with an On/Off toggle and Reset. Sliders are colour-graded by gain (green low, yellow at 0 dB, orange to red when boosted), and a live response-curve graph with glow sits above the bands. When on, the EQ shapes both what you hear (and record) and the spectrum that feeds the shaders' audio bands.
 - **Spectrum analyser:** replaced the thin linear FFT line (which spanned 0 to 24 kHz, leaving most of the plot empty) with a log-frequency bar analyser from 20 Hz to 20 kHz in dB, with a fixed red-to-violet colour per frequency, peak caps, glow, a reflection, frequency gridlines and a hover readout.
 - **Shader templates:** `visual_starter.frag` (stage 1, no audio, marked `AUDIO_HOOK`s) and `audio_reactive_starter.frag` (stage 3 reference).
 
 ### Removed
+- **Load Demo Shader:** File > Load Demo Shader is gone, and `shaders/samples/` is deleted with it (the nine example shaders that menu loaded).
 - **MilkDrop support:** removed the unfinished MilkDrop preset work, none of which was built into the app: the empty `Milk-Converter/` submodule link, 416 `.milk` presets in `shaders/presets/`, the unused preset loader (`src/MilkdropPresetEffect.h`, `src/PresetFileParser.*`), the vendored `projectm-eval` library, a MilkDrop debug log line in `ShaderManager.cpp`, and `documentation/MILK_CONVERTER.md`. Copies of the docs and C++ files are in `backups/milkdrop-removal-2026-10-24/`.
 - `GEMINI.md` (content moved into `AGENTS.md` and the shader docs) and `MORPHING_PARTICLES_PALETTE_FIX.md` (its palette rules are now in `SHADERS.md` 4.3). The originals are kept in `backups/docs-2026-10-24/`.
 

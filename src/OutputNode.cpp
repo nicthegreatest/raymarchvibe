@@ -53,6 +53,7 @@ nlohmann::json OutputNode::Serialize() const {
     if (m_inputEffect) {
         j["input_id"] = m_inputEffect->id;
     }
+    WriteTransitionIn(j, transitionIn);
     return j;
 }
 
@@ -61,6 +62,7 @@ void OutputNode::Deserialize(const nlohmann::json& data) {
     if (data.contains("input_id")) {
         m_deserialized_input_id = data["input_id"];
     }
+    ReadTransitionIn(data, transitionIn);
 }
 
 void OutputNode::ResetParameters() {
